@@ -8,13 +8,11 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -159,7 +157,7 @@ fun TalentHubScreen(
             }
             Spacer(Modifier.height(8.dp))
             SegmentedControl(
-                labels = listOf("Retain", "Portal", "Schedule", "HS", "Money"),
+                labels = listOf("Retain", "Portal", "HS", "Money"),
                 selected = state.selectedTab.ordinal,
                 onSelect = { viewModel.selectTab(HubTab.entries[it]) },
                 modifier = Modifier.padding(vertical = 4.dp),
@@ -169,99 +167,25 @@ fun TalentHubScreen(
                 modifier = Modifier.fillMaxSize(),
                 label = "talentHubTabContent",
             ) { tab ->
-                if (tab == HubTab.SCHEDULE) {
-                    ScheduleTabContent(state, viewModel)
-                } else {
-                    Column(modifier = Modifier.fillMaxSize()) {
-                        if (tab != HubTab.MONEY) {
-                            FiltersRow(state, viewModel)
-                        }
-                        LazyColumn(
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
-                        ) {
-                            items(state.rows, key = { it.id }) { row ->
-                                TalentRowCard(
-                                    row = row,
-                                    onClick = { viewModel.onRowTap(row.id) },
-                                    onCheck = { viewModel.toggleSuggestion(row.id) },
-                                )
-                            }
+                Column(modifier = Modifier.fillMaxSize()) {
+                    if (tab != HubTab.MONEY) {
+                        FiltersRow(state, viewModel)
+                    }
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        items(state.rows, key = { it.id }) { row ->
+                            TalentRowCard(
+                                row = row,
+                                onClick = { viewModel.onRowTap(row.id) },
+                                onCheck = { viewModel.toggleSuggestion(row.id) },
+                            )
                         }
                     }
                 }
             }
         }
-    }
-
-    if (state.opponentPickerWeek != null) {
-        AlertDialog(
-            onDismissRequest = viewModel::dismissOpponentPicker,
-            title = { Text("OOC opponent — Week ${(state.opponentPickerWeek ?: 0) + 1}") },
-            text = {
-                Column {
-                    if (state.dealOpponentAbbr != null) {
-                        Text(
-                            state.dealQuote,
-                            style = MaterialTheme.typography.bodySmall,
-                            modifier = Modifier.padding(bottom = 8.dp),
-                        )
-                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                            TextButton(onClick = { viewModel.signBuyGameYears(1) }) {
-                                Text("Buy 1yr")
-                            }
-                            TextButton(onClick = { viewModel.signBuyGameYears(2) }) {
-                                Text("Buy 2yr")
-                            }
-                            TextButton(onClick = { viewModel.signBuyGameYears(3) }) {
-                                Text("Buy 3yr")
-                            }
-                        }
-                        TextButton(onClick = viewModel::signHomeAndHomeDeal) {
-                            Text("Home-and-home (2yr)")
-                        }
-                        TextButton(
-                            onClick = {
-                                val idx = state.opponentAbbrs.indexOf(state.dealOpponentAbbr)
-                                if (idx >= 0) viewModel.pickOpponent(idx)
-                            },
-                        ) {
-                            Text("One-off game only")
-                        }
-                    }
-                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
-                        items(state.opponentOptions.size) { index ->
-                        Column(modifier = Modifier.fillMaxWidth()) {
-                            TextButton(
-                                onClick = {
-                                    viewModel.selectDealOpponent(index)
-                                },
-                                modifier = Modifier.fillMaxWidth(),
-                            ) {
-                                Text(
-                                    state.opponentOptions[index],
-                                    modifier = Modifier.fillMaxWidth(),
-                                    textAlign = TextAlign.Start,
-                                )
-                            }
-                            val abbr = state.opponentAbbrs.getOrNull(index)
-                            if (abbr != null) {
-                                TextButton(
-                                    onClick = { viewModel.declareRival(abbr) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                ) {
-                                    Text("Declare $abbr as rival")
-                                }
-                            }
-                        }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::dismissOpponentPicker) { Text("Close") }
-            },
-        )
     }
 
     state.offerSheet?.let { sheet ->
@@ -586,93 +510,3 @@ private fun OfferBottomSheet(
         }
     }
 }
-
-@Composable
-private fun ScheduleTabContent(state: TalentHubUiState, viewModel: TalentHubViewModel) {
-    Column(modifier = Modifier.fillMaxSize()) {
-        if (state.rivalSummary.isNotBlank()) {
-            Text(
-                text = "Rivals: ${state.rivalSummary}",
-                style = MaterialTheme.typography.bodySmall,
-                modifier = Modifier.padding(bottom = 4.dp),
-            )
-        }
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 8.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                text = "OOC slate — tap open weeks to pick or sign deals. " +
-                    "${state.filledOocSlots} filled · ${state.openOocSlots} open.",
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            TextButton(onClick = viewModel::resuggestOocSchedule) {
-                Text("Resuggest")
-            }
-        }
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(bottom = 80.dp),
-        ) {
-            if (state.contractRows.isNotEmpty()) {
-                item {
-                    Text(
-                        "Upcoming OOC contracts",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                items(state.contractRows, key = { it.id }) { row ->
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
-                            .padding(12.dp),
-                    ) {
-                        Text(row.summary, style = MaterialTheme.typography.bodySmall)
-                        TextButton(onClick = { viewModel.cancelContract(row.id) }) {
-                            Text("Cancel deal")
-                        }
-                    }
-                }
-            }
-            items(state.scheduleWeeks, key = { it.week }) { week ->
-                val clickable = !week.locked
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
-                        .then(
-                            if (clickable) Modifier.clickable {
-                                if (week.open) viewModel.openOpponentPicker(week.week)
-                                else viewModel.clearScheduleWeek(week.week)
-                            } else Modifier
-                        )
-                        .padding(12.dp),
-                ) {
-                    val rivalry = week.rivalryLabel?.let { " · $it rival" } ?: ""
-                    Text(
-                        "${week.weekLabel} · ${week.status}$rivalry",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Text(week.detail, style = MaterialTheme.typography.bodySmall)
-                    when {
-                        week.contractLocked ->
-                            Text("Contract locked — cancel deal to change", style = MaterialTheme.typography.labelSmall)
-                        !week.locked && !week.open ->
-                            Text("Tap to clear and re-pick", style = MaterialTheme.typography.labelSmall)
-                    }
-                }
-            }
-        }
-    }
-}
-

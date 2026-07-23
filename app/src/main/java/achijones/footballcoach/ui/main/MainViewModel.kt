@@ -90,13 +90,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         handlePendingOffseasonResult()
         if (before != GameSession.OffseasonResult.NONE) {
             val l = league ?: return
-            if (_uiState.value.navigateToTalentHub) return
+            if (_uiState.value.navigateToTalentHub || _uiState.value.navigateToSchedule) return
             userTeam = l.userTeam
             currentTeam = userTeam
             currentConference = l.findConference(userTeam!!.conference)
             rebuildSnapshot(ready = true)
         } else if (lLoadedInOffseason()) {
-            _uiState.update { it.copy(navigateToTalentHub = true) }
+            navigateToOffseasonDestination()
         }
     }
 
@@ -114,7 +114,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         handlePendingOffseasonResult()
         val l = league ?: return
         if (l.loadedInOffseason && OffseasonSession.ready()) {
-            _uiState.update { it.copy(navigateToTalentHub = true) }
+            navigateToOffseasonDestination()
             return
         }
         if (GameSession.needsTeamPicker() || l.userTeam == null) {
@@ -172,7 +172,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 league!!.saveLeague(file)
                 currentTeam = userTeam
                 currentConference = league!!.findConference(userTeam!!.conference)
-                _uiState.update { it.copy(navigateToTalentHub = true) }
+                _uiState.update { it.copy(navigateToSchedule = true) }
             }
             GameSession.OffseasonResult.DONE_SCHEDULE -> {
                 if (!OffseasonSession.ready()) return
@@ -223,6 +223,22 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun consumeNavigateToTalentHub() {
         _uiState.update { it.copy(navigateToTalentHub = false, showTeamPicker = false) }
+    }
+
+    fun consumeNavigateToSchedule() {
+        _uiState.update { it.copy(navigateToSchedule = false, showTeamPicker = false) }
+    }
+
+    fun openScheduleScreen() {
+        _uiState.update { it.copy(navigateToSchedule = true) }
+    }
+
+    private fun navigateToOffseasonDestination() {
+        if (OffseasonSession.ready() && OffseasonSession.phase == OffseasonSession.Phase.SCHEDULE) {
+            _uiState.update { it.copy(navigateToSchedule = true) }
+        } else {
+            _uiState.update { it.copy(navigateToTalentHub = true) }
+        }
     }
 
     fun consumeSnackbar() {
@@ -528,7 +544,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         GameSession.setNeedsOocScheduling(true)
         // Keep showTeamPicker true until navigation starts so MainScreen does not
         // briefly paint the roster under the outgoing picker.
-        _uiState.update { it.copy(navigateToTalentHub = true) }
+        _uiState.update { it.copy(navigateToSchedule = true) }
         rebuildSnapshot()
         wantUpdateConf = 2
     }

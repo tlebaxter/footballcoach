@@ -239,6 +239,9 @@ public class League {
         }
         RivalryDynamics.formNewRivalries(this);
         advanceSeasonWinStreaks();
+        if (oocContracts != null) {
+            oocContracts.enforceBreaches();
+        }
         prepareSeasonSchedule();
         hasScheduledBowls = false;
     }

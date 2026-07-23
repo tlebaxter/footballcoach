@@ -14,6 +14,8 @@ public final class OocContractBook {
     private final League league;
     private final ArrayList<OocContract> contracts = new ArrayList<>();
     private int nextId = 1;
+    /** Last breach summaries for UI (cleared when read). */
+    private final ArrayList<String> recentBreachNotices = new ArrayList<>();
 
     public OocContractBook(League league) {
         this.league = league;
@@ -27,6 +29,16 @@ public final class OocContractBook {
         ArrayList<OocContract> out = new ArrayList<>();
         for (OocContract c : contracts) {
             if (c.involves(abbr)) {
+                out.add(c);
+            }
+        }
+        return out;
+    }
+
+    public List<OocContract> forTeamInYear(String abbr, int year) {
+        ArrayList<OocContract> out = new ArrayList<>();
+        for (OocContract c : contracts) {
+            if (c.involves(abbr) && c.gameForYear(year) != null) {
                 out.add(c);
             }
         }
@@ -55,6 +67,12 @@ public final class OocContractBook {
         return findContractBetween(a.abbr, b.abbr, year) != null;
     }
 
+    public List<String> consumeBreachNotices() {
+        ArrayList<String> out = new ArrayList<>(recentBreachNotices);
+        recentBreachNotices.clear();
+        return out;
+    }
+
     public String quoteBuyGame(Team home, Team away) {
         int g = NilMoney.buyGameGuarantee(home.teamPrestige, away.teamPrestige);
         int bonus = NilMoney.buyGameWinBonus(g);
@@ -67,6 +85,49 @@ public final class OocContractBook {
         int bonus = NilMoney.buyGameWinBonus(g);
         return "Guarantee " + NilMoney.format(g)
                 + " (you receive) · Win bonus " + NilMoney.format(bonus);
+    }
+
+    /**
+     * Signs a one-year single-game contract (optional guarantee).
+     */
+    public OocContract signSingleGame(Team home, Team away, int year, boolean withGuarantee) {
+        if (home == null || away == null || home == away) {
+            return null;
+        }
+        if (home.conference.equals(away.conference)) {
+            return null;
+        }
+        if (alreadyContracted(home, away, year)) {
+            return null;
+        }
+        int guarantee = 0;
+        int winBonus = 0;
+        if (withGuarantee) {
+            guarantee = NilMoney.buyGameGuarantee(home.teamPrestige, away.teamPrestige);
+            if (home.recruitMoney < guarantee) {
+                return null;
+            }
+            winBonus = NilMoney.buyGameWinBonus(guarantee);
+        }
+        ArrayList<OocContractGame> games = new ArrayList<>();
+        games.add(new OocContractGame(year, home.abbr, away.abbr, guarantee, winBonus));
+        int buyout = NilMoney.oocCancelBuyout(
+                withGuarantee ? OocContract.Type.BUY : OocContract.Type.SINGLE,
+                guarantee,
+                1);
+        OocContract.Type type = withGuarantee ? OocContract.Type.BUY : OocContract.Type.SINGLE;
+        OocContract contract = new OocContract(
+                "C" + (nextId++),
+                home.abbr,
+                away.abbr,
+                year,
+                1,
+                type,
+                year,
+                buyout,
+                games);
+        contracts.add(contract);
+        return contract;
     }
 
     /**
@@ -95,62 +156,194 @@ public final class OocContractBook {
             games.add(new OocContractGame(
                     startYear + y, home.abbr, away.abbr, guarantee, winBonus));
         }
+        int buyout = NilMoney.oocCancelBuyout(OocContract.Type.BUY, guarantee * years, years);
         OocContract contract = new OocContract(
                 "C" + (nextId++),
                 home.abbr,
                 away.abbr,
                 startYear,
                 years,
+                OocContract.Type.BUY,
+                startYear + years - 1,
+                buyout,
                 games);
         contracts.add(contract);
         return contract;
     }
 
     /**
-     * Signs a 2-year home-and-home (no guarantee).
+     * Signs a 2-year home-and-home starting {@code startYear} with return the next year.
      */
     public OocContract signHomeAndHome(Team teamA, Team teamB, int startYear, boolean aHomesFirst) {
+        return signHomeAndHome(teamA, teamB, startYear, startYear + 1, aHomesFirst);
+    }
+
+    /**
+     * Signs a home-and-home with a deferred return year (1–6 years after start).
+     */
+    public OocContract signHomeAndHome(
+            Team teamA, Team teamB, int startYear, int returnYear, boolean aHomesFirst) {
         if (teamA == null || teamB == null || teamA == teamB) {
             return null;
         }
         if (teamA.conference.equals(teamB.conference)) {
             return null;
         }
+        int minReturn = startYear + 1;
+        int maxReturn = startYear + 6;
+        if (returnYear < minReturn) {
+            returnYear = minReturn;
+        }
+        if (returnYear > maxReturn) {
+            returnYear = maxReturn;
+        }
         if (alreadyContracted(teamA, teamB, startYear)
-                || alreadyContracted(teamA, teamB, startYear + 1)) {
+                || alreadyContracted(teamA, teamB, returnYear)) {
             return null;
         }
         Team firstHome = aHomesFirst ? teamA : teamB;
         Team firstAway = aHomesFirst ? teamB : teamA;
         ArrayList<OocContractGame> games = new ArrayList<>();
         games.add(new OocContractGame(startYear, firstHome.abbr, firstAway.abbr, 0, 0));
-        games.add(new OocContractGame(startYear + 1, firstAway.abbr, firstHome.abbr, 0, 0));
+        games.add(new OocContractGame(returnYear, firstAway.abbr, firstHome.abbr, 0, 0));
+        int length = returnYear - startYear + 1;
+        int buyout = NilMoney.oocCancelBuyout(OocContract.Type.HOME_AND_HOME, 0, 2);
         OocContract contract = new OocContract(
                 "C" + (nextId++),
                 teamA.abbr,
                 teamB.abbr,
                 startYear,
-                2,
+                length,
+                OocContract.Type.HOME_AND_HOME,
+                returnYear,
+                buyout,
                 games);
         contracts.add(contract);
         return contract;
     }
 
-    public boolean cancel(String contractId) {
+    /**
+     * Cancels an unsettled deal, charging {@code cancellingTeam} the buyout.
+     *
+     * @return true if cancelled
+     */
+    public boolean cancel(String contractId, Team cancellingTeam) {
         Iterator<OocContract> it = contracts.iterator();
         while (it.hasNext()) {
             OocContract c = it.next();
-            if (c.id.equals(contractId)) {
-                int year = league.getYear();
-                OocContractGame thisYear = c.gameForYear(year);
-                if (thisYear != null && thisYear.settled) {
-                    return false;
-                }
-                it.remove();
-                return true;
+            if (!c.id.equals(contractId)) {
+                continue;
             }
+            int year = league.getYear();
+            OocContractGame thisYear = c.gameForYear(year);
+            if (thisYear != null && thisYear.settled) {
+                return false;
+            }
+            clearScheduleForContract(c);
+            if (cancellingTeam != null) {
+                int fee = refreshBuyout(c);
+                chargeTeam(cancellingTeam, fee, /*prestigeHitIfShort*/ true);
+            }
+            it.remove();
+            return true;
         }
         return false;
+    }
+
+    /** @deprecated use {@link #cancel(String, Team)} */
+    @Deprecated
+    public boolean cancel(String contractId) {
+        return cancel(contractId, null);
+    }
+
+    /**
+     * Removes deals past their fulfill-by year that still have unsettled games.
+     * Charges breach fines to both parties (split) when possible.
+     *
+     * @return number of contracts breached
+     */
+    public int enforceBreaches() {
+        int year = league.getYear();
+        int breached = 0;
+        Iterator<OocContract> it = contracts.iterator();
+        while (it.hasNext()) {
+            OocContract c = it.next();
+            if (!c.hasUnsettledGames()) {
+                continue;
+            }
+            if (c.mustFulfillByYear >= year) {
+                continue;
+            }
+            int fine = NilMoney.oocBreachFine(refreshBuyout(c));
+            Team a = league.findTeamAbbr(c.teamA);
+            Team b = league.findTeamAbbr(c.teamB);
+            int half = fine / 2;
+            if (a != null) {
+                chargeTeam(a, half, true);
+            }
+            if (b != null) {
+                chargeTeam(b, fine - half, true);
+            }
+            clearScheduleForContract(c);
+            recentBreachNotices.add(
+                    c.teamA + "–" + c.teamB + " OOC deal breached (past " + c.mustFulfillByYear
+                            + "); fine " + NilMoney.format(fine));
+            it.remove();
+            breached++;
+        }
+        return breached;
+    }
+
+    private int refreshBuyout(OocContract c) {
+        int remaining = c.remainingGuaranteeTotal(league.getYear());
+        return Math.max(c.buyout, NilMoney.oocCancelBuyout(c.type, remaining, c.lengthYears));
+    }
+
+    private void chargeTeam(Team team, int amount, boolean prestigeHitIfShort) {
+        if (team == null || amount <= 0) {
+            return;
+        }
+        int paid = Math.min(team.recruitMoney, amount);
+        team.recruitMoney -= paid;
+        if (team.recruitMoney < 0) {
+            team.recruitMoney = 0;
+        }
+        if (prestigeHitIfShort && paid < amount) {
+            team.teamPrestige = Math.max(40, team.teamPrestige - 1);
+        }
+    }
+
+    private void clearScheduleForContract(OocContract c) {
+        int year = league.getYear();
+        OocContractGame cg = c.gameForYear(year);
+        if (cg == null || cg.settled) {
+            return;
+        }
+        Team home = league.findTeamAbbr(cg.homeAbbr);
+        Team away = league.findTeamAbbr(cg.awayAbbr);
+        if (home == null) {
+            return;
+        }
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            Game game = home.gameSchedule.get(week);
+            if (game == null) {
+                continue;
+            }
+            if (c.id.equals(game.contractId)
+                    || (game.homeTeam == home
+                    && game.awayTeam == away
+                    && isOocGame(game))) {
+                OocScheduleBuilder.clearUserOocGame(home, week);
+                break;
+            }
+        }
+    }
+
+    private static boolean isOocGame(Game game) {
+        return game != null && (
+                "OOC".equals(game.gameName)
+                        || "OOC Rivalry".equals(game.gameName)
+                        || "Rivalry Game OOC".equals(game.gameName));
     }
 
     /**
@@ -255,9 +448,6 @@ public final class OocContractBook {
         for (OocContractGame g : c.games) {
             if (g.year >= league.getYear() && !g.settled) {
                 return false;
-            }
-            if (g.year < league.getYear() && !g.settled) {
-                // missed year — drop
             }
         }
         for (OocContractGame g : c.games) {
@@ -395,7 +585,9 @@ public final class OocContractBook {
                 ng.settled = g.settled;
                 games.add(ng);
             }
-            updated.add(new OocContract(c.id, a, b, c.startYear, c.lengthYears, games));
+            updated.add(new OocContract(
+                    c.id, a, b, c.startYear, c.lengthYears, c.type,
+                    c.mustFulfillByYear, c.buyout, games));
         }
         contracts.clear();
         contracts.addAll(updated);

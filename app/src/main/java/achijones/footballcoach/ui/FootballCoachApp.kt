@@ -8,6 +8,7 @@ import achijones.footballcoach.ui.coach.CoachGameScreen
 import achijones.footballcoach.ui.home.HomeScreen
 import achijones.footballcoach.ui.main.MainScreen
 import achijones.footballcoach.ui.navigation.Routes
+import achijones.footballcoach.ui.schedule.ScheduleScreen
 import achijones.footballcoach.ui.talenthub.TalentHubScreen
 import achijones.footballcoach.ui.tutorial.TutorialScreen
 
@@ -49,12 +50,27 @@ fun FootballCoachApp() {
                         launchSingleTop = true
                     }
                 },
+                onNavigateSchedule = {
+                    navController.navigate(Routes.SCHEDULE) {
+                        launchSingleTop = true
+                    }
+                },
             )
         }
         composable(Routes.COACH_GAME) {
             CoachGameScreen(
                 onFinished = {
                     navController.popBackStack()
+                },
+            )
+        }
+        composable(Routes.SCHEDULE) {
+            ScheduleScreen(
+                onNavigateToMain = {
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(Routes.SCHEDULE) { inclusive = true }
+                        launchSingleTop = true
+                    }
                 },
             )
         }

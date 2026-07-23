@@ -109,6 +109,7 @@ import achijones.footballcoach.ui.components.ConferenceLogo
 import achijones.footballcoach.ui.components.SegmentedControl
 import achijones.footballcoach.ui.components.TabContentTransition
 import achijones.footballcoach.ui.components.TeamLogo
+import achijones.footballcoach.ui.components.rememberLogoNeedsContrastBoost
 import achijones.footballcoach.ui.components.rememberTeamColors
 import achijones.footballcoach.ui.theme.FcChipPosBg
 import achijones.footballcoach.ui.theme.FcChipPosText
@@ -139,18 +140,27 @@ fun MainScreen(
     onNavigateHome: () -> Unit,
     onNavigateTalentHub: () -> Unit,
     onNavigateCoach: () -> Unit = {},
+    onNavigateSchedule: () -> Unit = {},
     viewModel: MainViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbar = remember { SnackbarHostState() }
     // Hold a blank screen after team pick / offseason handoff so the roster
-    // never flashes for a frame before NavHost reaches Talent Hub.
+    // never flashes for a frame before NavHost reaches Talent Hub / Schedule.
     var suppressMainContent by remember { mutableStateOf(false) }
 
     BackHandler { viewModel.requestExit() }
 
     LaunchedEffect(Unit) {
         viewModel.onScreenEntered()
+    }
+
+    // Returning from Talent Hub / Schedule reuses this composition; clear the
+    // outbound blanking flag so Main is visible again.
+    LaunchedEffect(state.ready, state.navigateToTalentHub, state.navigateToSchedule) {
+        if (state.ready && !state.navigateToTalentHub && !state.navigateToSchedule) {
+            suppressMainContent = false
+        }
     }
 
     LaunchedEffect(state.navigateHome) {
@@ -166,6 +176,13 @@ fun MainScreen(
             onNavigateTalentHub()
         }
     }
+    LaunchedEffect(state.navigateToSchedule) {
+        if (state.navigateToSchedule) {
+            suppressMainContent = true
+            viewModel.consumeNavigateToSchedule()
+            onNavigateSchedule()
+        }
+    }
     LaunchedEffect(state.navigateToCoach) {
         if (state.navigateToCoach) {
             viewModel.consumeNavigateToCoach()
@@ -179,7 +196,7 @@ fun MainScreen(
         }
     }
 
-    if (!state.ready && !state.navigateHome && !state.navigateToTalentHub) {
+    if (!state.ready && !state.navigateHome && !state.navigateToTalentHub && !state.navigateToSchedule) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
         }
@@ -195,7 +212,7 @@ fun MainScreen(
         return
     }
 
-    if (suppressMainContent || state.navigateToTalentHub) {
+    if (suppressMainContent || state.navigateToTalentHub || state.navigateToSchedule) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -824,6 +841,7 @@ private fun MorePanel(state: MainUiState, viewModel: MainViewModel, modifier: Mo
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         MoreButton("Save League", viewModel::openSaveDialog)
+        MoreButton("Schedule & Contracts", viewModel::openScheduleScreen)
         MoreButton("League History / Records", viewModel::openLeagueHistoryDialog)
         MoreButton("Team History", viewModel::openTeamHistoryDialog)
         MoreButton("Team Rankings", viewModel::openRankingsDialog)
@@ -1832,6 +1850,11 @@ private fun TeamPickerScreen(
                             label = "teamLogoSwap",
                             contentAlignment = Alignment.Center,
                         ) { team ->
+                            val teamBoostBg = rememberTeamColors(team.name, team.abbr).primary
+                            val needsContrastBoost = rememberLogoNeedsContrastBoost(
+                                teamName = team.name,
+                                background = teamBoostBg,
+                            )
                             Column(
                                 modifier = Modifier.fillMaxWidth(),
                                 horizontalAlignment = Alignment.CenterHorizontally,
@@ -1842,6 +1865,7 @@ private fun TeamPickerScreen(
                                     abbr = team.abbr,
                                     size = 200.dp,
                                     framed = false,
+                                    contrastBoost = needsContrastBoost,
                                 )
                                 Spacer(Modifier.height(20.dp))
                                 Text(

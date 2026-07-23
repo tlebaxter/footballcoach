@@ -88,11 +88,6 @@ public class OocContractBookTest {
 
         StringBuilder sb = new StringBuilder();
         league.oocContracts.appendSave(sb);
-        OocContractBook restored = new OocContractBook(league);
-        restored.restore(new BufferedReader(new StringReader(
-                sb.toString().replace("OOC_CONTRACTS\n", "").replace("END_OOC_CONTRACTS\n", "")
-                        .replace("END_OOC_CONTRACTS", ""))));
-        // Manual restore path: parse block properly
         OocContractBook book2 = new OocContractBook(league);
         BufferedReader reader = new BufferedReader(new StringReader(sb.toString()));
         assertEquals("OOC_CONTRACTS", reader.readLine());
@@ -102,6 +97,103 @@ public class OocContractBookTest {
         assertNotNull(loaded);
         assertEquals(2, loaded.games.size());
         assertEquals(signed.games.get(0).guarantee, loaded.games.get(0).guarantee);
+        assertEquals(OocContract.Type.BUY, loaded.type);
+        assertEquals(signed.mustFulfillByYear, loaded.mustFulfillByYear);
+        assertEquals(signed.buyout, loaded.buyout);
+    }
+
+    @Test
+    public void signSingleGameCreatesOneYearContract() throws Exception {
+        League league = createOpenOocLeague();
+        Team home = league.findTeamAbbr("MIA");
+        Team away = league.findTeamAbbr("TOL");
+        assertNotNull(home);
+        assertNotNull(away);
+        OocContract peer = league.oocContracts.signSingleGame(home, away, league.getYear(), false);
+        assertNotNull(peer);
+        assertEquals(OocContract.Type.SINGLE, peer.type);
+        assertEquals(1, peer.games.size());
+        assertEquals(0, peer.games.get(0).guarantee);
+        assertEquals(league.getYear(), peer.mustFulfillByYear);
+
+        Team power = league.findTeamAbbr("ALA");
+        Team soft = league.findTeamAbbr("AKR");
+        assertNotNull(power);
+        assertNotNull(soft);
+        OocContract buy = league.oocContracts.signSingleGame(power, soft, league.getYear() + 1, true);
+        assertNotNull(buy);
+        assertEquals(OocContract.Type.BUY, buy.type);
+        assertTrue(buy.games.get(0).guarantee > 0);
+    }
+
+    @Test
+    public void deferredHomeAndHomeSetsFulfillByReturnYear() throws Exception {
+        League league = createOpenOocLeague();
+        Team a = league.findTeamAbbr("USC");
+        Team b = league.findTeamAbbr("NDE");
+        assertNotNull(a);
+        assertNotNull(b);
+        int start = league.getYear();
+        int ret = start + 4;
+        OocContract contract = league.oocContracts.signHomeAndHome(a, b, start, ret, true);
+        assertNotNull(contract);
+        assertEquals(OocContract.Type.HOME_AND_HOME, contract.type);
+        assertEquals(2, contract.games.size());
+        assertEquals(start, contract.games.get(0).year);
+        assertEquals(ret, contract.games.get(1).year);
+        assertEquals(ret, contract.mustFulfillByYear);
+        assertEquals(b.abbr, contract.games.get(1).homeAbbr);
+    }
+
+    @Test
+    public void cancelChargesBuyout() throws Exception {
+        League league = createOpenOocLeague();
+        Team a = league.findTeamAbbr("UGA");
+        Team b = league.findTeamAbbr("CLE");
+        assertNotNull(a);
+        assertNotNull(b);
+        OocContract contract = league.oocContracts.signHomeAndHome(a, b, league.getYear(), true);
+        assertNotNull(contract);
+        int before = a.recruitMoney;
+        assertTrue(league.oocContracts.cancel(contract.id, a));
+        assertTrue(a.recruitMoney < before);
+        assertTrue(a.recruitMoney <= before - Math.min(before, contract.buyout));
+        assertTrue(league.oocContracts.findById(contract.id) == null);
+    }
+
+    @Test
+    public void enforceBreachesRemovesPastDueDeals() throws Exception {
+        League league = createOpenOocLeague();
+        Team a = league.findTeamAbbr("USC");
+        Team b = league.findTeamAbbr("NDE");
+        assertNotNull(a);
+        assertNotNull(b);
+        int start = league.getYear();
+        String pastLine = "CX,USC,NDE," + (start - 3) + ",2,H," + (start - 1) + ",250000,"
+                + (start - 2) + ":USC:NDE:0:0:0|" + (start - 1) + ":NDE:USC:0:0:0";
+        OocContract pastDue = OocContract.parse(pastLine);
+        StringBuilder sb = new StringBuilder();
+        sb.append("OOC_CONTRACTS\nNEXT_ID,99\n").append(pastDue.encode()).append("\nEND_OOC_CONTRACTS\n");
+        BufferedReader reader = new BufferedReader(new StringReader(sb.toString()));
+        assertEquals("OOC_CONTRACTS", reader.readLine());
+        league.oocContracts.restore(reader);
+        assertNotNull(league.oocContracts.findById("CX"));
+        int moneyBefore = a.recruitMoney + b.recruitMoney;
+        int count = league.oocContracts.enforceBreaches();
+        assertTrue(count >= 1);
+        assertTrue(league.oocContracts.findById("CX") == null);
+        assertTrue(a.recruitMoney + b.recruitMoney <= moneyBefore);
+        assertFalse(league.oocContracts.consumeBreachNotices().isEmpty());
+    }
+
+    @Test
+    public void legacySaveLineStillParses() {
+        String legacy = "C7,ALA,UMA,2026,2,2026:ALA:UMA:200000:30000:0|2027:ALA:UMA:200000:30000:0";
+        OocContract c = OocContract.parse(legacy);
+        assertEquals(OocContract.Type.BUY, c.type);
+        assertEquals(2027, c.mustFulfillByYear);
+        assertEquals(2, c.games.size());
+        assertTrue(c.buyout > 0);
     }
 
     @Test

@@ -5,5 +5,6 @@ object Routes {
     const val TUTORIAL = "tutorial"
     const val MAIN = "main"
     const val TALENT_HUB = "talentHub"
+    const val SCHEDULE = "schedule"
     const val COACH_GAME = "coachGame"
 }

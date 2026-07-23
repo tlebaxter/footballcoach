@@ -178,6 +178,7 @@ data class MainUiState(
     val ready: Boolean = false,
     val navigateHome: Boolean = false,
     val navigateToTalentHub: Boolean = false,
+    val navigateToSchedule: Boolean = false,
     val selectedTab: MainTab = MainTab.HOME,
     val homeSegment: HomeSegment = HomeSegment.ROSTER,
     val browseSegment: BrowseSegment = BrowseSegment.ROSTER,

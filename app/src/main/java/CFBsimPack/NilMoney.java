@@ -236,6 +236,29 @@ public final class NilMoney {
         return (int) Math.round(guarantee * 0.15 / 1000.0) * 1000;
     }
 
+    /**
+     * Cancel fee for an OOC contract. Buy deals scale with remaining guarantees;
+     * H&amp;H / single use a flat prestige-style floor.
+     */
+    public static int oocCancelBuyout(OocContract.Type type, int remainingGuarantees, int lengthYears) {
+        int years = Math.max(1, lengthYears);
+        if (type == OocContract.Type.BUY || remainingGuarantees > 0) {
+            int fromGuarantees = (int) Math.round(remainingGuarantees * 0.50 / 1000.0) * 1000;
+            int floor = 100_000 * years;
+            return Math.max(floor, fromGuarantees);
+        }
+        if (type == OocContract.Type.HOME_AND_HOME) {
+            return 250_000 * years;
+        }
+        return 75_000;
+    }
+
+    /** Breach fine when a deal passes its fulfill-by year unsettled (~1.25× cancel buyout). */
+    public static int oocBreachFine(int cancelBuyout) {
+        int base = Math.max(75_000, cancelBuyout);
+        return (int) Math.round(base * 1.25 / 1000.0) * 1000;
+    }
+
     private static int clampPrestige(int prestige) {
         if (prestige < 40) return 40;
         if (prestige > 99) return 99;
