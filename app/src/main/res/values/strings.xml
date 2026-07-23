@@ -8,7 +8,6 @@
     <string name="action_team_history">My Team History</string>
     <string name="action_rankings">Team Rankings</string>
     <string name="action_heisman">Post Season Awards</string>
-    <string name="action_news_stories">News Stories</string>
     <string name="action_bowlgame_watch">Bowl Games</string>
     <string name="action_ccg_watch">Conf Championships</string>
     <string name="action_ccg_bowl_watch">CCGs / Bowl Games</string>
@@ -16,6 +15,7 @@
     <string name="action_return_main_menu">Return to Main Menu</string>
     <string name="action_change_team_name">Settings/Change Name</string>
     <string name="title_activity_recruiting">RecruitingActivity</string>
+    <string name="title_activity_talent_hub">Talent Hub</string>
     <string name="league_player_names">
         Tim,
         James,
@@ -383,7 +383,7 @@
         As coach, it will be your responsibility to manage your team\'s strategy, simulate through seasons, recruit new players, and above all, win championships.
     </string>
     <string name="tutPlayingSeason">
-        Your team will play 12 games in the regular season, which consist of playing all 9 of your conference opponents once and three out of conference games.
+        Your team will play 12 games in the regular season using the 2026 FBS conference alignment. Conferences play up to nine conference games, with out-of-conference games filling the rest of the schedule.
         By navigating to the GAMES tab, you can see exactly what your team\'s schedule is.
         And by clicking on each game, you can see a scouting report of the two teams (if the game has yet to be played), or a summary of the game (if it was already played).\n\n
         The most important game of the regular season is your rivalry game, which you gain prestige if won or lose prestige if lost.

@@ -1,0 +1,40 @@
+# Gradle
+.gradle/
+**/build/
+
+# Kotlin
+.kotlin/
+
+# Local SDK / secrets
+local.properties
+*.jks
+*.keystore
+keystore.properties
+
+# Build artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+*.hprof
+
+# Android Studio / IDE
+.idea/
+*.iml
+.cxx/
+.externalNativeBuild/
+captures/
+*.navigation/
+outputs/
+
+# Tooling / logs
+.cursor/
+*.log
+firebase-debug.log
+
+# Firebase config (uncomment if you don't want it in git)
+# google-services.json
+
+# OS
+.DS_Store
+Thumbs.db

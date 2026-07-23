@@ -1,27 +1,101 @@
-apply plugin: 'com.android.application'
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.plugin.compose'
+}
+
+def localProps = new Properties()
+def localPropsFile = rootProject.file('local.properties')
+if (localPropsFile.exists()) {
+    localPropsFile.withInputStream { localProps.load(it) }
+}
+
+def fcStoreFile = System.getenv('FC_STORE_FILE') ?: localProps.getProperty('FC_STORE_FILE')
+def fcStorePassword = System.getenv('FC_STORE_PASSWORD') ?: localProps.getProperty('FC_STORE_PASSWORD')
+def fcKeyAlias = System.getenv('FC_KEY_ALIAS') ?: localProps.getProperty('FC_KEY_ALIAS')
+def fcKeyPassword = System.getenv('FC_KEY_PASSWORD') ?: localProps.getProperty('FC_KEY_PASSWORD')
+def hasReleaseSigning = fcStoreFile != null && !fcStoreFile.trim().isEmpty()
+        && fcStorePassword != null && fcKeyAlias != null && fcKeyPassword != null
 
 android {
-    compileSdkVersion 23
-    buildToolsVersion "23.0.2"
+    namespace 'achijones.footballcoach'
+    compileSdk 37
 
     defaultConfig {
         applicationId "achijones.footballcoach"
-        minSdkVersion 19
-        targetSdkVersion 23
-        versionCode 32
-        versionName "1.38"
+        minSdk 23
+        targetSdk 37
+        versionCode 33
+        versionName "1.39"
     }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    buildFeatures {
+        compose true
+    }
+
+    signingConfigs {
+        if (hasReleaseSigning) {
+            release {
+                storeFile file(fcStoreFile)
+                storePassword fcStorePassword
+                keyAlias fcKeyAlias
+                keyPassword fcKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
             minifyEnabled false
-            proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            if (hasReleaseSigning) {
+                signingConfig signingConfigs.release
+            }
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
     }
 }
 
 dependencies {
-    compile fileTree(dir: 'libs', include: ['*.jar'])
-    testCompile 'junit:junit:4.12'
-    compile 'com.android.support:appcompat-v7:23.1.1'
-    compile 'com.android.support:design:23.1.1'
+    def composeBom = platform('androidx.compose:compose-bom:2026.06.01')
+    implementation composeBom
+    androidTestImplementation composeBom
+
+    implementation 'androidx.compose.ui:ui'
+    implementation 'androidx.compose.ui:ui-tooling-preview'
+    implementation 'androidx.compose.foundation:foundation'
+    implementation 'androidx.compose.material3:material3'
+    implementation 'androidx.compose.material:material-icons-extended'
+    implementation 'sh.calvin.reorderable:reorderable:2.4.3'
+    debugImplementation 'androidx.compose.ui:ui-tooling'
+
+    implementation 'androidx.activity:activity-compose:1.13.0'
+    implementation 'androidx.navigation:navigation-compose:2.9.8'
+    implementation 'androidx.lifecycle:lifecycle-viewmodel-compose:2.11.0'
+    implementation 'androidx.lifecycle:lifecycle-runtime-ktx:2.11.0'
+
+    implementation 'androidx.appcompat:appcompat:1.7.1'
+    implementation 'androidx.activity:activity:1.13.0'
+    implementation 'androidx.coordinatorlayout:coordinatorlayout:1.3.0'
+    implementation 'com.google.android.material:material:1.14.0'
+    testImplementation 'junit:junit:4.13.2'
+}
+
+// Keep app/app-debug.apk updated for: adb install -r app/app-debug.apk
+afterEvaluate {
+    tasks.named('assembleDebug').configure {
+        doLast {
+            def src = layout.buildDirectory.file('outputs/apk/debug/app-debug.apk').get().asFile
+            def dest = layout.projectDirectory.file('app-debug.apk').asFile
+            src.withInputStream { input ->
+                dest.withOutputStream { output ->
+                    output << input
+                }
+            }
+            logger.lifecycle("Copied debug APK to ${dest}")
+        }
+    }
 }

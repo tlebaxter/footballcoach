@@ -1,6 +1,8 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import java.util.Vector;
 
 /**
@@ -37,14 +39,182 @@ public class Player {
     public boolean isInjured;
     public Injury injury;
 
+    /**
+     * When true, this player keeps their depth-chart slot through auto-sorts
+     * (unlocked teammates still sort around them). Injury still bumps them down.
+     */
+    public boolean depthLocked;
+
+    public RosterStatus rosterStatus = RosterStatus.SCHOLARSHIP;
+    public int nilDealAmount;
+    /** Original signed length (1–4). */
+    public int contractLength;
+    /** Future seasons still owed after the installment already paid this offseason. */
+    public int contractYearsRemaining;
+    public boolean retainedThisOffseason;
+    /** 1–7 projected round; 0 = UDFA / not a draft prospect. */
+    public int projectedDraftRound;
+    public boolean draftDeclared;
+    public ArrayList<PlayerSeasonRecord> careerSeasons = new ArrayList<>();
+    public TransferReason transferReason;
+    public String transferReasonText;
+    public Team priorTeam;
+    public int portalRiskTier; // 0 safe, 1-3 at risk
+
     protected final String[] letterGrades = {"F", "F+", "D", "D+", "C", "C+", "B", "B+", "A", "A+"};
     
     public Vector ratingsVector;
+
+    public void recordSeasonSnapshot() {
+        if (team == null || team.league == null) return;
+        careerSeasons.add(new PlayerSeasonRecord(this, team.league.getYear()));
+    }
+
+    public void applyOffer(RosterStatus status, int nilAmount) {
+        applyOffer(status, nilAmount, 1);
+    }
+
+    /**
+     * Apply roster status + annual NIL and multi-year length.
+     * Caller pays the year-1 installment; remaining years are future encumbrance.
+     */
+    public void applyOffer(RosterStatus status, int nilAmount, int years) {
+        this.rosterStatus = status != null ? status : RosterStatus.SCHOLARSHIP;
+        this.nilDealAmount = (this.rosterStatus == RosterStatus.SCHOLARSHIP_PLUS_NIL) ? Math.max(0, nilAmount) : 0;
+        int y = Math.max(1, years);
+        int max = ProgramOffers.maxContractYears(this);
+        if (y > max) y = max;
+        this.contractLength = y;
+        this.contractYearsRemaining = Math.max(0, y - 1);
+        this.retainedThisOffseason = true;
+        this.draftDeclared = false;
+    }
+
+    public void clearContract() {
+        rosterStatus = RosterStatus.PWO;
+        nilDealAmount = 0;
+        contractLength = 0;
+        contractYearsRemaining = 0;
+        retainedThisOffseason = false;
+    }
+
+    public boolean needsDealRenewal() {
+        if (year >= 5) return false;
+        if (rosterStatus == null || rosterStatus == RosterStatus.PWO) return false;
+        return contractYearsRemaining <= 0;
+    }
+
+    public int annualDealCash(int prestige) {
+        return NilMoney.offerCashCost(rosterStatus, nilDealAmount, prestige);
+    }
+
+    /** Future-year encumbrance from the recruiting purse (NIL only — COA is year-1). */
+    public int futureNilCommitment() {
+        if (rosterStatus != RosterStatus.SCHOLARSHIP_PLUS_NIL) return 0;
+        return Math.max(0, nilDealAmount);
+    }
+
+    public String schoolsAttendedSummary() {
+        Map<String, int[]> ranges = new LinkedHashMap<>();
+        for (PlayerSeasonRecord r : careerSeasons) {
+            String key = r.teamAbbr;
+            int[] range = ranges.get(key);
+            if (range == null) {
+                ranges.put(key, new int[]{r.seasonYear, r.seasonYear});
+            } else {
+                if (r.seasonYear < range[0]) range[0] = r.seasonYear;
+                if (r.seasonYear > range[1]) range[1] = r.seasonYear;
+            }
+        }
+        if (team != null && !ranges.containsKey(team.abbr)) {
+            int y = team.league != null ? team.league.getYear() : 0;
+            ranges.put(team.abbr, new int[]{y, y});
+        }
+        StringBuilder sb = new StringBuilder();
+        for (Map.Entry<String, int[]> e : ranges.entrySet()) {
+            if (sb.length() > 0) sb.append(", ");
+            sb.append(e.getKey()).append(" (").append(e.getValue()[0]);
+            if (e.getValue()[0] != e.getValue()[1]) sb.append("-").append(e.getValue()[1]);
+            sb.append(")");
+        }
+        return sb.length() == 0 ? (team != null ? team.abbr : "—") : sb.toString();
+    }
+
+    public String careerSeasonsSaveSuffix() {
+        if (careerSeasons == null || careerSeasons.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        sb.append("|HIST");
+        for (PlayerSeasonRecord r : careerSeasons) {
+            sb.append("|").append(r.toSaveToken());
+        }
+        return sb.toString();
+    }
+
+    public void loadCareerSeasonsFromSuffix(String field) {
+        careerSeasons = new ArrayList<>();
+        if (field == null || !field.startsWith("|HIST")) return;
+        String[] parts = field.split("\\|");
+        for (int i = 2; i < parts.length; i++) {
+            if (parts[i].isEmpty()) continue;
+            PlayerSeasonRecord r = PlayerSeasonRecord.fromSaveToken(parts[i]);
+            if (r != null) careerSeasons.add(r);
+        }
+    }
+
+    public String rosterStatusSave() {
+        return rosterStatus.name() + ":" + nilDealAmount + ":" + contractYearsRemaining + ":"
+                + contractLength + ":" + (retainedThisOffseason ? "1" : "0")
+                + ":" + (depthLocked ? "1" : "0");
+    }
+
+    public void loadRosterStatus(String field) {
+        if (field == null || field.isEmpty()) {
+            rosterStatus = RosterStatus.SCHOLARSHIP;
+            nilDealAmount = 0;
+            contractYearsRemaining = 0;
+            contractLength = 1;
+            retainedThisOffseason = false;
+            depthLocked = false;
+            return;
+        }
+        String[] p = field.split(":");
+        rosterStatus = RosterStatus.fromString(p[0]);
+        nilDealAmount = 0;
+        contractYearsRemaining = 0;
+        contractLength = 1;
+        retainedThisOffseason = false;
+        depthLocked = false;
+        if (p.length > 1) {
+            try {
+                nilDealAmount = Integer.parseInt(p[1]);
+            } catch (Exception e) {
+                nilDealAmount = 0;
+            }
+        }
+        if (p.length > 2) {
+            try {
+                contractYearsRemaining = Integer.parseInt(p[2]);
+            } catch (Exception e) {
+                contractYearsRemaining = 0;
+            }
+        }
+        if (p.length > 3) {
+            try {
+                contractLength = Integer.parseInt(p[3]);
+            } catch (Exception e) {
+                contractLength = Math.max(1, contractYearsRemaining + 1);
+            }
+        }
+        if (p.length > 4) {
+            retainedThisOffseason = "1".equals(p[4]);
+        }
+        if (p.length > 5) {
+            depthLocked = "1".equals(p[5]);
+        }
+    }
     
     public String getYrStr() {
-        if (year == 0) {
-            return "RS";
-        } else if ( year == 1 ) {
+        if ( year == 1 ) {
             return "Fr";
         } else if ( year == 2 ) {
             return "So";
@@ -52,6 +222,8 @@ public class Player {
             return "Jr";
         } else if ( year == 4 ) {
             return "Sr";
+        } else if ( year == 5 ) {
+            return "Grad";
         }
         return "ERROR";
     }
@@ -154,11 +326,36 @@ public class Player {
         ArrayList<String> pStats = new ArrayList<>();
         pStats.add("Games: " + (gamesPlayed+careerGamesPlayed) + " (" + (statsWins+careerWins) + "-" + (gamesPlayed+careerGamesPlayed-(statsWins+careerWins)) + ")"
                 + ">Yrs: " + getYearsPlayed());
-        pStats.add("Awards: " + getAwards() + "> ");
+        pStats.add("Awards: " + getAwards() + ">Status: " + rosterStatus.displayName());
+        pStats.add("Schools: " + schoolsAttendedSummary() + "> ");
         return pStats;
     }
 
+    public ArrayList<String> getYearByYearStatsList() {
+        ArrayList<String> lines = new ArrayList<>();
+        if (careerSeasons != null) {
+            for (int i = careerSeasons.size() - 1; i >= 0; i--) {
+                lines.add(careerSeasons.get(i).summaryLine());
+            }
+        }
+        // Current season in progress
+        if (team != null && team.league != null && gamesPlayed > 0) {
+            PlayerSeasonRecord current = new PlayerSeasonRecord(this, team.league.getYear());
+            lines.add(0, current.summaryLine() + " *");
+        }
+        return lines;
+    }
+
     public String getYearsPlayed() {
+        if (careerSeasons != null && !careerSeasons.isEmpty()) {
+            int start = careerSeasons.get(0).seasonYear;
+            int end = careerSeasons.get(careerSeasons.size() - 1).seasonYear;
+            if (team != null && team.league != null) {
+                end = Math.max(end, team.league.getYear());
+            }
+            return start + "-" + end;
+        }
+        if (team == null || team.league == null) return "—";
         int startYear = team.league.getYear() - year + 1;
         int endYear = team.league.getYear();
         return startYear + "-" + endYear;
@@ -202,13 +399,17 @@ public class Player {
         switch (pos) {
             case "QB": return 0;
             case "RB": return 1;
-            case "WR": return 2;
-            case "OL": return 3;
-            case "K": return 4;
-            case "S": return 5;
-            case "CB": return 6;
-            case "F7": return 7;
-            default: return 8;
+            case "FB": return 2;
+            case "WR": return 3;
+            case "TE": return 4;
+            case "OL": return 5;
+            case "K": return 6;
+            case "S": return 7;
+            case "CB": return 8;
+            case "EDGE": return 9;
+            case "DL": return 10;
+            case "LB": return 11;
+            default: return 12;
         }
     }
     

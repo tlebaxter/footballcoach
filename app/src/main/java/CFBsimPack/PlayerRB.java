@@ -51,7 +51,6 @@ public class PlayerRB extends Player {
         ratRushSpd = spd;
         ratRushEva = eva;
         isRedshirt = rs;
-        if (isRedshirt) year = 0;
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/2) + 70 + (int)(Math.random()*100) - 50;
 
@@ -102,7 +101,6 @@ public class PlayerRB extends Player {
         ratRushSpd = spd;
         ratRushEva = eva;
         isRedshirt = rs;
-        if (isRedshirt) year = 0;
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/2) + 70 + (int)(Math.random()*100) - 50;
         
@@ -208,6 +206,7 @@ public class PlayerRB extends Player {
     
     @Override
     public void advanceSeason() {
+        recordSeasonSnapshot();
         year++;
         int oldOvr = ratOvr;
         ratFootIQ += (int)(Math.random()*(ratPot + gamesPlayed - 35))/10;

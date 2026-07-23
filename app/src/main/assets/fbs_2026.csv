@@ -1,0 +1,139 @@
+conference,name,abbr,prestige,rivalAbbr
+SEC,Alabama,ALA,95,AUB
+SEC,Arkansas,ARK,78,MIZ
+SEC,Auburn,AUB,86,ALA
+SEC,Florida,FLA,85,UGA
+SEC,Georgia,UGA,95,FLA
+SEC,Kentucky,UKY,76,TEN
+SEC,LSU,LSU,92,OLM
+SEC,Mississippi State,MST,74,TAM
+SEC,Missouri,MIZ,82,ARK
+SEC,Oklahoma,OKL,91,TEX
+SEC,Ole Miss,OLM,87,LSU
+SEC,South Carolina,SCA,80,VAN
+SEC,Tennessee,TEN,90,UKY
+SEC,Texas,TEX,95,OKL
+SEC,Texas A&M,TAM,87,MST
+SEC,Vanderbilt,VAN,68,SCA
+Big Ten,Illinois,ILL,76,NWU
+Big Ten,Indiana,IND,84,PUR
+Big Ten,Iowa,IOW,84,NEB
+Big Ten,Maryland,UMD,74,RUT
+Big Ten,Michigan,MIC,94,OSU
+Big Ten,Michigan State,MSU,80,PSU
+Big Ten,Minnesota,MIN,76,WIS
+Big Ten,Nebraska,NEB,84,IOW
+Big Ten,Northwestern,NWU,68,ILL
+Big Ten,Ohio State,OSU,95,MIC
+Big Ten,Oregon,ORE,94,WAS
+Big Ten,Penn State,PSU,93,MSU
+Big Ten,Purdue,PUR,69,IND
+Big Ten,Rutgers,RUT,72,UMD
+Big Ten,UCLA,UCL,77,CAL
+Big Ten,USC,USC,91,NDE
+Big Ten,Washington,WAS,88,ORE
+Big Ten,Wisconsin,WIS,82,MIN
+ACC,Boston College,BCO,73,SYR
+ACC,California,CAL,79,UCL
+ACC,Clemson,CLE,92,FSU
+ACC,Duke,DUK,76,UNC
+ACC,Florida State,FSU,90,CLE
+ACC,Georgia Tech,GAT,79,MIA
+ACC,Louisville,LOU,84,PIT
+ACC,Miami,MIA,91,GAT
+ACC,NC State,NCS,81,WFU
+ACC,North Carolina,UNC,84,DUK
+ACC,Pittsburgh,PIT,80,LOU
+ACC,SMU,SMU,85,STA
+ACC,Stanford,STA,72,SMU
+ACC,Syracuse,SYR,78,BCO
+ACC,Virginia,UVA,71,VAT
+ACC,Virginia Tech,VAT,82,UVA
+ACC,Wake Forest,WFU,72,NCS
+Big 12,Arizona,ARI,81,ASU
+Big 12,Arizona State,ASU,87,ARI
+Big 12,Baylor,BAY,77,TCU
+Big 12,BYU,BYU,88,UTA
+Big 12,Cincinnati,CIN,78,WVU
+Big 12,Colorado,COL,87,KSU
+Big 12,Houston,HOU,75,UCF
+Big 12,Iowa State,ISU,86,KAN
+Big 12,Kansas,KAN,81,ISU
+Big 12,Kansas State,KSU,87,COL
+Big 12,Oklahoma State,OKS,80,TTU
+Big 12,TCU,TCU,84,BAY
+Big 12,Texas Tech,TTU,86,OKS
+Big 12,UCF,UCF,77,HOU
+Big 12,Utah,UTA,89,BYU
+Big 12,West Virginia,WVU,78,CIN
+American,Army,ARM,82,NAV
+American,Charlotte,CLT,59,ECU
+American,East Carolina,ECU,73,CLT
+American,Florida Atlantic,FAU,64,USF
+American,Memphis,MEM,82,TUL
+American,Navy,NAV,79,ARM
+American,North Texas,UNT,78,UTS
+American,Rice,RIC,68,TLS
+American,Temple,TEM,58,UAB
+American,Tulane,TUL,82,MEM
+American,Tulsa,TLS,61,RIC
+American,UAB,UAB,65,TEM
+American,USF,USF,75,FAU
+American,UTSA,UTS,79,UNT
+Conference USA,Delaware,DEL,62,MTS
+Conference USA,FIU,FIU,58,LIB
+Conference USA,Jacksonville State,JST,72,KST
+Conference USA,Kennesaw State,KST,60,JST
+Conference USA,Liberty,LIB,78,FIU
+Conference USA,Middle Tennessee,MTS,65,DEL
+Conference USA,Missouri State,MOS,60,NMS
+Conference USA,New Mexico State,NMS,65,MOS
+Conference USA,Sam Houston,SHS,68,WKU
+Conference USA,WKU,WKU,75,SHS
+MAC,Akron,AKR,52,KEN
+MAC,Ball State,BSU,59,MOH
+MAC,Bowling Green,BGS,68,TOL
+MAC,Buffalo,BUF,65,OHI
+MAC,Central Michigan,CMU,63,WMU
+MAC,Eastern Michigan,EMU,65,SAC
+MAC,Kent State,KEN,50,AKR
+MAC,Miami (Ohio),MOH,72,BSU
+MAC,Ohio,OHI,72,BUF
+MAC,Sacramento State,SAC,62,EMU
+MAC,Toledo,TOL,75,BGS
+MAC,UMass,UMA,55,UCN
+MAC,Western Michigan,WMU,74,CMU
+Mountain West,Air Force,AFA,72,WYO
+Mountain West,Hawaii,HAW,67,NEV
+Mountain West,Nevada,NEV,60,HAW
+Mountain West,New Mexico,UNM,62,UTP
+Mountain West,North Dakota State,NDS,74,NIU
+Mountain West,Northern Illinois,NIU,72,NDS
+Mountain West,San Jose State,SJS,68,UNL
+Mountain West,UNLV,UNL,78,SJS
+Mountain West,UTEP,UTP,60,UNM
+Mountain West,Wyoming,WYO,69,AFA
+Pac-12,Boise State,BOI,86,FRE
+Pac-12,Colorado State,CSU,71,UST
+Pac-12,Fresno State,FRE,78,BOI
+Pac-12,Oregon State,ORS,76,WSU
+Pac-12,San Diego State,SDS,73,TST
+Pac-12,Texas State,TST,77,SDS
+Pac-12,Utah State,UST,68,CSU
+Pac-12,Washington State,WSU,79,ORS
+Sun Belt,Appalachian State,APP,76,JMU
+Sun Belt,Arkansas State,ARS,68,ULL
+Sun Belt,Coastal Carolina,CCU,72,GSO
+Sun Belt,Georgia Southern,GSO,72,CCU
+Sun Belt,Georgia State,GST,65,ODU
+Sun Belt,James Madison,JMU,82,APP
+Sun Belt,Louisiana,ULL,74,ARS
+Sun Belt,Louisiana Tech,LAT,68,SMI
+Sun Belt,Marshall,MSH,74,ULM
+Sun Belt,Old Dominion,ODU,68,GST
+Sun Belt,South Alabama,USA,70,TRO
+Sun Belt,Southern Miss,SMI,64,LAT
+Sun Belt,Troy,TRO,73,USA
+Sun Belt,ULM,ULM,57,MSH
+Independents,Notre Dame,NDE,93,USC
+Independents,UConn,UCN,60,UMA
