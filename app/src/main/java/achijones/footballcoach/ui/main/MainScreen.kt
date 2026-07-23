@@ -1,7 +1,17 @@
 package achijones.footballcoach.ui.main
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -10,25 +20,32 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.DragHandle
 import androidx.compose.material.icons.filled.EmojiEvents
 import androidx.compose.material.icons.filled.Groups
@@ -70,6 +87,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -78,14 +97,19 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import achijones.footballcoach.ui.components.ConferenceLogo
 import achijones.footballcoach.ui.components.SegmentedControl
 import achijones.footballcoach.ui.components.TabContentTransition
+import achijones.footballcoach.ui.components.TeamLogo
+import achijones.footballcoach.ui.components.rememberTeamColors
 import achijones.footballcoach.ui.theme.FcChipPosBg
 import achijones.footballcoach.ui.theme.FcChipPosText
 import achijones.footballcoach.ui.theme.FcLoss
@@ -119,6 +143,9 @@ fun MainScreen(
 ) {
     val state by viewModel.uiState.collectAsState()
     val snackbar = remember { SnackbarHostState() }
+    // Hold a blank screen after team pick / offseason handoff so the roster
+    // never flashes for a frame before NavHost reaches Talent Hub.
+    var suppressMainContent by remember { mutableStateOf(false) }
 
     BackHandler { viewModel.requestExit() }
 
@@ -134,6 +161,7 @@ fun MainScreen(
     }
     LaunchedEffect(state.navigateToTalentHub) {
         if (state.navigateToTalentHub) {
+            suppressMainContent = true
             viewModel.consumeNavigateToTalentHub()
             onNavigateTalentHub()
         }
@@ -154,6 +182,27 @@ fun MainScreen(
     if (!state.ready && !state.navigateHome && !state.navigateToTalentHub) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
             CircularProgressIndicator()
+        }
+        return
+    }
+
+    if (state.showTeamPicker) {
+        BackHandler { /* Must pick a team to continue */ }
+        TeamPickerScreen(
+            conferences = state.teamPickerConferences,
+            onPick = viewModel::pickTeam,
+        )
+        return
+    }
+
+    if (suppressMainContent || state.navigateToTalentHub) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color(0xFF0A0A0A)),
+            contentAlignment = Alignment.Center,
+        ) {
+            CircularProgressIndicator(color = Color.White)
         }
         return
     }
@@ -234,9 +283,6 @@ fun MainScreen(
         }
     }
 
-    if (state.showTeamPicker) {
-        TeamPickerDialog(state.teamPickerOptions, viewModel::pickTeam)
-    }
     if (state.showExitConfirm) {
         AlertDialog(
             onDismissRequest = viewModel::dismissExitConfirm,
@@ -1560,7 +1606,11 @@ private fun ScheduleCard(
                 .clickable { onOpponentClick(row.opponentTeamName) },
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            OpponentLogoCircle(abbr = row.opponentAbbr)
+            TeamLogo(
+                teamName = row.opponentTeamName,
+                abbr = row.opponentAbbr,
+                size = 44.dp,
+            )
             Text(
                 text = "#${row.opponentRank}",
                 style = MaterialTheme.typography.labelSmall,
@@ -1570,38 +1620,6 @@ private fun ScheduleCard(
         }
     }
 }
-
-@Composable
-private fun OpponentLogoCircle(abbr: String) {
-    val logoColor = opponentLogoColor(abbr)
-    Box(
-        modifier = Modifier
-            .size(44.dp)
-            .clip(CircleShape)
-            .background(logoColor)
-            .border(1.5.dp, Color.White.copy(alpha = 0.25f), CircleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            text = abbr.take(4),
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = Color.White,
-            maxLines = 1,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-private fun opponentLogoColor(abbr: String): Color {
-    var hash = 0
-    for (ch in abbr.uppercase()) {
-        hash = 31 * hash + ch.code
-    }
-    val hue = ((hash % 360) + 360) % 360
-    return Color.hsl(hue.toFloat(), 0.55f, 0.38f)
-}
-
 
 @Composable
 private fun AwardCard(row: AwardRowUi) {
@@ -1641,22 +1659,277 @@ private fun BowlCard(bowl: BowlRowUi) {
 }
 
 @Composable
-private fun TeamPickerDialog(options: List<String>, onPick: (Int) -> Unit) {
-    AlertDialog(
-        onDismissRequest = {},
-        title = { Text("Choose your team:") },
-        text = {
-            LazyColumn {
-                items(options.size) { i ->
-                    TextButton(
-                        onClick = { onPick(i) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(options[i], modifier = Modifier.fillMaxWidth()) }
+private fun TeamPickerScreen(
+    conferences: List<TeamPickerConfUi>,
+    onPick: (Int) -> Unit,
+) {
+    if (conferences.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+            CircularProgressIndicator()
+        }
+        return
+    }
+    var selectedConfIndex by remember { mutableIntStateOf(0) }
+    var teamIndex by remember { mutableIntStateOf(0) }
+    var slideForward by remember { mutableStateOf(true) }
+    val confIndex = selectedConfIndex.coerceIn(conferences.indices)
+    val selectedConf = conferences[confIndex]
+    val currentTeam = selectedConf.teams.getOrNull(teamIndex.coerceIn(0, (selectedConf.teams.size - 1).coerceAtLeast(0)))
+    val teamColors = rememberTeamColors(currentTeam?.name, currentTeam?.abbr ?: "TEAM")
+    val animPrimary by animateColorAsState(
+        targetValue = teamColors.primary,
+        animationSpec = tween(350),
+        label = "pickerPrimary",
+    )
+    val animSecondary by animateColorAsState(
+        targetValue = teamColors.secondary,
+        animationSpec = tween(350),
+        label = "pickerSecondary",
+    )
+    val gradientBrush = Brush.linearGradient(
+        colors = listOf(
+            animPrimary,
+            animSecondary.copy(alpha = 0.95f),
+            Color(0xFF0A0A0A),
+        ),
+    )
+    val swipeThresholdPx = with(LocalDensity.current) { 48.dp.toPx() }
+    var dragAccum by remember { mutableFloatStateOf(0f) }
+
+    fun goToTeam(nextIndex: Int, forward: Boolean) {
+        if (nextIndex !in selectedConf.teams.indices || nextIndex == teamIndex) return
+        slideForward = forward
+        teamIndex = nextIndex
+    }
+
+    LaunchedEffect(confIndex) {
+        slideForward = true
+        teamIndex = 0
+    }
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(gradientBrush),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .statusBarsPadding()
+                .navigationBarsPadding()
+                .padding(top = 20.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(
+                text = "Choose your team",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+            )
+
+            LazyRow(
+                contentPadding = PaddingValues(horizontal = 16.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                itemsIndexed(conferences) { index, conf ->
+                    val selected = index == confIndex
+                    Row(
+                        modifier = Modifier
+                            .clip(RoundedCornerShape(22.dp))
+                            .background(
+                                if (selected) Color.White.copy(alpha = 0.24f)
+                                else Color.Black.copy(alpha = 0.32f),
+                            )
+                            .border(
+                                width = if (selected) 1.5.dp else 1.dp,
+                                color = if (selected) Color.White.copy(alpha = 0.9f)
+                                else Color.White.copy(alpha = 0.2f),
+                                shape = RoundedCornerShape(22.dp),
+                            )
+                            .clickable { selectedConfIndex = index }
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        ConferenceLogo(conferenceName = conf.name, size = 24.dp)
+                        Text(
+                            text = conf.name,
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                            color = Color.White,
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
-        },
-        confirmButton = {},
-    )
+
+            if (selectedConf.teams.isEmpty() || currentTeam == null) {
+                Box(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text("No teams in this conference.", color = Color.White)
+                }
+            } else {
+                Row(
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(
+                        onClick = { goToTeam(teamIndex - 1, forward = false) },
+                        enabled = teamIndex > 0,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                            contentDescription = "Previous team",
+                            tint = Color.White.copy(
+                                alpha = if (teamIndex > 0) 0.95f else 0.3f,
+                            ),
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                    Box(
+                        modifier = Modifier
+                            .weight(1f)
+                            .fillMaxHeight()
+                            .pointerInput(confIndex, selectedConf.teams.size, teamIndex) {
+                                detectHorizontalDragGestures(
+                                    onDragStart = { dragAccum = 0f },
+                                    onDragEnd = {
+                                        when {
+                                            dragAccum <= -swipeThresholdPx ->
+                                                goToTeam(teamIndex + 1, forward = true)
+                                            dragAccum >= swipeThresholdPx ->
+                                                goToTeam(teamIndex - 1, forward = false)
+                                        }
+                                        dragAccum = 0f
+                                    },
+                                    onDragCancel = { dragAccum = 0f },
+                                    onHorizontalDrag = { _, amount -> dragAccum += amount },
+                                )
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        AnimatedContent(
+                            targetState = currentTeam,
+                            transitionSpec = {
+                                val enter = fadeIn(tween(240)) + slideInHorizontally(tween(280)) {
+                                    if (slideForward) it / 4 else -it / 4
+                                }
+                                val exit = fadeOut(tween(180)) + slideOutHorizontally(tween(220)) {
+                                    if (slideForward) -it / 4 else it / 4
+                                }
+                                (enter togetherWith exit).using(SizeTransform(clip = false))
+                            },
+                            label = "teamLogoSwap",
+                            contentAlignment = Alignment.Center,
+                        ) { team ->
+                            Column(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.Center,
+                            ) {
+                                TeamLogo(
+                                    teamName = team.name,
+                                    abbr = team.abbr,
+                                    size = 200.dp,
+                                    framed = false,
+                                )
+                                Spacer(Modifier.height(20.dp))
+                                Text(
+                                    text = team.name,
+                                    style = MaterialTheme.typography.headlineSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    color = Color.White,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                )
+                                Spacer(Modifier.height(6.dp))
+                                Text(
+                                    text = "${team.abbr} · Prestige ${team.prestige}",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    color = Color.White.copy(alpha = 0.85f),
+                                    textAlign = TextAlign.Center,
+                                )
+                            }
+                        }
+                    }
+                    IconButton(
+                        onClick = { goToTeam(teamIndex + 1, forward = true) },
+                        enabled = teamIndex < selectedConf.teams.lastIndex,
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = "Next team",
+                            tint = Color.White.copy(
+                                alpha = if (teamIndex < selectedConf.teams.lastIndex) {
+                                    0.95f
+                                } else {
+                                    0.3f
+                                },
+                            ),
+                            modifier = Modifier.size(40.dp),
+                        )
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Center,
+                ) {
+                    val pageCount = selectedConf.teams.size
+                    val maxDots = 11
+                    val current = teamIndex
+                    val windowStart = when {
+                        pageCount <= maxDots -> 0
+                        current <= maxDots / 2 -> 0
+                        current >= pageCount - (maxDots / 2) -> pageCount - maxDots
+                        else -> current - maxDots / 2
+                    }
+                    val windowEnd = (windowStart + maxDots).coerceAtMost(pageCount)
+                    for (i in windowStart until windowEnd) {
+                        Box(
+                            modifier = Modifier
+                                .padding(horizontal = 3.dp)
+                                .size(if (i == current) 9.dp else 6.dp)
+                                .clip(CircleShape)
+                                .background(
+                                    if (i == current) Color.White
+                                    else Color.White.copy(alpha = 0.35f),
+                                ),
+                        )
+                    }
+                }
+            }
+
+            Button(
+                onClick = { if (currentTeam != null) onPick(currentTeam.teamListIndex) },
+                enabled = currentTeam != null,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .height(52.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Color.White,
+                    contentColor = Color.Black,
+                    disabledContainerColor = Color.White.copy(alpha = 0.4f),
+                    disabledContentColor = Color.Black.copy(alpha = 0.5f),
+                ),
+                shape = RoundedCornerShape(16.dp),
+            ) {
+                Text("Select", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+            }
+        }
+    }
 }
 
 @Composable

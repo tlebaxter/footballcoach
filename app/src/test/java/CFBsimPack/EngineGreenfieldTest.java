@@ -250,7 +250,7 @@ public class EngineGreenfieldTest {
         File tmp = File.createTempFile("oldsave", ".txt");
         try {
             FileWriter w = new FileWriter(tmp);
-            w.write("2026: ABC (0-0) 0 CCs, 0 NCs>[EASY]%\n");
+            w.write("2026: ABC (0-0) 0 CCs, 0 NCs>%\n");
             w.write("END_LEAGUE_HIST\n");
             w.write("END_HEISMAN_HIST\n");
             w.write("TEAM_COUNT,1\n");
@@ -276,7 +276,7 @@ public class EngineGreenfieldTest {
             csvPath = Paths.get("app/src/main/assets/fbs_2026.csv");
         }
         String csv = new String(Files.readAllBytes(csvPath), StandardCharsets.UTF_8);
-        League league = new League(FIRST_NAMES, LAST_NAMES, csv, false);
+        League league = new League(FIRST_NAMES, LAST_NAMES, csv);
         league.userTeam = league.teamList.get(0);
         league.userTeam.userControlled = true;
         return league;

@@ -3,6 +3,7 @@ package com.example.achijones.footballcoach;
 import CFBsimPack.Game;
 import CFBsimPack.League;
 import CFBsimPack.LeagueOffseason;
+import CFBsimPack.Rivalry;
 import CFBsimPack.Team;
 
 import org.junit.Rule;
@@ -46,7 +47,7 @@ public class ExampleUnitTest {
     public void createsComplete2026FbsSchedule() throws Exception {
         League league = createLeague();
 
-        assertEquals(138, league.teamList.size());
+        assertEquals(140, league.teamList.size());
         assertEquals(11, league.conferences.size());
         assertEquals(2026, league.getYear());
         assertEquals(18, league.findConference("Big Ten").confTeams.size());
@@ -61,7 +62,6 @@ public class ExampleUnitTest {
             assertNull("Bye week should be empty for " + team.abbr, team.gameSchedule.get(team.byeWeek));
 
             Set<Team> opponents = new HashSet<>();
-            boolean playsRival = false;
             int games = 0;
             for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
                 Game game = team.gameSchedule.get(week);
@@ -74,10 +74,42 @@ public class ExampleUnitTest {
                 Team opponent = game.homeTeam == team ? game.awayTeam : game.homeTeam;
                 assertTrue(game.homeTeam == team || game.awayTeam == team);
                 assertTrue("Duplicate opponent for " + team.abbr, opponents.add(opponent));
-                playsRival |= opponent.abbr.equals(team.rivalTeam);
             }
             assertEquals(League.REGULAR_SEASON_GAMES, games);
-            assertTrue("Missing rivalry game for " + team.abbr, playsRival);
+        }
+
+        // Hot same-conference reciprocal rivals (min ≥ 70) are seated first and must meet.
+        for (Team team : league.teamList) {
+            if (team.rivalries == null) {
+                continue;
+            }
+            for (Rivalry link : team.rivalries) {
+                Team rival = league.findTeamAbbr(link.opponentAbbr);
+                if (rival == null || !team.conference.equals(rival.conference)) {
+                    continue;
+                }
+                Rivalry back = rival.rivalryWith(team.abbr);
+                if (back == null) {
+                    continue;
+                }
+                if (Math.min(link.strength, back.strength) < Rivalry.HOT_THRESHOLD) {
+                    continue;
+                }
+                boolean playsRival = false;
+                for (Game game : team.gameSchedule) {
+                    if (game == null) {
+                        continue;
+                    }
+                    Team opponent = game.homeTeam == team ? game.awayTeam : game.homeTeam;
+                    if (opponent == rival) {
+                        playsRival = true;
+                        break;
+                    }
+                }
+                assertTrue(
+                        "Missing in-conference Hot rivalry for " + team.abbr + " vs " + rival.abbr,
+                        playsRival);
+            }
         }
 
         for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
@@ -99,7 +131,7 @@ public class ExampleUnitTest {
             }
             assertEquals(0, playing % 2);
             assertEquals(playing / 2, games.size());
-            assertEquals(138, playing + byes);
+            assertEquals(140, playing + byes);
         }
     }
 
@@ -164,7 +196,7 @@ public class ExampleUnitTest {
         assertTrue(league.saveLeague(saveFile));
 
         League loaded = new League(saveFile, FIRST_NAMES, LAST_NAMES);
-        assertEquals(138, loaded.teamList.size());
+        assertEquals(140, loaded.teamList.size());
         assertEquals(11, loaded.conferences.size());
         assertEquals(League.FIRST_SEASON_YEAR, loaded.getYear());
         assertEquals(league.userTeam.name, loaded.userTeam.name);
@@ -246,8 +278,7 @@ public class ExampleUnitTest {
         return new League(
                 FIRST_NAMES,
                 LAST_NAMES,
-                teamsCsv,
-                false);
+                teamsCsv);
     }
 
     private static int conferenceGameCount(Team team) {

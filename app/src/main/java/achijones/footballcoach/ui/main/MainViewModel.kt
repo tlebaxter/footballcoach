@@ -124,7 +124,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             _uiState.update {
                 it.copy(
                     showTeamPicker = true,
-                    teamPickerOptions = l.getTeamListStr().toList(),
+                    teamPickerConferences = buildTeamPickerConferences(l),
                 )
             }
         }
@@ -222,7 +222,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun consumeNavigateToTalentHub() {
-        _uiState.update { it.copy(navigateToTalentHub = false) }
+        _uiState.update { it.copy(navigateToTalentHub = false, showTeamPicker = false) }
     }
 
     fun consumeSnackbar() {
@@ -409,7 +409,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
             val lastWl = user.gameWLSchedule.lastOrNull()
             val playedRealGame = user.gameWLSchedule.size > numGamesPlayed && lastWl != "BYE"
-            if (l.currentWeek != League.WEEK_SEASON_END && showInjuryReport && l.isHardMode &&
+            if (l.currentWeek != League.WEEK_SEASON_END && showInjuryReport &&
                 playedRealGame
             ) {
                 showInjury = true
@@ -526,7 +526,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         l.offseason = off
         GameSession.beginOffseason(l, off, OffseasonSession.Phase.SCHEDULE)
         GameSession.setNeedsOocScheduling(true)
-        _uiState.update { it.copy(showTeamPicker = false, navigateToTalentHub = true) }
+        // Keep showTeamPicker true until navigation starts so MainScreen does not
+        // briefly paint the roster under the outgoing picker.
+        _uiState.update { it.copy(navigateToTalentHub = true) }
         rebuildSnapshot()
         wantUpdateConf = 2
     }
@@ -870,11 +872,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         showInjuryReport = dialog.showInjuryReport
         user.showPopups = showToasts
         if (l.isNameValid(newName) && l.isAbbrValid(newAbbr)) {
-            l.changeAbbrHistoryRecords(user.abbr, newAbbr)
+            val oldAbbr = user.abbr
+            l.changeAbbrHistoryRecords(oldAbbr, newAbbr)
             user.name = newName
             user.abbr = newAbbr
-            val rival = l.findTeamAbbr(user.rivalTeam)
-            rival?.rivalTeam = user.abbr
+            for (t in l.teamList) {
+                if (t !== user) {
+                    t.retargetRivalAbbr(oldAbbr, newAbbr)
+                }
+            }
+            l.oocContracts?.retargetAbbr(oldAbbr, newAbbr)
             syncBrowseIndicesToCurrentTeam()
             rebuildSnapshot()
         } else if (showToasts) {
@@ -1670,6 +1677,24 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun letterGrade(num: Int): String {
         val ind = ((num - 50) / 5).coerceIn(0, LETTER_GRADES.lastIndex)
         return LETTER_GRADES[ind]
+    }
+
+    private fun buildTeamPickerConferences(l: League): List<TeamPickerConfUi> {
+        val indexByAbbr = l.teamList.withIndex().associate { it.value.abbr to it.index }
+        return l.conferences.map { conf ->
+            TeamPickerConfUi(
+                name = conf.confName,
+                teams = conf.confTeams.mapNotNull { team ->
+                    val index = indexByAbbr[team.abbr] ?: return@mapNotNull null
+                    TeamPickerTeamUi(
+                        teamListIndex = index,
+                        name = team.name,
+                        abbr = team.abbr,
+                        prestige = team.teamPrestige,
+                    )
+                },
+            )
+        }.filter { it.teams.isNotEmpty() }
     }
 
     companion object {

@@ -32,6 +32,8 @@ public class Game implements Serializable {
     public Team awayTeam;
     public boolean hasPlayed;
     public String gameName;
+    /** Optional OOC contract id when this game was materialized from a multi-year deal. */
+    public String contractId;
 
     public int homeScore;
     public int[] homeQScore;
@@ -88,10 +90,15 @@ public class Game implements Serializable {
     }
 
     private void tagRivalry() {
-        if (homeTeam.rivalTeam.equals(awayTeam.abbr) || awayTeam.rivalTeam.equals(homeTeam.abbr)) {
+        if (Team.strongestRivalryBetween(homeTeam, awayTeam) > 0) {
             if (gameName.equals("In Conf")) gameName = "Rivalry Game";
             else if (gameName.equals("OOC")) gameName = "OOC Rivalry";
         }
+    }
+
+    /** Strongest rivalry strength between the two teams (0 if none). */
+    public int rivalryStrength() {
+        return Team.strongestRivalryBetween(homeTeam, awayTeam);
     }
 
     public void setRandom(Random random) {
@@ -565,9 +572,16 @@ public class Game implements Serializable {
         homeTeam.teamTODiff += awayTOs - homeTOs;
         awayTeam.teamTODiff += homeTOs - awayTOs;
 
-        if (homeTeam.rivalTeam.equals(awayTeam.abbr) || awayTeam.rivalTeam.equals(homeTeam.abbr)) {
-            if (homeScore > awayScore) homeTeam.wonRivalryGame = true;
-            else awayTeam.wonRivalryGame = true;
+        boolean homeWon = homeScore > awayScore;
+        if (homeTeam.isRival(awayTeam.abbr)) {
+            homeTeam.recordRivalryResult(awayTeam.abbr, homeWon);
+        }
+        if (awayTeam.isRival(homeTeam.abbr)) {
+            awayTeam.recordRivalryResult(homeTeam.abbr, !homeWon);
+        }
+
+        if (homeTeam.league != null && homeTeam.league.oocContracts != null) {
+            homeTeam.league.oocContracts.settlePlayedGame(this);
         }
 
         homeTeam.checkForInjury();
@@ -931,7 +945,11 @@ public class Game implements Serializable {
                 + "\nOff Tal " + awayTeam.getOffTalent()
                 + "\nDef Tal " + awayTeam.getDefTalent()
                 + "\nPrestige " + awayTeam.teamPrestige;
-        String center = gameName + "\n\nSCOUT";
+        int rivalry = rivalryStrength();
+        String center = gameName + "\n\nSCOUT"
+                + (rivalry > 0
+                ? "\n" + Rivalry.band(rivalry) + " rivalry (" + rivalry + ")"
+                : "");
         String right = homeTeam.abbr + "\nOff: " + homeTeam.offPhilosophy.displayName
                 + "\nDef: " + homeTeam.defSystem.displayName
                 + "\nOff Tal " + homeTeam.getOffTalent()
@@ -939,6 +957,21 @@ public class Game implements Serializable {
                 + "\nPrestige " + homeTeam.teamPrestige;
         String notes = "Philosophies and fronts shape personnel and playcalling.\n"
                 + "Set your Offense Philosophy and Defense System on the Team tab.";
+        if (rivalry >= Rivalry.PRESTIGE_THRESHOLD) {
+            int swing = rivalry >= Rivalry.HOT_THRESHOLD ? 2 : 1;
+            notes += "\nRivalry stakes: about ±" + swing
+                    + " prestige when the programs are competitive.";
+        }
+        if (contractId != null && homeTeam.league != null && homeTeam.league.oocContracts != null) {
+            OocContractGame cg = homeTeam.league.oocContracts.findById(contractId) != null
+                    ? homeTeam.league.oocContracts.findById(contractId)
+                    .gameForYear(homeTeam.league.getYear())
+                    : null;
+            if (cg != null && cg.guarantee > 0) {
+                notes += "\nBuy-game guarantee: " + NilMoney.format(cg.guarantee)
+                        + " paid by " + cg.homeAbbr + " to " + cg.awayAbbr + " when played.";
+            }
+        }
         return new String[]{left, center, right, notes};
     }
 }

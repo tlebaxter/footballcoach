@@ -1,6 +1,8 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -200,8 +202,6 @@ public final class ConferenceScheduleBuilder {
     }
 
     private static int firstOpenSharedWeek(Team first, Team second) {
-        // Prefer flex weeks for catch-ups so odd-conference holes remain on
-        // non-flex weeks (needed for independents and realistic OOC partners).
         for (int week : FLEX_WEEKS) {
             if (first.gameSchedule.get(week) == null && second.gameSchedule.get(week) == null) {
                 return week;
@@ -244,29 +244,13 @@ public final class ConferenceScheduleBuilder {
         }
 
         Set<Team> placed = new HashSet<>();
-        int pairSlot = teams.size() % 2 == 0 ? 0 : 1;
         if (teams.size() % 2 == 1) {
-            Team unmatched = findTeamWithoutInternalReciprocalRival(teams);
+            Team unmatched = findTeamWithoutStrongInConfRival(teams);
             arranged.set(0, unmatched);
             placed.add(unmatched);
         }
 
-        for (Team team : teams) {
-            if (placed.contains(team)) {
-                continue;
-            }
-            Team rival = findTeamByAbbreviation(teams, team.rivalTeam);
-            if (rival != null
-                    && !placed.contains(rival)
-                    && team.abbr.equals(rival.rivalTeam)
-                    && pairSlot < rotationSize / 2) {
-                arranged.set(pairSlot, team);
-                arranged.set(rotationSize - 1 - pairSlot, rival);
-                placed.add(team);
-                placed.add(rival);
-                pairSlot++;
-            }
-        }
+        seatStrongReciprocalPairs(teams, arranged, placed, rotationSize);
 
         int nextEmpty = 0;
         for (Team team : teams) {
@@ -282,10 +266,96 @@ public final class ConferenceScheduleBuilder {
         return arranged;
     }
 
-    private static Team findTeamWithoutInternalReciprocalRival(List<Team> teams) {
+    /**
+     * Seat reciprocal same-conf pairs with min strength ≥ {@link Rivalry#SEAT_THRESHOLD},
+     * strongest pairs first.
+     */
+    private static void seatStrongReciprocalPairs(
+            List<Team> teams,
+            ArrayList<Team> arranged,
+            Set<Team> placed,
+            int rotationSize) {
+        ArrayList<int[]> pairs = new ArrayList<>();
+        Set<String> seen = new HashSet<>();
         for (Team team : teams) {
-            Team rival = findTeamByAbbreviation(teams, team.rivalTeam);
-            if (rival == null || !team.abbr.equals(rival.rivalTeam)) {
+            if (team.rivalries == null) {
+                continue;
+            }
+            for (Rivalry r : team.rivalries) {
+                Team rival = findTeamByAbbreviation(teams, r.opponentAbbr);
+                if (rival == null) {
+                    continue;
+                }
+                Rivalry back = rival.rivalryWith(team.abbr);
+                if (back == null) {
+                    continue;
+                }
+                int min = Math.min(r.strength, back.strength);
+                if (min < Rivalry.SEAT_THRESHOLD) {
+                    continue;
+                }
+                String key = team.abbr.compareTo(rival.abbr) < 0
+                        ? team.abbr + "-" + rival.abbr
+                        : rival.abbr + "-" + team.abbr;
+                if (!seen.add(key)) {
+                    continue;
+                }
+                pairs.add(new int[] {
+                        min,
+                        teams.indexOf(team),
+                        teams.indexOf(rival)
+                });
+            }
+        }
+        Collections.sort(pairs, new Comparator<int[]>() {
+            @Override
+            public int compare(int[] a, int[] b) {
+                return Integer.compare(b[0], a[0]);
+            }
+        });
+
+        int pairSlot = 0;
+        while (pairSlot < rotationSize / 2 && arranged.get(pairSlot) != null) {
+            pairSlot++;
+        }
+        for (int[] pair : pairs) {
+            if (pairSlot >= rotationSize / 2) {
+                break;
+            }
+            Team a = teams.get(pair[1]);
+            Team b = teams.get(pair[2]);
+            if (placed.contains(a) || placed.contains(b)) {
+                continue;
+            }
+            arranged.set(pairSlot, a);
+            arranged.set(rotationSize - 1 - pairSlot, b);
+            placed.add(a);
+            placed.add(b);
+            pairSlot++;
+            while (pairSlot < rotationSize / 2 && arranged.get(pairSlot) != null) {
+                pairSlot++;
+            }
+        }
+    }
+
+    private static Team findTeamWithoutStrongInConfRival(List<Team> teams) {
+        for (Team team : teams) {
+            boolean hasStrong = false;
+            if (team.rivalries != null) {
+                for (Rivalry r : team.rivalries) {
+                    Team rival = findTeamByAbbreviation(teams, r.opponentAbbr);
+                    if (rival == null) {
+                        continue;
+                    }
+                    Rivalry back = rival.rivalryWith(team.abbr);
+                    if (back != null
+                            && Math.min(r.strength, back.strength) >= Rivalry.SEAT_THRESHOLD) {
+                        hasStrong = true;
+                        break;
+                    }
+                }
+            }
+            if (!hasStrong) {
                 return team;
             }
         }

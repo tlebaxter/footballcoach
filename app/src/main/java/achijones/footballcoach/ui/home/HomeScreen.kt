@@ -91,7 +91,7 @@ fun HomeScreen(
             )
             Spacer(Modifier.height(8.dp))
             Button(
-                onClick = viewModel::openDifficultyDialog,
+                onClick = viewModel::startNewLeague,
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading,
             ) { Text("New Game") }
@@ -131,34 +131,6 @@ fun HomeScreen(
             }
             Spacer(Modifier.height(24.dp))
         }
-    }
-
-    if (state.showDifficultyDialog) {
-        AlertDialog(
-            onDismissRequest = viewModel::dismissDifficultyDialog,
-            title = { Text("Choose Difficulty:") },
-            text = {
-                Text(
-                    "What difficulty would you like?\n\n" +
-                        "Easy Mode has no injuries, normal rivalry mechanics, and a 50% chance " +
-                        "your good players will leave early for the NFL.\n\n" +
-                        "Hard Mode has injuries enabled, harder rivalry games, and a 70% chance " +
-                        "your good players will leave early for the NFL.\n\n" +
-                        "This cannot be changed later.",
-                    style = MaterialTheme.typography.bodyMedium,
-                )
-            },
-            confirmButton = {
-                TextButton(onClick = { viewModel.startNewLeague(hardMode = false) }) {
-                    Text("EASY")
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { viewModel.startNewLeague(hardMode = true) }) {
-                    Text("HARD")
-                }
-            },
-        )
     }
 
     if (state.showLoadDialog) {

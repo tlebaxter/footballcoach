@@ -100,7 +100,7 @@ This project is provided **as-is**, without warranty, as described in the licens
 Android Studio (recent stable) + JDK matching the project Gradle config. Open the repo root, sync Gradle, and run the `app` module.
 
 ```bash
-./gradlew :app:assembleDebug
+./gradlew :app:installDebug
 ```
 
 ---

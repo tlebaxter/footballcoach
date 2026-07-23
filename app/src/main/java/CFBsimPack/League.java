@@ -72,6 +72,9 @@ public class League {
     public boolean loadedInOffseason;
     public OffseasonSession.Phase loadedOffseasonPhase;
 
+    /** Multi-year OOC buy games and home-and-homes. */
+    public OocContractBook oocContracts;
+
     boolean heismanDecided;
     Player heisman;
     ArrayList<Player> heismanCandidates;
@@ -86,14 +89,11 @@ public class League {
     public static final String[] donationNames = {"Mark Eeslee", "Lee Sin", "Brent Uttwipe", "Gabriel Kemble",
             "Jon Stupak", "Kiergan Ren", "Dean Steinkuhler", "Declan Greally", "Parks Wilson", "Darren Ryder"};
 
-    private boolean isHardMode;
-
     /**
      * Creates League, sets up Conferences, reads team names and conferences from file.
      * Also schedules games for every team.
      */
-    public League(String namesCSV, String lastNamesCSV, String teamsCSV, boolean difficulty) {
-        isHardMode = difficulty;
+    public League(String namesCSV, String lastNamesCSV, String teamsCSV) {
         heismanDecided = false;
         hasScheduledBowls = false;
         bowlGames = new Game[10];
@@ -108,6 +108,7 @@ public class League {
         longestWinStreak = new TeamStreak(getYear(), getYear(), 0, "XXX");
         yearStartLongestWinStreak = new TeamStreak(getYear(), getYear(), 0, "XXX");
         longestActiveWinStreak = new TeamStreak(getYear(), getYear(), 0, "XXX");
+        oocContracts = new OocContractBook(this);
 
         // Read first names from file
         nameList = new ArrayList<String>();
@@ -131,18 +132,16 @@ public class League {
     /**
      * Test/helper constructor that builds conference + byes but leaves OOC open.
      */
-    League(String namesCSV, String lastNamesCSV, String teamsCSV, boolean difficulty, boolean fillOoc) {
-        this(namesCSV, lastNamesCSV, teamsCSV, difficulty, fillOoc, true);
+    League(String namesCSV, String lastNamesCSV, String teamsCSV, boolean fillOoc) {
+        this(namesCSV, lastNamesCSV, teamsCSV, fillOoc, true);
     }
 
     private League(
             String namesCSV,
             String lastNamesCSV,
             String teamsCSV,
-            boolean difficulty,
             boolean fillOoc,
             boolean ignored) {
-        isHardMode = difficulty;
         heismanDecided = false;
         hasScheduledBowls = false;
         bowlGames = new Game[10];
@@ -157,6 +156,7 @@ public class League {
         longestWinStreak = new TeamStreak(getYear(), getYear(), 0, "XXX");
         yearStartLongestWinStreak = new TeamStreak(getYear(), getYear(), 0, "XXX");
         longestActiveWinStreak = new TeamStreak(getYear(), getYear(), 0, "XXX");
+        oocContracts = new OocContractBook(this);
 
         nameList = new ArrayList<String>();
         for (String n : namesCSV.split(",")) {
@@ -213,6 +213,9 @@ public class League {
             conference.setUpSchedule();
         }
         ByeWeekAssigner.assign(teamList);
+        if (oocContracts != null) {
+            oocContracts.materializeCurrentYear();
+        }
     }
 
     /**
@@ -220,6 +223,9 @@ public class League {
      */
     public void completeOocSchedule() {
         OocScheduleBuilder.scheduleRemaining(teamList);
+        if (oocContracts != null) {
+            oocContracts.autoSignFutureDeals(teamList);
+        }
     }
 
     /**
@@ -231,6 +237,7 @@ public class League {
         for (int t = 0; t < teamList.size(); ++t) {
             teamList.get(t).advanceSeason();
         }
+        RivalryDynamics.formNewRivalries(this);
         advanceSeasonWinStreaks();
         prepareSeasonSchedule();
         hasScheduledBowls = false;
@@ -255,16 +262,14 @@ public class League {
         longestWinStreak = new TeamStreak(FIRST_SEASON_YEAR, FIRST_SEASON_YEAR, 0, "XXX");
         yearStartLongestWinStreak = new TeamStreak(FIRST_SEASON_YEAR, FIRST_SEASON_YEAR, 0, "XXX");
         longestActiveWinStreak = new TeamStreak(FIRST_SEASON_YEAR, FIRST_SEASON_YEAR, 0, "XXX");
+        oocContracts = new OocContractBook(this);
 
         try {
             // Always wrap FileReader in BufferedReader.
             BufferedReader bufferedReader = new BufferedReader( new FileReader(saveFile) );
 
-            //First ignore the save file info
+            //First ignore the save file info (legacy saves may end with [HARD]% or [EASY]%)
             line = bufferedReader.readLine();
-            // [EASY]%    [HARD]%
-            if (line.substring(line.length() - 7, line.length()).equals("[HARD]%")) isHardMode = true;
-            else isHardMode = false;
 
             //Next get league history
             leagueHistory = new ArrayList<String[]>();
@@ -368,13 +373,20 @@ public class League {
                 userTeam.hallOfFame.add(line);
             }
 
-            // Optional schedule + mid-offseason blocks
+            // Optional schedule + OOC contracts + mid-offseason blocks
             line = bufferedReader.readLine();
             boolean restoredSchedule = false;
             if (line != null && line.equals("SCHEDULE")) {
                 restoreScheduleFromSave(bufferedReader);
                 restoredSchedule = true;
                 line = bufferedReader.readLine();
+            }
+            if (line != null && line.equals("OOC_CONTRACTS")) {
+                oocContracts.restore(bufferedReader);
+                line = bufferedReader.readLine();
+            }
+            if (restoredSchedule && oocContracts != null) {
+                oocContracts.relinkScheduleContractIds();
             }
             if (line != null && line.startsWith("OFFSEASON,")) {
                 restoreOffseasonFromSave(bufferedReader, line);
@@ -412,15 +424,6 @@ public class League {
         catch(IOException ex) {
             throw new IllegalStateException("Unable to read save file.", ex);
         }
-    }
-
-    /**
-     * Gets whether it is hard mode.
-     * Returns true is hard, false if normal.
-     * @return difficulty
-     */
-    public boolean isHardMode() {
-        return isHardMode;
     }
 
     /**
@@ -653,6 +656,7 @@ public class League {
         for (int t = 0; t < teamList.size(); ++t) {
             teamList.get(t).advanceSeason();
         }
+        RivalryDynamics.formNewRivalries(this);
 
         // Advance win streaks
         advanceSeasonWinStreaks();
@@ -1689,13 +1693,8 @@ public class League {
         if (OffseasonSession.ready() && OffseasonSession.league == this) {
             offTag = "[OFF:" + OffseasonSession.phase.name() + "]";
         }
-        if (isHardMode) {
-            sb.append(getYear() + ": " + userTeam.abbr + " (" + (userTeam.totalWins - userTeam.wins) + "-" + (userTeam.totalLosses - userTeam.losses) + ") " +
-                    userTeam.totalCCs + " CCs, " + userTeam.totalNCs + " NCs>" + offTag + "[HARD]%\n");
-        } else {
-            sb.append(getYear() + ": " + userTeam.abbr + " (" + (userTeam.totalWins - userTeam.wins) + "-" + (userTeam.totalLosses - userTeam.losses) + ") " +
-                    userTeam.totalCCs + " CCs, " + userTeam.totalNCs + " NCs>" + offTag + "[EASY]%\n");
-        }
+        sb.append(getYear() + ": " + userTeam.abbr + " (" + (userTeam.totalWins - userTeam.wins) + "-" + (userTeam.totalLosses - userTeam.losses) + ") " +
+                userTeam.totalCCs + " CCs, " + userTeam.totalNCs + " NCs>" + offTag + "%\n");
 
         // Save league history of who was #1 each year
         for (int i = 0; i < leagueHistory.size(); ++i) {
@@ -1712,7 +1711,7 @@ public class League {
             sb.append(heismanHistory.get(i) + "\n");
         }
             sb.append("END_HEISMAN_HIST\n");
-        sb.append("SAVE_VERSION,3\n");
+        sb.append("SAVE_VERSION,4\n");
         sb.append("TEAM_COUNT," + teamList.size() + "\n");
 
         // Save information about each team like W-L records, as well as all the players
@@ -1720,7 +1719,7 @@ public class League {
             int offPhil = t.offPhilosophy != null ? t.offPhilosophy.ordinal() : OffensivePhilosophy.MULTIPLE.ordinal();
             int defSys = t.defSystem != null ? t.defSystem.ordinal() : DefensiveSystem.BASE_4_3.ordinal();
             sb.append(t.conference + "," + t.name + "," + t.abbr + "," + t.teamPrestige + "," +
-                    (t.totalWins - t.wins) + "," + (t.totalLosses - t.losses) + "," + t.totalCCs + "," + t.totalNCs + "," + t.rivalTeam + "," +
+                    (t.totalWins - t.wins) + "," + (t.totalLosses - t.losses) + "," + t.totalCCs + "," + t.totalNCs + "," + t.encodeRivalries() + "," +
                     t.totalNCLosses + "," + t.totalCCLosses + "," + t.totalBowls + "," + t.totalBowlLosses + "," +
                     "1,1," + (t.showPopups ? 1 : 0) + "," +
                     t.yearStartWinStreak.getStreakCSV() + "," +  t.teamTVDeal + "," + t.confTVDeal + "," +
@@ -1760,6 +1759,9 @@ public class League {
         }
         sb.append("END_HALL_OF_FAME\n");
         appendScheduleBlock(sb);
+        if (oocContracts != null) {
+            oocContracts.appendSave(sb);
+        }
 
         if (OffseasonSession.ready() && OffseasonSession.league == this) {
             appendOffseasonBlock(sb);

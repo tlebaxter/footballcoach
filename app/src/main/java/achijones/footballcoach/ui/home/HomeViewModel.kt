@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 data class HomeUiState(
-    val showDifficultyDialog: Boolean = false,
     val showLoadDialog: Boolean = false,
     val saveSlotInfos: List<String> = emptyList(),
     val loading: Boolean = false,
@@ -30,14 +29,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
-
-    fun openDifficultyDialog() {
-        _uiState.update { it.copy(showDifficultyDialog = true, errorMessage = null) }
-    }
-
-    fun dismissDifficultyDialog() {
-        _uiState.update { it.copy(showDifficultyDialog = false) }
-    }
 
     fun openLoadDialog() {
         val infos = SaveSlots.infos(getApplication())
@@ -66,10 +57,10 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(navigateToTutorial = true) }
     }
 
-    fun startNewLeague(hardMode: Boolean) {
+    fun startNewLeague() {
         viewModelScope.launch {
             _uiState.update {
-                it.copy(loading = true, showDifficultyDialog = false, errorMessage = null)
+                it.copy(loading = true, errorMessage = null)
             }
             try {
                 withContext(Dispatchers.Default) {
@@ -79,7 +70,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                         app.getString(R.string.league_player_names),
                         app.getString(R.string.league_last_names),
                         teamsCsv,
-                        hardMode,
                     )
                     GameSession.setLeague(league)
                     GameSession.clearOffseason()

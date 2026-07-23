@@ -1,0 +1,435 @@
+package CFBsimPack;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Iterator;
+import java.util.List;
+
+/**
+ * League-wide multi-year OOC contract ledger.
+ */
+public final class OocContractBook {
+
+    private final League league;
+    private final ArrayList<OocContract> contracts = new ArrayList<>();
+    private int nextId = 1;
+
+    public OocContractBook(League league) {
+        this.league = league;
+    }
+
+    public List<OocContract> all() {
+        return new ArrayList<>(contracts);
+    }
+
+    public List<OocContract> forTeam(String abbr) {
+        ArrayList<OocContract> out = new ArrayList<>();
+        for (OocContract c : contracts) {
+            if (c.involves(abbr)) {
+                out.add(c);
+            }
+        }
+        return out;
+    }
+
+    public OocContract findById(String id) {
+        for (OocContract c : contracts) {
+            if (c.id.equals(id)) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    public OocContract findContractBetween(String a, String b, int year) {
+        for (OocContract c : contracts) {
+            if (c.involves(a) && c.involves(b) && c.gameForYear(year) != null) {
+                return c;
+            }
+        }
+        return null;
+    }
+
+    public boolean alreadyContracted(Team a, Team b, int year) {
+        return findContractBetween(a.abbr, b.abbr, year) != null;
+    }
+
+    public String quoteBuyGame(Team home, Team away) {
+        int g = NilMoney.buyGameGuarantee(home.teamPrestige, away.teamPrestige);
+        int bonus = NilMoney.buyGameWinBonus(g);
+        return "Guarantee " + NilMoney.format(g)
+                + " (you pay) · Away win bonus " + NilMoney.format(bonus);
+    }
+
+    public String quoteReceiveBuyGame(Team home, Team away) {
+        int g = NilMoney.buyGameGuarantee(home.teamPrestige, away.teamPrestige);
+        int bonus = NilMoney.buyGameWinBonus(g);
+        return "Guarantee " + NilMoney.format(g)
+                + " (you receive) · Win bonus " + NilMoney.format(bonus);
+    }
+
+    /**
+     * Signs a buy-game series: same home each year for {@code years} (1–3).
+     */
+    public OocContract signBuyGame(Team home, Team away, int startYear, int years) {
+        if (home == null || away == null || home == away) {
+            return null;
+        }
+        if (home.conference.equals(away.conference)) {
+            return null;
+        }
+        years = Math.max(1, Math.min(3, years));
+        int guarantee = NilMoney.buyGameGuarantee(home.teamPrestige, away.teamPrestige);
+        if (home.recruitMoney < guarantee) {
+            return null;
+        }
+        for (int y = 0; y < years; y++) {
+            if (alreadyContracted(home, away, startYear + y)) {
+                return null;
+            }
+        }
+        ArrayList<OocContractGame> games = new ArrayList<>();
+        int winBonus = NilMoney.buyGameWinBonus(guarantee);
+        for (int y = 0; y < years; y++) {
+            games.add(new OocContractGame(
+                    startYear + y, home.abbr, away.abbr, guarantee, winBonus));
+        }
+        OocContract contract = new OocContract(
+                "C" + (nextId++),
+                home.abbr,
+                away.abbr,
+                startYear,
+                years,
+                games);
+        contracts.add(contract);
+        return contract;
+    }
+
+    /**
+     * Signs a 2-year home-and-home (no guarantee).
+     */
+    public OocContract signHomeAndHome(Team teamA, Team teamB, int startYear, boolean aHomesFirst) {
+        if (teamA == null || teamB == null || teamA == teamB) {
+            return null;
+        }
+        if (teamA.conference.equals(teamB.conference)) {
+            return null;
+        }
+        if (alreadyContracted(teamA, teamB, startYear)
+                || alreadyContracted(teamA, teamB, startYear + 1)) {
+            return null;
+        }
+        Team firstHome = aHomesFirst ? teamA : teamB;
+        Team firstAway = aHomesFirst ? teamB : teamA;
+        ArrayList<OocContractGame> games = new ArrayList<>();
+        games.add(new OocContractGame(startYear, firstHome.abbr, firstAway.abbr, 0, 0));
+        games.add(new OocContractGame(startYear + 1, firstAway.abbr, firstHome.abbr, 0, 0));
+        OocContract contract = new OocContract(
+                "C" + (nextId++),
+                teamA.abbr,
+                teamB.abbr,
+                startYear,
+                2,
+                games);
+        contracts.add(contract);
+        return contract;
+    }
+
+    public boolean cancel(String contractId) {
+        Iterator<OocContract> it = contracts.iterator();
+        while (it.hasNext()) {
+            OocContract c = it.next();
+            if (c.id.equals(contractId)) {
+                int year = league.getYear();
+                OocContractGame thisYear = c.gameForYear(year);
+                if (thisYear != null && thisYear.settled) {
+                    return false;
+                }
+                it.remove();
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Places this year's contracted games into open OOC weeks.
+     *
+     * @return number of games placed
+     */
+    public int materializeCurrentYear() {
+        int year = league.getYear();
+        int placed = 0;
+        for (OocContract contract : contracts) {
+            OocContractGame cg = contract.gameForYear(year);
+            if (cg == null || cg.settled) {
+                continue;
+            }
+            Team home = league.findTeamAbbr(cg.homeAbbr);
+            Team away = league.findTeamAbbr(cg.awayAbbr);
+            if (home == null || away == null) {
+                continue;
+            }
+            if (alreadyOnSchedule(home, away)) {
+                continue;
+            }
+            int week = findSharedOpenWeek(home, away);
+            if (week < 0) {
+                continue;
+            }
+            Game game = new Game(home, away, "OOC");
+            game.contractId = contract.id;
+            home.gameSchedule.set(week, game);
+            away.gameSchedule.set(week, game);
+            placed++;
+        }
+        return placed;
+    }
+
+    public void settlePlayedGame(Game game) {
+        if (game == null || game.homeTeam == null || game.awayTeam == null) {
+            return;
+        }
+        String contractId = game.contractId;
+        OocContract contract = null;
+        if (contractId != null) {
+            contract = findById(contractId);
+        }
+        if (contract == null) {
+            contract = findContractBetween(
+                    game.homeTeam.abbr, game.awayTeam.abbr, league.getYear());
+        }
+        if (contract == null) {
+            return;
+        }
+        OocContractGame cg = contract.gameForYear(league.getYear());
+        if (cg == null || cg.settled) {
+            return;
+        }
+        if (!cg.homeAbbr.equals(game.homeTeam.abbr) || !cg.awayAbbr.equals(game.awayTeam.abbr)) {
+            return;
+        }
+        transfer(game.homeTeam, game.awayTeam, cg.guarantee);
+        if (game.awayScore > game.homeScore && cg.winBonus > 0) {
+            transfer(game.homeTeam, game.awayTeam, cg.winBonus);
+        }
+        cg.settled = true;
+        pruneFinished();
+    }
+
+    private static void transfer(Team from, Team to, int amount) {
+        if (amount <= 0) {
+            return;
+        }
+        int paid = Math.min(from.recruitMoney, amount);
+        from.recruitMoney -= paid;
+        to.recruitMoney += paid;
+        if (from.recruitMoney < 0) {
+            from.recruitMoney = 0;
+        }
+    }
+
+    public void pruneFinished() {
+        Iterator<OocContract> it = contracts.iterator();
+        while (it.hasNext()) {
+            OocContract c = it.next();
+            if (c.isFullySettled() || !c.hasFutureGames(league.getYear())) {
+                boolean anyFuture = false;
+                for (OocContractGame g : c.games) {
+                    if (g.year > league.getYear() || (g.year == league.getYear() && !g.settled)) {
+                        anyFuture = true;
+                        break;
+                    }
+                }
+                if (!anyFuture && c.isFullySettled()) {
+                    it.remove();
+                } else if (!c.hasFutureGames(league.getYear()) && allPastSettledOrGone(c)) {
+                    it.remove();
+                }
+            }
+        }
+    }
+
+    private boolean allPastSettledOrGone(OocContract c) {
+        for (OocContractGame g : c.games) {
+            if (g.year >= league.getYear() && !g.settled) {
+                return false;
+            }
+            if (g.year < league.getYear() && !g.settled) {
+                // missed year — drop
+            }
+        }
+        for (OocContractGame g : c.games) {
+            if (g.year > league.getYear()) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * AI: create short buy games / H&H for unmatched prestige bands after user scheduling.
+     */
+    public void autoSignFutureDeals(List<Team> teams) {
+        int year = league.getYear();
+        ArrayList<Team> sorted = new ArrayList<>(teams);
+        sorted.sort((a, b) -> Integer.compare(b.teamPrestige, a.teamPrestige));
+        int signed = 0;
+        for (int i = 0; i < sorted.size() && signed < 25; i++) {
+            Team power = sorted.get(i);
+            if (countOpenOoc(power) < 1) {
+                continue;
+            }
+            for (int j = sorted.size() - 1; j > i && signed < 25; j--) {
+                Team soft = sorted.get(j);
+                if (power.conference.equals(soft.conference)) {
+                    continue;
+                }
+                if (power.teamPrestige - soft.teamPrestige < 12) {
+                    break;
+                }
+                if (alreadyContracted(power, soft, year + 1)) {
+                    continue;
+                }
+                if (power.recruitMoney < NilMoney.buyGameGuarantee(power.teamPrestige, soft.teamPrestige)) {
+                    continue;
+                }
+                if (signBuyGame(power, soft, year + 1, 1) != null) {
+                    signed++;
+                }
+            }
+        }
+        // Peer H&H for mid-tier open teams
+        for (int i = 0; i < sorted.size() - 1 && signed < 40; i++) {
+            Team a = sorted.get(i);
+            Team b = sorted.get(i + 1);
+            if (a.conference.equals(b.conference)) {
+                continue;
+            }
+            if (Math.abs(a.teamPrestige - b.teamPrestige) > 8) {
+                continue;
+            }
+            if (alreadyContracted(a, b, year + 1) || alreadyContracted(a, b, year + 2)) {
+                continue;
+            }
+            if (signHomeAndHome(a, b, year + 1, true) != null) {
+                signed++;
+            }
+        }
+    }
+
+    private static int countOpenOoc(Team team) {
+        int n = 0;
+        for (int w = 0; w < League.REGULAR_SEASON_WEEKS; w++) {
+            if (team.isOpenOocWeek(w)) {
+                n++;
+            }
+        }
+        return n;
+    }
+
+    private static boolean alreadyOnSchedule(Team a, Team b) {
+        for (Game g : a.gameSchedule) {
+            if (g == null) {
+                continue;
+            }
+            Team opp = g.homeTeam == a ? g.awayTeam : g.homeTeam;
+            if (opp == b) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static int findSharedOpenWeek(Team a, Team b) {
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            if (a.isOpenOocWeek(week) && b.isOpenOocWeek(week)) {
+                return week;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * After schedule restore, attach {@link Game#contractId} for this year's contracted matchups.
+     */
+    public void relinkScheduleContractIds() {
+        int year = league.getYear();
+        for (OocContract contract : contracts) {
+            OocContractGame cg = contract.gameForYear(year);
+            if (cg == null || cg.settled) {
+                continue;
+            }
+            Team home = league.findTeamAbbr(cg.homeAbbr);
+            Team away = league.findTeamAbbr(cg.awayAbbr);
+            if (home == null || away == null) {
+                continue;
+            }
+            for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+                Game game = home.gameSchedule.get(week);
+                if (game == null) {
+                    continue;
+                }
+                if (game.homeTeam == home && game.awayTeam == away) {
+                    game.contractId = contract.id;
+                    break;
+                }
+            }
+        }
+    }
+
+    public void retargetAbbr(String oldAbbr, String newAbbr) {
+        if (oldAbbr == null || newAbbr == null || oldAbbr.equals(newAbbr)) {
+            return;
+        }
+        ArrayList<OocContract> updated = new ArrayList<>();
+        for (OocContract c : contracts) {
+            String a = c.teamA.equals(oldAbbr) ? newAbbr : c.teamA;
+            String b = c.teamB.equals(oldAbbr) ? newAbbr : c.teamB;
+            ArrayList<OocContractGame> games = new ArrayList<>();
+            for (OocContractGame g : c.games) {
+                String home = g.homeAbbr.equals(oldAbbr) ? newAbbr : g.homeAbbr;
+                String away = g.awayAbbr.equals(oldAbbr) ? newAbbr : g.awayAbbr;
+                OocContractGame ng = new OocContractGame(g.year, home, away, g.guarantee, g.winBonus);
+                ng.settled = g.settled;
+                games.add(ng);
+            }
+            updated.add(new OocContract(c.id, a, b, c.startYear, c.lengthYears, games));
+        }
+        contracts.clear();
+        contracts.addAll(updated);
+    }
+
+    public void appendSave(StringBuilder sb) {
+        sb.append("OOC_CONTRACTS\n");
+        sb.append("NEXT_ID,").append(nextId).append("\n");
+        for (OocContract c : contracts) {
+            sb.append(c.encode()).append("\n");
+        }
+        sb.append("END_OOC_CONTRACTS\n");
+    }
+
+    public void restore(BufferedReader reader) throws IOException {
+        contracts.clear();
+        String line = reader.readLine();
+        if (line != null && line.startsWith("NEXT_ID,")) {
+            nextId = Integer.parseInt(line.substring("NEXT_ID,".length()).trim());
+            line = reader.readLine();
+        }
+        while (line != null && !line.equals("END_OOC_CONTRACTS")) {
+            if (!line.isEmpty()) {
+                OocContract c = OocContract.parse(line);
+                contracts.add(c);
+                try {
+                    int idNum = Integer.parseInt(c.id.replace("C", ""));
+                    if (idNum >= nextId) {
+                        nextId = idNum + 1;
+                    }
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            line = reader.readLine();
+        }
+    }
+}

@@ -11,6 +11,8 @@ import CFBsimPack.OffseasonSession
 import CFBsimPack.OocScheduleBuilder
 import CFBsimPack.Player
 import CFBsimPack.ProgramOffers
+import CFBsimPack.Rivalry
+import CFBsimPack.RivalryDynamics
 import CFBsimPack.RosterStatus
 import CFBsimPack.Team
 import achijones.footballcoach.ui.util.SaveSlots
@@ -33,6 +35,13 @@ data class ScheduleWeekUi(
     val locked: Boolean,
     val open: Boolean,
     val opponentAbbr: String?,
+    val contractLocked: Boolean = false,
+    val rivalryLabel: String? = null,
+)
+
+data class ContractRowUi(
+    val id: String,
+    val summary: String,
 )
 
 data class TalentRowUi(
@@ -92,9 +101,13 @@ data class TalentHubUiState(
     val scheduleWeeks: List<ScheduleWeekUi> = emptyList(),
     val openOocSlots: Int = 0,
     val filledOocSlots: Int = 0,
+    val contractRows: List<ContractRowUi> = emptyList(),
+    val rivalSummary: String = "",
     val opponentPickerWeek: Int? = null,
     val opponentOptions: List<String> = emptyList(),
     val opponentAbbrs: List<String> = emptyList(),
+    val dealOpponentAbbr: String? = null,
+    val dealQuote: String = "",
     val primaryLabel: String? = null,
     val message: String? = null,
     val offerSheet: OfferSheetState? = null,
@@ -476,13 +489,19 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
     fun openOpponentPicker(week: Int) {
         val u = user ?: return
         val l = league ?: return
-        if (!u.isOpenOocWeek(week) && u.gameSchedule.getOrNull(week)?.let {
+        val existing = u.gameSchedule.getOrNull(week)
+        if (existing?.contractId != null) {
+            _uiState.update {
+                it.copy(message = "That week is locked by an OOC contract. Cancel the deal to change it.")
+            }
+            return
+        }
+        if (!u.isOpenOocWeek(week) && existing?.let {
                 it.gameName == "OOC" || it.gameName == "OOC Rivalry"
                     || it.gameName == "Rivalry Game OOC"
             } != true) {
             return
         }
-        // Allow re-picking: clear existing OOC first
         if (!u.isOpenOocWeek(week)) {
             OocScheduleBuilder.clearUserOocGame(u, week)
         }
@@ -490,15 +509,41 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update {
             it.copy(
                 opponentPickerWeek = week,
-                opponentOptions = eligible.map { t -> "${t.name} (${t.abbr}) — ${t.conference}" },
+                opponentOptions = eligible.map { t -> formatOpponentOption(u, t) },
                 opponentAbbrs = eligible.map { t -> t.abbr },
+                dealOpponentAbbr = null,
+                dealQuote = "",
             )
         }
     }
 
+    private fun formatOpponentOption(user: Team, t: Team): String {
+        val strength = Team.strongestRivalryBetween(user, t)
+        val rivalTag = if (strength > 0) {
+            " · ${Rivalry.band(strength)} rival ($strength)"
+        } else {
+            ""
+        }
+        val book = league?.oocContracts
+        val quote = if (book != null && user.teamPrestige >= t.teamPrestige) {
+            " · Buy: you pay ${NilMoney.format(NilMoney.buyGameGuarantee(user.teamPrestige, t.teamPrestige))}"
+        } else if (book != null) {
+            " · Buy: you get ${NilMoney.format(NilMoney.buyGameGuarantee(t.teamPrestige, user.teamPrestige))}"
+        } else {
+            ""
+        }
+        return "${t.name} (${t.abbr}) — ${t.conference}$rivalTag$quote"
+    }
+
     fun dismissOpponentPicker() {
         _uiState.update {
-            it.copy(opponentPickerWeek = null, opponentOptions = emptyList(), opponentAbbrs = emptyList())
+            it.copy(
+                opponentPickerWeek = null,
+                opponentOptions = emptyList(),
+                opponentAbbrs = emptyList(),
+                dealOpponentAbbr = null,
+                dealQuote = "",
+            )
         }
     }
 
@@ -517,8 +562,124 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         reloadTab()
     }
 
+    fun selectDealOpponent(index: Int) {
+        val u = user ?: return
+        val l = league ?: return
+        val abbrs = _uiState.value.opponentAbbrs
+        if (index < 0 || index >= abbrs.size) return
+        val opponent = l.findTeamAbbr(abbrs[index]) ?: return
+        val book = l.oocContracts ?: return
+        val quote = if (u.teamPrestige >= opponent.teamPrestige) {
+            book.quoteBuyGame(u, opponent) + " · Or sign a 2-year home-and-home (no guarantee)."
+        } else {
+            book.quoteReceiveBuyGame(opponent, u) + " · Or sign a 2-year home-and-home (no guarantee)."
+        }
+        _uiState.update {
+            it.copy(dealOpponentAbbr = opponent.abbr, dealQuote = quote)
+        }
+    }
+
+    fun signBuyGameYears(years: Int) {
+        val u = user ?: return
+        val l = league ?: return
+        val book = l.oocContracts ?: return
+        val week = _uiState.value.opponentPickerWeek ?: return
+        val oppAbbr = _uiState.value.dealOpponentAbbr ?: return
+        val opponent = l.findTeamAbbr(oppAbbr) ?: return
+        val home: Team
+        val away: Team
+        if (u.teamPrestige >= opponent.teamPrestige) {
+            home = u
+            away = opponent
+        } else {
+            home = opponent
+            away = u
+        }
+        val contract = book.signBuyGame(home, away, l.year, years) ?: run {
+            _uiState.update {
+                it.copy(message = "Could not sign buy game (affordability or conflict).")
+            }
+            return
+        }
+        if (!OocScheduleBuilder.placeFixedHomeOocGame(home, away, week, contract.id)) {
+            book.materializeCurrentYear()
+        }
+        dismissOpponentPicker()
+        reloadTab()
+    }
+
+    fun signHomeAndHomeDeal() {
+        val u = user ?: return
+        val l = league ?: return
+        val book = l.oocContracts ?: return
+        val week = _uiState.value.opponentPickerWeek ?: return
+        val oppAbbr = _uiState.value.dealOpponentAbbr ?: return
+        val opponent = l.findTeamAbbr(oppAbbr) ?: return
+        val contract = book.signHomeAndHome(u, opponent, l.year, true) ?: run {
+            _uiState.update { it.copy(message = "Could not sign home-and-home.") }
+            return
+        }
+        val cg = contract.gameForYear(l.year)
+        if (cg == null
+            || !OocScheduleBuilder.placeFixedHomeOocGame(
+                l.findTeamAbbr(cg.homeAbbr) ?: u,
+                l.findTeamAbbr(cg.awayAbbr) ?: opponent,
+                week,
+                contract.id,
+            )
+        ) {
+            book.materializeCurrentYear()
+        }
+        dismissOpponentPicker()
+        reloadTab()
+    }
+
+    fun declareRival(opponentAbbr: String) {
+        val u = user ?: return
+        val l = league ?: return
+        val opponent = l.findTeamAbbr(opponentAbbr) ?: return
+        val error = RivalryDynamics.declareRival(u, opponent)
+        if (error != null) {
+            _uiState.update { it.copy(message = error) }
+            return
+        }
+        _uiState.update {
+            it.copy(message = "Declared ${opponent.abbr} as a rival (${u.rivalryWith(opponent.abbr)?.displayLabel()}).")
+        }
+        reloadTab()
+    }
+
+    fun cancelContract(contractId: String) {
+        val l = league ?: return
+        val book = l.oocContracts ?: return
+        val u = user ?: return
+        val contract = book.findById(contractId) ?: return
+        val year = l.year
+        val cg = contract.gameForYear(year)
+        if (cg != null && !cg.settled) {
+            for (week in 0 until League.REGULAR_SEASON_WEEKS) {
+                val g = u.gameSchedule.getOrNull(week) ?: continue
+                if (g.contractId == contractId) {
+                    OocScheduleBuilder.clearUserOocGame(u, week)
+                }
+            }
+        }
+        if (!book.cancel(contractId)) {
+            _uiState.update { it.copy(message = "Cannot cancel a deal that already paid out.") }
+            return
+        }
+        reloadTab()
+    }
+
     fun clearScheduleWeek(week: Int) {
         val u = user ?: return
+        val game = u.gameSchedule.getOrNull(week)
+        if (game?.contractId != null) {
+            _uiState.update {
+                it.copy(message = "Cancel the OOC contract to clear this week.")
+            }
+            return
+        }
         if (OocScheduleBuilder.clearUserOocGame(u, week)) {
             reloadTab()
         }
@@ -778,6 +939,10 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             !it.locked && !it.open
                 && (it.status == "OOC" || it.status == "OOC Rivalry" || it.status == "Rivalry Game OOC")
         }
+        val contractRows = buildContractRows(u)
+        val rivalSummary = u.rivalries.joinToString(" · ") { r ->
+            r.displayLabel()
+        }
 
         val primaryLabel = when {
             tab == HubTab.RETAIN && phase == OffseasonSession.Phase.RETENTION ->
@@ -807,10 +972,31 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                 scheduleWeeks = scheduleWeeks,
                 openOocSlots = openOoc,
                 filledOocSlots = filledOoc,
+                contractRows = contractRows,
+                rivalSummary = rivalSummary,
                 primaryLabel = primaryLabel,
             )
         }
         applyFilters()
+    }
+
+    private fun buildContractRows(u: Team): List<ContractRowUi> {
+        val book = league?.oocContracts ?: return emptyList()
+        val year = league?.year ?: 0
+        return book.forTeam(u.abbr).map { c ->
+            val games = c.games.joinToString("; ") { g ->
+                val role = when {
+                    g.homeAbbr == u.abbr -> "home"
+                    else -> "away"
+                }
+                "${g.year} $role vs ${if (g.homeAbbr == u.abbr) g.awayAbbr else g.homeAbbr}" +
+                    if (g.guarantee > 0) " (${NilMoney.format(g.guarantee)})" else ""
+            }
+            ContractRowUi(c.id, "${c.teamA}–${c.teamB}: $games")
+        }.filter { row ->
+            book.findById(row.id)?.hasFutureGames(year) == true
+                || book.findById(row.id)?.gameForYear(year) != null
+        }
     }
 
     private fun buildScheduleWeeks(u: Team): List<ScheduleWeekUi> {
@@ -849,15 +1035,26 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             val homeAway = if (game.homeTeam == u) "vs" else "@"
             val isOoc = game.gameName == "OOC" || game.gameName == "OOC Rivalry"
                 || game.gameName == "Rivalry Game OOC"
+            val contractLocked = game.contractId != null
+            val rivalry = game.rivalryStrength()
+            val moneyNote = if (contractLocked && game.contractId != null) {
+                val cg = league?.oocContracts?.findById(game.contractId)?.gameForYear(league?.year ?: 0)
+                if (cg != null && cg.guarantee > 0) {
+                    if (game.homeTeam == u) " · Pay ${NilMoney.format(cg.guarantee)}"
+                    else " · Earn ${NilMoney.format(cg.guarantee)}"
+                } else if (contractLocked) " · Contract" else ""
+            } else ""
             weeks.add(
                 ScheduleWeekUi(
                     week = week,
                     weekLabel = "Week ${week + 1}",
                     status = game.gameName,
-                    detail = "$homeAway ${opp.name} (${opp.abbr})",
-                    locked = !isOoc,
+                    detail = "$homeAway ${opp.name} (${opp.abbr})$moneyNote",
+                    locked = !isOoc || contractLocked,
                     open = false,
                     opponentAbbr = opp.abbr,
+                    contractLocked = contractLocked,
+                    rivalryLabel = if (rivalry > 0) "${Rivalry.band(rivalry)} ($rivalry)" else null,
                 ),
             )
         }

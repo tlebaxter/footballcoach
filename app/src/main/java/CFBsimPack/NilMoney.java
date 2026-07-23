@@ -215,4 +215,30 @@ public final class NilMoney {
         int cost = (int) Math.round(remaining * rate / 1000.0) * 1000;
         return Math.max(0, cost);
     }
+
+    /**
+     * Guarantee paid by home to away for a buy game.
+     * Higher when home is much stronger than the visitor.
+     */
+    public static int buyGameGuarantee(int homePrestige, int awayPrestige) {
+        int home = clampPrestige(homePrestige);
+        int away = clampPrestige(awayPrestige);
+        int gap = Math.max(0, home - away);
+        double base = 150_000 + gap * 18_000 + (100 - away) * 2_500;
+        return (int) Math.round(base / 1000.0) * 1000;
+    }
+
+    /** Optional win bonus (~15% of guarantee) paid by home if away wins. */
+    public static int buyGameWinBonus(int guarantee) {
+        if (guarantee <= 0) {
+            return 0;
+        }
+        return (int) Math.round(guarantee * 0.15 / 1000.0) * 1000;
+    }
+
+    private static int clampPrestige(int prestige) {
+        if (prestige < 40) return 40;
+        if (prestige > 99) return 99;
+        return prestige;
+    }
 }

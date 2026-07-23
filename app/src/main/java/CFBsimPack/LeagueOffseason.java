@@ -721,6 +721,8 @@ public class LeagueOffseason {
             aiClaimRemainingPortal();
             league.updateTeamHistories();
             league.updateLeagueHistory();
+            // Rivalry dynamics need intact schedules (resetStats clears the user slate).
+            RivalryDynamics.applyEndOfSeason(league);
             if (user != null) {
                 user.resetStats();
             }

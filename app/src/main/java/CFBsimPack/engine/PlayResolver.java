@@ -132,7 +132,7 @@ public final class PlayResolver {
         int cbSpd = cb != null ? cb.ratCBSpd : 70;
 
         double completion = (normalize(qb.ratPassAcc) + normalize(cat) - normalize(cbCov)) / 2.0
-                + 18.25 - pressure / 16.8 + homeField(offense, state);
+                + 18.25 - pressure / 16.8 + homeField(offense, defense, state);
         completion *= cov.completionMod * concept.completionMod;
         completion += cov.passFitBonus();
         completion += concept.matchupBonus(cov);
@@ -195,7 +195,7 @@ public final class PlayResolver {
 
         int blockAdv = (int) ((off.olRushComposite() - def.runStopComposite() * sys.runWeight)
                 + cov.runFitBonus() + concept.matchupBonus(cov));
-        int yards = (int) ((rb.ratRushSpd + blockAdv + homeField(offense, state))
+        int yards = (int) ((rb.ratRushSpd + blockAdv + homeField(offense, defense, state))
                 * rng.nextDouble() / 10.0 * concept.runYardsMod);
         if (yards < 2) {
             yards += rb.ratRushPow / 20 - 3;
@@ -743,10 +743,18 @@ public final class PlayResolver {
         return defense.getCompositeFrontRush();
     }
 
-    private int homeField(Team offense, GameState state) {
-        // Rough HF: home offense gets +2
-        boolean homeOff = state.possessionHome;
-        return homeOff ? 2 : 0;
+    private int homeField(Team offense, Team defense, GameState state) {
+        int bonus = state.possessionHome ? 2 : 0;
+        int rivalry = Team.strongestRivalryBetween(offense, defense);
+        if (rivalry >= 25) {
+            int intensity = rivalry / 50; // 0–2
+            if (state.possessionHome) {
+                bonus += intensity;
+            } else if (intensity > 0) {
+                bonus += intensity / 2;
+            }
+        }
+        return bonus;
     }
 
     private int normalize(int rating) {

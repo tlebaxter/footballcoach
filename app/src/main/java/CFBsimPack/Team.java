@@ -5,7 +5,9 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Team class.
@@ -18,8 +20,14 @@ public class Team {
     public String name;
     public String abbr;
     public String conference;
-    public String rivalTeam;
-    public boolean wonRivalryGame;
+    /** Named rivals with 0–100 strength. */
+    public ArrayList<Rivalry> rivalries;
+    /** Opponent abbr → won this season's rivalry game (only opponents listed as rivals). */
+    public HashMap<String, Boolean> rivalryResults;
+    /** Notes from {@link RivalryDynamics} for UI / season summary. */
+    public ArrayList<String> rivalryDynamicsNotes;
+    /** Set when dynamics already ran this offseason (avoids double decay). */
+    public boolean rivalryDynamicsAppliedThisOffseason;
     public ArrayList<String> teamHistory;
     public ArrayList<String> hallOfFame;
     public boolean userControlled;
@@ -136,7 +144,7 @@ public class Team {
     public boolean hadCoachingChange;
 
     private static final int NFL_OVR = 90;
-    private static final double NFL_CHANCE = 0.5;
+    private static final double NFL_CHANCE = 0.7;
 
     /**
      * Creates new team, recruiting needed players and setting team stats to 0.
@@ -146,13 +154,16 @@ public class Team {
      * @param league reference to the league object all must obey
      * @param prestige prestige of that team, between 0-100
      */
-    public Team( String name, String abbr, String conference, League league, int prestige, String rivalTeamAbbr ) {
+    public Team( String name, String abbr, String conference, League league, int prestige, String rivalsEncoded ) {
         this.league = league;
         userControlled = false;
         showPopups = true;
         teamHistory = new ArrayList<String>();
         hallOfFame = new ArrayList<>();
         playersInjuredAll = new ArrayList<>();
+        rivalries = new ArrayList<>(Rivalry.parseEncoded(rivalsEncoded));
+        rivalryResults = new HashMap<>();
+        rivalryDynamicsNotes = new ArrayList<>();
 
         teamQBs = new ArrayList<PlayerQB>();
         teamRBs = new ArrayList<PlayerRB>();
@@ -206,8 +217,6 @@ public class Team {
         this.name = name;
         this.abbr = abbr;
         this.conference = conference;
-        rivalTeam = rivalTeamAbbr;
-        wonRivalryGame = false;
         teamPoints = 0;
         teamOppPoints = 0;
         teamYards = 0;
@@ -239,6 +248,9 @@ public class Team {
         teamHistory = new ArrayList<String>();
         hallOfFame = new ArrayList<>();
         playersInjuredAll = new ArrayList<>();
+        rivalries = new ArrayList<>();
+        rivalryResults = new HashMap<>();
+        rivalryDynamicsNotes = new ArrayList<>();
 
         teamQBs = new ArrayList<PlayerQB>();
         teamRBs = new ArrayList<PlayerRB>();
@@ -301,7 +313,12 @@ public class Team {
             totalLosses = Integer.parseInt(teamInfo[5]);
             totalCCs = Integer.parseInt(teamInfo[6]);
             totalNCs = Integer.parseInt(teamInfo[7]);
-            rivalTeam = teamInfo[8];
+            String rivalsField = teamInfo[8];
+            if (rivalsField.contains(":") || rivalsField.contains(";")) {
+                rivalries = new ArrayList<>(Rivalry.parseEncoded(rivalsField));
+            } else {
+                rivalries = new ArrayList<>(Rivalry.singlePrimary(rivalsField));
+            }
             if (teamInfo.length >= 13) {
                 totalNCLosses = Integer.parseInt(teamInfo[9]);
                 totalCCLosses = Integer.parseInt(teamInfo[10]);
@@ -355,7 +372,16 @@ public class Team {
         groupPlayerStandingCSV();
         
         
-        wonRivalryGame = false;
+        if (rivalries == null) {
+            rivalries = new ArrayList<>();
+        }
+        if (rivalryResults == null) {
+            rivalryResults = new HashMap<>();
+        }
+        if (rivalryDynamicsNotes == null) {
+            rivalryDynamicsNotes = new ArrayList<>();
+        }
+        rivalryResults.clear();
         teamStratOffNum = 1;
         teamStratDefNum = 1;
         numRecruits = 30;
@@ -379,6 +405,213 @@ public class Team {
         teamOffTalent = getOffTalent();
         teamDefTalent = getDefTalent();
         teamPollScore = teamPrestige + getOffTalent() + getDefTalent();
+    }
+
+    public String encodeRivalries() {
+        return Rivalry.encode(rivalries);
+    }
+
+    /** Opponent abbr of the highest-strength rivalry, or null. */
+    public String highestRivalAbbr() {
+        if (rivalries == null || rivalries.isEmpty()) {
+            return null;
+        }
+        Rivalry best = null;
+        for (Rivalry r : rivalries) {
+            if (best == null || r.strength > best.strength) {
+                best = r;
+            }
+        }
+        return best != null ? best.opponentAbbr : null;
+    }
+
+    /** @deprecated use {@link #highestRivalAbbr()} */
+    @Deprecated
+    public String primaryRivalAbbr() {
+        return highestRivalAbbr();
+    }
+
+    public Rivalry rivalryWith(String opponentAbbr) {
+        if (opponentAbbr == null || rivalries == null) {
+            return null;
+        }
+        for (Rivalry r : rivalries) {
+            if (r.opponentAbbr.equalsIgnoreCase(opponentAbbr)) {
+                return r;
+            }
+        }
+        return null;
+    }
+
+    public boolean isRival(String opponentAbbr) {
+        return rivalryWith(opponentAbbr) != null;
+    }
+
+    /**
+     * Strongest rivalry strength either side has toward the other (0 if none).
+     */
+    public static int strongestRivalryBetween(Team a, Team b) {
+        if (a == null || b == null) {
+            return 0;
+        }
+        int best = 0;
+        Rivalry fromA = a.rivalryWith(b.abbr);
+        Rivalry fromB = b.rivalryWith(a.abbr);
+        if (fromA != null) {
+            best = fromA.strength;
+        }
+        if (fromB != null && fromB.strength > best) {
+            best = fromB.strength;
+        }
+        return best;
+    }
+
+    public Rivalry ensureRivalry(String opponentAbbr, int minStrength) {
+        Rivalry existing = rivalryWith(opponentAbbr);
+        if (existing != null) {
+            if (existing.strength < minStrength) {
+                existing.strength = Rivalry.clamp(minStrength);
+            }
+            return existing;
+        }
+        if (rivalries == null) {
+            rivalries = new ArrayList<>();
+        }
+        if (rivalries.size() >= Rivalry.MAX_RIVALRIES) {
+            Rivalry weakest = null;
+            for (Rivalry r : rivalries) {
+                if (r.strength < Rivalry.WARM_THRESHOLD
+                        && (weakest == null || r.strength < weakest.strength)) {
+                    weakest = r;
+                }
+            }
+            if (weakest == null || minStrength < 30) {
+                return null;
+            }
+            rivalries.remove(weakest);
+        }
+        Rivalry created = new Rivalry(opponentAbbr, minStrength);
+        rivalries.add(created);
+        return created;
+    }
+
+    public void recordRivalryResult(String opponentAbbr, boolean won) {
+        if (opponentAbbr == null) {
+            return;
+        }
+        if (rivalryResults == null) {
+            rivalryResults = new HashMap<>();
+        }
+        rivalryResults.put(opponentAbbr, won);
+    }
+
+    public void clearRivalryResults() {
+        if (rivalryResults == null) {
+            rivalryResults = new HashMap<>();
+        } else {
+            rivalryResults.clear();
+        }
+    }
+
+    /**
+     * Prestige delta from rivalry games this season (does not mutate prestige).
+     */
+    public int computeRivalryPrestigeDelta() {
+        int delta = 0;
+        if (rivalries == null || rivalryResults == null || league == null) {
+            return 0;
+        }
+        for (Rivalry rivalry : rivalries) {
+            if (!rivalryResults.containsKey(rivalry.opponentAbbr)) {
+                continue;
+            }
+            boolean won = Boolean.TRUE.equals(rivalryResults.get(rivalry.opponentAbbr));
+            Team rival = league.findTeamAbbr(rivalry.opponentAbbr);
+            if (rival == null) {
+                continue;
+            }
+            delta += rivalryPrestigeSwing(rivalry.strength, won, teamPrestige, rival.teamPrestige);
+        }
+        return delta;
+    }
+
+    static int rivalryPrestigeSwing(
+            int strength,
+            boolean won,
+            int ownPrestige,
+            int rivalPrestige) {
+        if (strength < Rivalry.PRESTIGE_THRESHOLD) {
+            return 0;
+        }
+        int competitiveGap = 15 + strength / 10;
+        int prestigeSwing = strength >= Rivalry.HOT_THRESHOLD ? 2 : 1;
+        int gap = ownPrestige - rivalPrestige;
+        if (won) {
+            if (gap >= competitiveGap) {
+                return 0;
+            }
+            int swing = prestigeSwing;
+            if (rivalPrestige - ownPrestige >= 10) {
+                swing += 1;
+            }
+            return swing;
+        }
+        if (rivalPrestige - ownPrestige >= competitiveGap) {
+            return 0;
+        }
+        return -prestigeSwing;
+    }
+
+    public String rivalryPrestigeSummaryLines() {
+        StringBuilder sb = new StringBuilder();
+        if (rivalries == null || rivalryResults == null || league == null) {
+            return "";
+        }
+        for (Rivalry rivalry : rivalries) {
+            if (!rivalryResults.containsKey(rivalry.opponentAbbr)) {
+                continue;
+            }
+            boolean won = Boolean.TRUE.equals(rivalryResults.get(rivalry.opponentAbbr));
+            Team rival = league.findTeamAbbr(rivalry.opponentAbbr);
+            if (rival == null) {
+                continue;
+            }
+            int swing = rivalryPrestigeSwing(
+                    rivalry.strength, won, teamPrestige, rival.teamPrestige);
+            String label = rivalry.displayLabel();
+            if (won) {
+                if (swing > 0) {
+                    sb.append("\n\nWon your rivalry vs ").append(label)
+                            .append(". Recruits noticed (+")
+                            .append(swing).append(" prestige).");
+                } else {
+                    sb.append("\n\nWon your rivalry vs ").append(label)
+                            .append(", but it was expected given the prestige gap (no change).");
+                }
+            } else {
+                if (swing < 0) {
+                    sb.append("\n\nLost your rivalry vs ").append(label)
+                            .append(". Recruits soured (")
+                            .append(swing).append(" prestige).");
+                } else {
+                    sb.append("\n\nLost your rivalry vs ").append(label)
+                            .append(", but it was expected in a rebuild (no change).");
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    public void retargetRivalAbbr(String oldAbbr, String newAbbr) {
+        if (oldAbbr == null || newAbbr == null || rivalries == null) {
+            return;
+        }
+        for (int i = 0; i < rivalries.size(); i++) {
+            Rivalry r = rivalries.get(i);
+            if (r.opponentAbbr.equalsIgnoreCase(oldAbbr)) {
+                rivalries.set(i, new Rivalry(newAbbr, r.strength));
+            }
+        }
     }
 
     public int getRosterCount() {
@@ -511,9 +744,6 @@ public class Team {
 
     public void grantYearlyBudget() {
         recruitMoney = NilMoney.yearlyBudget(teamPrestige);
-        if (league != null && league.isHardMode() && userControlled) {
-            recruitMoney = (int) (recruitMoney * 0.90);
-        }
         // Pay remaining multi-year NIL only (COA was charged at sign/retain).
         // Full COA+NIL for the whole roster was wiping the purse before retention.
         int granted = recruitMoney;
@@ -532,9 +762,6 @@ public class Team {
 
     public int projectedBudget(int yearOffset) {
         int base = NilMoney.yearlyBudget(teamPrestige);
-        if (league != null && league.isHardMode() && userControlled) {
-            base = (int) (base * 0.90);
-        }
         if (yearOffset <= 0) return base;
         return base;
     }
@@ -784,13 +1011,8 @@ public class Team {
      * Advance season, hiring new coach if needed and calculating new prestige level.
      */
     public void advanceSeason() {
-        // subtract for rivalry first
         int oldPrestige = teamPrestige;
-        if (wonRivalryGame && (teamPrestige - league.findTeamAbbr(rivalTeam).teamPrestige < 20)) {
-            teamPrestige += 2;
-        } else if (!wonRivalryGame && league.findTeamAbbr(rivalTeam).teamPrestige - teamPrestige < 20) {
-            teamPrestige -= 2;
-        }
+        teamPrestige += computeRivalryPrestigeDelta();
 
         int expectedPollFinish = 1 + (int) Math.round(
                 (100 - teamPrestige) / 100.0 * (league.teamList.size() - 1));
@@ -809,21 +1031,12 @@ public class Team {
         if (teamPrestige > 95) teamPrestige = 95;
         if (teamPrestige < 45) teamPrestige = 45;
 
-        if (league.findTeamAbbr(rivalTeam).userControlled && league.isHardMode()) {
-            // My rival is the user team, lock my prestige if it is Hard Mode
-            Team rival = league.findTeamAbbr(rivalTeam);
-            if (teamPrestige < rival.teamPrestige - 10) {
-                teamPrestige = rival.teamPrestige - 10;
-            }
-        } else if (userControlled && league.isHardMode()) {
-            // I am the user team, lock my rivals prestige
-            Team rival = league.findTeamAbbr(rivalTeam);
-            if (rival.teamPrestige < teamPrestige - 10) {
-                rival.teamPrestige = teamPrestige - 10;
-            }
-        }
-
         diffPrestige = teamPrestige - oldPrestige;
+        if (!rivalryDynamicsAppliedThisOffseason) {
+            RivalryDynamics.evolveTeam(this);
+        }
+        rivalryDynamicsAppliedThisOffseason = false;
+        clearRivalryResults();
 
         if (userControlled) checkHallofFame();
 
@@ -924,18 +1137,17 @@ public class Team {
 
     public void getPlayersLeaving() {
         if (playersLeaving.isEmpty()) {
-            double hardBonus = 0;
-            if (userControlled && league != null && league.isHardMode()) hardBonus = 0.2;
+            double leaveBonus = 0;
             if (natChampWL != null && natChampWL.equals("NCW")) {
-                hardBonus += 0.2;
+                leaveBonus += 0.2;
             }
             for (Player p : getAllPlayers()) {
-                considerDraftOrGraduation(p, hardBonus);
+                considerDraftOrGraduation(p, leaveBonus);
             }
         }
     }
 
-    private void considerDraftOrGraduation(Player p, double hardBonus) {
+    private void considerDraftOrGraduation(Player p, double leaveBonus) {
         if (p == null) return;
         p.projectedDraftRound = 0;
         p.draftDeclared = false;
@@ -963,7 +1175,7 @@ public class Team {
         }
 
         // Legacy high-ovr early declare chance for near-UDFA
-        if (p.ratOvr > NFL_OVR && Math.random() < NFL_CHANCE + hardBonus) {
+        if (p.ratOvr > NFL_OVR && Math.random() < NFL_CHANCE + leaveBonus) {
             p.projectedDraftRound = 0;
             playersLeaving.add(p);
         }
@@ -2294,20 +2506,18 @@ public class Team {
     public void checkForInjury() {
         playersInjured = new ArrayList<>();
         playersRecovered = new ArrayList<>();
-        if (league.isHardMode()) {
-            checkInjuryPosition(teamQBs, 1);
-            checkInjuryPosition(teamRBs, 2);
-            checkInjuryPosition(teamFBs, 1);
-            checkInjuryPosition(teamWRs, 3);
-            checkInjuryPosition(teamTEs, 1);
-            checkInjuryPosition(teamOLs, 5);
-            checkInjuryPosition(teamKs, 1);
-            checkInjuryPosition(teamSs, 1);
-            checkInjuryPosition(teamCBs, 3);
-            checkInjuryPosition(teamEDGEs, 2);
-            checkInjuryPosition(teamDLs, 3);
-            checkInjuryPosition(teamLBs, 3);
-        }
+        checkInjuryPosition(teamQBs, 1);
+        checkInjuryPosition(teamRBs, 2);
+        checkInjuryPosition(teamFBs, 1);
+        checkInjuryPosition(teamWRs, 3);
+        checkInjuryPosition(teamTEs, 1);
+        checkInjuryPosition(teamOLs, 5);
+        checkInjuryPosition(teamKs, 1);
+        checkInjuryPosition(teamSs, 1);
+        checkInjuryPosition(teamCBs, 3);
+        checkInjuryPosition(teamEDGEs, 2);
+        checkInjuryPosition(teamDLs, 3);
+        checkInjuryPosition(teamLBs, 3);
     }
 
     private void checkInjuryPosition(ArrayList<? extends Player> players, int numStarters) {
@@ -3051,14 +3261,9 @@ public class Team {
             summary += "\n\nWell, your team performed exactly how many expected. This won't hurt or help recruiting, but try to improve next year!";
         }
 
-        if ( wonRivalryGame && (teamPrestige - league.findTeamAbbr(rivalTeam).teamPrestige < 20) ) {
-            summary += "\n\nFuture recruits were impressed that you won your rivalry game. You gained 2 prestige.";
-        } else if (!wonRivalryGame && league.findTeamAbbr(rivalTeam).teamPrestige - teamPrestige < 20) {
-            summary += "\n\nSince you couldn't win your rivalry game, recruits aren't excited to attend your school. You lost 2 prestige.";
-        } else if ( wonRivalryGame ) {
-            summary += "\n\nGood job winning your rivalry game, but it was expected given the state of their program. You gain no prestige for this.";
-        } else {
-            summary += "\n\nYou lost your rivalry game, but this was expected given your rebuilding program. You lost no prestige for this.";
+        summary += rivalryPrestigeSummaryLines();
+        for (String note : RivalryDynamics.previewNotes(this)) {
+            summary += "\n\n" + note;
         }
 
         return summary;
@@ -3284,8 +3489,12 @@ public class Team {
         String gameSummary = gameWLSchedule.get(i) + " " + gameSummaryStr(g);
         String rivalryGameStr = "";
         if (g.gameName.equals("Rivalry Game") || g.gameName.equals("OOC Rivalry")) {
-            if ( gameWLSchedule.get(i).equals("W") ) rivalryGameStr = "Won against Rival!\n";
-            else rivalryGameStr = "Lost against Rival!\n";
+            int strength = g.rivalryStrength();
+            String label = strength > 0
+                    ? Rivalry.band(strength) + " (" + strength + ") "
+                    : "";
+            if ( gameWLSchedule.get(i).equals("W") ) rivalryGameStr = "Won against " + label + "Rival!\n";
+            else rivalryGameStr = "Lost against " + label + "Rival!\n";
         }
         return rivalryGameStr + name + " " + gameSummary + "\nNew poll rank: #" + rankTeamPollScore + " " + abbr + " (" + wins + "-" + losses + ")";
     }

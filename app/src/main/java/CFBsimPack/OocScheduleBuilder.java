@@ -41,7 +41,6 @@ public final class OocScheduleBuilder {
             }
 
             ArrayList<Matchup> matchups = new ArrayList<>();
-            reserveAvailableRivalries(available, usedMatchups, matchups);
             if (!matchRemainingTeams(available, usedMatchups, matchups, week)) {
                 Map<String, Integer> byConf = new HashMap<>();
                 // Rebuild available for error context
@@ -89,6 +88,29 @@ public final class OocScheduleBuilder {
     }
 
     /**
+     * Places an OOC game with a fixed home team (contract materialization / buy games).
+     */
+    public static boolean placeFixedHomeOocGame(Team home, Team away, int week, String contractId) {
+        if (home == null || away == null || home == away) {
+            return false;
+        }
+        if (!home.isOpenOocWeek(week) || !away.isOpenOocWeek(week)) {
+            return false;
+        }
+        if (home.conference.equals(away.conference)) {
+            return false;
+        }
+        if (alreadyMatched(home, away)) {
+            return false;
+        }
+        Game game = new Game(home, away, "OOC");
+        game.contractId = contractId;
+        home.gameSchedule.set(week, game);
+        away.gameSchedule.set(week, game);
+        return true;
+    }
+
+    /**
      * Clears a previously placed OOC game for the user in {@code week}, if editable.
      */
     public static boolean clearUserOocGame(Team user, int week) {
@@ -106,6 +128,18 @@ public final class OocScheduleBuilder {
         user.gameSchedule.set(week, null);
         opponent.gameSchedule.set(week, null);
         return true;
+    }
+
+    /** Clears editable free OOC games; skips contract-locked weeks. */
+    public static boolean clearUserFreeOocGame(Team user, int week) {
+        if (user == null || week < 0 || week >= user.gameSchedule.size()) {
+            return false;
+        }
+        Game game = user.gameSchedule.get(week);
+        if (game != null && game.contractId != null) {
+            return false;
+        }
+        return clearUserOocGame(user, week);
     }
 
     public static List<Team> eligibleOpponents(Team user, int week, List<Team> allTeams) {
@@ -145,14 +179,14 @@ public final class OocScheduleBuilder {
             return;
         }
         for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
-            clearUserOocGame(user, week);
+            clearUserFreeOocGame(user, week);
         }
     }
 
     /**
      * Fills the user's currently open OOC weeks with a balanced prestige slate.
-     * Prefers a cross-conference rivalry when both teams share an open week, then
-     * rotates tough / peer / easy opponents by {@link Team#teamPrestige}.
+     * Soft-prefers highest cross-conference rival (strength ≥ 50) when a shared
+     * open week exists (never required). Then rotates tough / peer / easy by prestige.
      *
      * @return number of games placed
      */
@@ -162,9 +196,8 @@ public final class OocScheduleBuilder {
         }
         int placed = 0;
 
-        Team rival = findByAbbreviation(allTeams, user.rivalTeam);
+        Team rival = highestCrossConfRival(user, allTeams);
         if (rival != null
-                && !user.conference.equals(rival.conference)
                 && !alreadyMatched(user, rival)) {
             int rivalryWeek = findSharedOpenWeek(user, rival);
             if (rivalryWeek >= 0 && placeUserOocGame(user, rival, rivalryWeek)) {
@@ -312,26 +345,6 @@ public final class OocScheduleBuilder {
         return count;
     }
 
-    private static void reserveAvailableRivalries(
-            ArrayList<Team> available,
-            Set<String> usedMatchups,
-            ArrayList<Matchup> matchups) {
-        ArrayList<Team> candidates = new ArrayList<>(available);
-        for (Team team : candidates) {
-            if (!available.contains(team)) {
-                continue;
-            }
-            Team rival = findByAbbreviation(available, team.rivalTeam);
-            if (rival != null
-                    && !team.conference.equals(rival.conference)
-                    && !usedMatchups.contains(matchupKey(team, rival))) {
-                matchups.add(new Matchup(team, rival));
-                available.remove(team);
-                available.remove(rival);
-            }
-        }
-    }
-
     private static boolean matchRemainingTeams(
             ArrayList<Team> available,
             Set<String> usedMatchups,
@@ -398,6 +411,29 @@ public final class OocScheduleBuilder {
             }
         }
         return null;
+    }
+
+    /** Highest-strength cross-conference rival at or above seat threshold. */
+    private static Team highestCrossConfRival(Team user, List<Team> allTeams) {
+        if (user.rivalries == null) {
+            return null;
+        }
+        Team best = null;
+        int bestStrength = Rivalry.SEAT_THRESHOLD - 1;
+        for (Rivalry r : user.rivalries) {
+            if (r.strength < Rivalry.SEAT_THRESHOLD) {
+                continue;
+            }
+            Team rival = findByAbbreviation(allTeams, r.opponentAbbr);
+            if (rival == null || user.conference.equals(rival.conference)) {
+                continue;
+            }
+            if (r.strength > bestStrength) {
+                best = rival;
+                bestStrength = r.strength;
+            }
+        }
+        return best;
     }
 
     static Team chooseHomeTeam(

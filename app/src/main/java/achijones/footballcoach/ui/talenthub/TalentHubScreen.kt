@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -198,23 +199,67 @@ fun TalentHubScreen(
             onDismissRequest = viewModel::dismissOpponentPicker,
             title = { Text("OOC opponent — Week ${(state.opponentPickerWeek ?: 0) + 1}") },
             text = {
-                LazyColumn {
-                    items(state.opponentOptions.size) { index ->
+                Column {
+                    if (state.dealOpponentAbbr != null) {
+                        Text(
+                            state.dealQuote,
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.padding(bottom = 8.dp),
+                        )
+                        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                            TextButton(onClick = { viewModel.signBuyGameYears(1) }) {
+                                Text("Buy 1yr")
+                            }
+                            TextButton(onClick = { viewModel.signBuyGameYears(2) }) {
+                                Text("Buy 2yr")
+                            }
+                            TextButton(onClick = { viewModel.signBuyGameYears(3) }) {
+                                Text("Buy 3yr")
+                            }
+                        }
+                        TextButton(onClick = viewModel::signHomeAndHomeDeal) {
+                            Text("Home-and-home (2yr)")
+                        }
                         TextButton(
-                            onClick = { viewModel.pickOpponent(index) },
-                            modifier = Modifier.fillMaxWidth(),
+                            onClick = {
+                                val idx = state.opponentAbbrs.indexOf(state.dealOpponentAbbr)
+                                if (idx >= 0) viewModel.pickOpponent(idx)
+                            },
                         ) {
-                            Text(
-                                state.opponentOptions[index],
+                            Text("One-off game only")
+                        }
+                    }
+                    LazyColumn(modifier = Modifier.heightIn(max = 320.dp)) {
+                        items(state.opponentOptions.size) { index ->
+                        Column(modifier = Modifier.fillMaxWidth()) {
+                            TextButton(
+                                onClick = {
+                                    viewModel.selectDealOpponent(index)
+                                },
                                 modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start,
-                            )
+                            ) {
+                                Text(
+                                    state.opponentOptions[index],
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start,
+                                )
+                            }
+                            val abbr = state.opponentAbbrs.getOrNull(index)
+                            if (abbr != null) {
+                                TextButton(
+                                    onClick = { viewModel.declareRival(abbr) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                ) {
+                                    Text("Declare $abbr as rival")
+                                }
+                            }
+                        }
                         }
                     }
                 }
             },
             confirmButton = {
-                TextButton(onClick = viewModel::dismissOpponentPicker) { Text("Cancel") }
+                TextButton(onClick = viewModel::dismissOpponentPicker) { Text("Close") }
             },
         )
     }
@@ -545,6 +590,13 @@ private fun OfferBottomSheet(
 @Composable
 private fun ScheduleTabContent(state: TalentHubUiState, viewModel: TalentHubViewModel) {
     Column(modifier = Modifier.fillMaxSize()) {
+        if (state.rivalSummary.isNotBlank()) {
+            Text(
+                text = "Rivals: ${state.rivalSummary}",
+                style = MaterialTheme.typography.bodySmall,
+                modifier = Modifier.padding(bottom = 4.dp),
+            )
+        }
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -553,7 +605,7 @@ private fun ScheduleTabContent(state: TalentHubUiState, viewModel: TalentHubView
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Suggested OOC slate — tap a week to change. " +
+                text = "OOC slate — tap open weeks to pick or sign deals. " +
                     "${state.filledOocSlots} filled · ${state.openOocSlots} open.",
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
@@ -567,6 +619,29 @@ private fun ScheduleTabContent(state: TalentHubUiState, viewModel: TalentHubView
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 80.dp),
         ) {
+            if (state.contractRows.isNotEmpty()) {
+                item {
+                    Text(
+                        "Upcoming OOC contracts",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                items(state.contractRows, key = { it.id }) { row ->
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.35f))
+                            .padding(12.dp),
+                    ) {
+                        Text(row.summary, style = MaterialTheme.typography.bodySmall)
+                        TextButton(onClick = { viewModel.cancelContract(row.id) }) {
+                            Text("Cancel deal")
+                        }
+                    }
+                }
+            }
             items(state.scheduleWeeks, key = { it.week }) { week ->
                 val clickable = !week.locked
                 Column(
@@ -582,14 +657,18 @@ private fun ScheduleTabContent(state: TalentHubUiState, viewModel: TalentHubView
                         )
                         .padding(12.dp),
                 ) {
+                    val rivalry = week.rivalryLabel?.let { " · $it rival" } ?: ""
                     Text(
-                        "${week.weekLabel} · ${week.status}",
+                        "${week.weekLabel} · ${week.status}$rivalry",
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(week.detail, style = MaterialTheme.typography.bodySmall)
-                    if (!week.locked && !week.open) {
-                        Text("Tap to clear and re-pick", style = MaterialTheme.typography.labelSmall)
+                    when {
+                        week.contractLocked ->
+                            Text("Contract locked — cancel deal to change", style = MaterialTheme.typography.labelSmall)
+                        !week.locked && !week.open ->
+                            Text("Tap to clear and re-pick", style = MaterialTheme.typography.labelSmall)
                     }
                 }
             }

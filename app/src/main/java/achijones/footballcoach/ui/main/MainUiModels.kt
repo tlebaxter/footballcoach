@@ -51,6 +51,18 @@ data class ScheduleRowUi(
     val isHome: Boolean,
 )
 
+data class TeamPickerTeamUi(
+    val teamListIndex: Int,
+    val name: String,
+    val abbr: String,
+    val prestige: Int,
+)
+
+data class TeamPickerConfUi(
+    val name: String,
+    val teams: List<TeamPickerTeamUi>,
+)
+
 data class LineupRowUi(
     val name: String,
     val ovr: Int,
@@ -210,7 +222,7 @@ data class MainUiState(
     val snackbarMessage: String? = null,
     val scrollScheduleToIndex: Int? = null,
     val showTeamPicker: Boolean = false,
-    val teamPickerOptions: List<String> = emptyList(),
+    val teamPickerConferences: List<TeamPickerConfUi> = emptyList(),
     val showExitConfirm: Boolean = false,
     val showSaveDialog: Boolean = false,
     val saveSlotInfos: List<String> = emptyList(),

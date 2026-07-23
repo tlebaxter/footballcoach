@@ -3,6 +3,7 @@ package CFBsimPack;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -11,7 +12,7 @@ import java.util.Set;
  */
 public final class LeagueDataLoader {
 
-    private static final int EXPECTED_TEAM_COUNT = 138;
+    private static final int EXPECTED_TEAM_COUNT = 140;
 
     private LeagueDataLoader() {
     }
@@ -52,11 +53,11 @@ public final class LeagueDataLoader {
                 throw new IllegalArgumentException(
                         "Invalid prestige on line " + (lineNumber + 1) + ".", exception);
             }
-            String rivalAbbreviation = values[4].trim();
+            String rivalsEncoded = values[4].trim();
 
-            if (conference.isEmpty() || name.isEmpty() || rivalAbbreviation.isEmpty()) {
+            if (conference.isEmpty() || name.isEmpty() || rivalsEncoded.isEmpty()) {
                 throw new IllegalArgumentException(
-                        "Conference, team name, and rival are required on line " + (lineNumber + 1) + ".");
+                        "Conference, team name, and rivals are required on line " + (lineNumber + 1) + ".");
             }
             if (abbreviation.length() != 3) {
                 throw new IllegalArgumentException(
@@ -73,12 +74,24 @@ public final class LeagueDataLoader {
                 throw new IllegalArgumentException("Duplicate team name: " + name);
             }
 
+            List<Rivalry> rivalries = Rivalry.parseEncoded(rivalsEncoded);
+            if (rivalries.isEmpty()) {
+                throw new IllegalArgumentException(
+                        "At least one rival is required on line " + (lineNumber + 1) + ".");
+            }
+            for (Rivalry rivalry : rivalries) {
+                if (rivalry.strength < 0 || rivalry.strength > 100) {
+                    throw new IllegalArgumentException(
+                            "Rival strength must be 0–100 on line " + (lineNumber + 1) + ".");
+                }
+            }
+
             Conference conf = conferencesByName.get(conference);
             if (conf == null) {
                 conf = new Conference(conference, league, !"Independents".equals(conference));
                 conferencesByName.put(conference, conf);
             }
-            seeds.add(new TeamSeed(conf, name, abbreviation, prestige, rivalAbbreviation));
+            seeds.add(new TeamSeed(conf, name, abbreviation, prestige, Rivalry.encode(rivalries)));
         }
 
         if (seeds.size() != EXPECTED_TEAM_COUNT) {
@@ -86,9 +99,15 @@ public final class LeagueDataLoader {
                     "Expected " + EXPECTED_TEAM_COUNT + " FBS teams but found " + seeds.size() + ".");
         }
         for (TeamSeed seed : seeds) {
-            if (!abbreviations.contains(seed.rivalAbbreviation)) {
-                throw new IllegalArgumentException(
-                        "Unknown rival " + seed.rivalAbbreviation + " for " + seed.abbreviation + ".");
+            for (Rivalry rivalry : Rivalry.parseEncoded(seed.rivalsEncoded)) {
+                if (!abbreviations.contains(rivalry.opponentAbbr)) {
+                    throw new IllegalArgumentException(
+                            "Unknown rival " + rivalry.opponentAbbr + " for " + seed.abbreviation + ".");
+                }
+                if (rivalry.opponentAbbr.equals(seed.abbreviation)) {
+                    throw new IllegalArgumentException(
+                            "Team " + seed.abbreviation + " cannot rival itself.");
+                }
             }
         }
 
@@ -101,7 +120,7 @@ public final class LeagueDataLoader {
                     seed.conference.confName,
                     league,
                     seed.prestige,
-                    seed.rivalAbbreviation);
+                    seed.rivalsEncoded);
             seed.conference.confTeams.add(team);
             league.teamList.add(team);
         }
@@ -112,19 +131,19 @@ public final class LeagueDataLoader {
         private final String name;
         private final String abbreviation;
         private final int prestige;
-        private final String rivalAbbreviation;
+        private final String rivalsEncoded;
 
         private TeamSeed(
                 Conference conference,
                 String name,
                 String abbreviation,
                 int prestige,
-                String rivalAbbreviation) {
+                String rivalsEncoded) {
             this.conference = conference;
             this.name = name;
             this.abbreviation = abbreviation;
             this.prestige = prestige;
-            this.rivalAbbreviation = rivalAbbreviation;
+            this.rivalsEncoded = rivalsEncoded;
         }
     }
 }
