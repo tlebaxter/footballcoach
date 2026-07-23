@@ -27,19 +27,20 @@ public class PlayerK extends Player {
     public int ratKickAcc;
     //KickFum affects how often he can fumble the snap
     public int ratKickFum;
-    
-    //Vector ratingsVector;
-    
     //Stats
     public int statsXPAtt;
     public int statsXPMade;
     public int statsFGAtt;
     public int statsFGMade;
+    public int statsPuntAtt;
+    public int statsPuntYards;
 
     public int careerXPAtt;
     public int careerXPMade;
     public int careerFGAtt;
     public int careerFGMade;
+    public int careerPuntAtt;
+    public int careerPuntYards;
     
     public PlayerK( String nm, Team t, int yr, int pot, int iq, int pow, int acc, int fum, boolean rs, int dur ) {
         team = t;
@@ -58,15 +59,6 @@ public class PlayerK extends Player {
         position = "K";
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/3.5) + 100 + (int)(Math.random()*100) - 50;
-        
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr+" (+"+ratImprovement+")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratKickPow);
-        ratingsVector.addElement(ratKickAcc);
-        ratingsVector.addElement(ratKickFum);
         
         statsXPAtt = 0;
         statsXPMade = 0;
@@ -108,15 +100,6 @@ public class PlayerK extends Player {
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/3.5) + 100 + (int)(Math.random()*100) - 50;
 
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr+" (+"+ratImprovement+")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratKickPow);
-        ratingsVector.addElement(ratKickAcc);
-        ratingsVector.addElement(ratKickFum);
-
         statsXPAtt = 0;
         statsXPMade = 0;
         statsFGAtt = 0;
@@ -153,15 +136,6 @@ public class PlayerK extends Player {
         position = "K";
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/3.5) + 100 + (int)(Math.random()*100) - 50;
-        
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr+" (+"+ratImprovement+")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratKickPow);
-        ratingsVector.addElement(ratKickAcc);
-        ratingsVector.addElement(ratKickFum);
 
         statsXPAtt = 0;
         statsXPMade = 0;
@@ -192,21 +166,7 @@ public class PlayerK extends Player {
         v.add(statsFGAtt);
         v.add((float)((int)(1000*(float)statsFGMade/statsFGAtt))/10);
         return v;
-    }
-    
-    public Vector getRatingsVector() {
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr + " (+" + ratImprovement + ")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratKickPow);
-        ratingsVector.addElement(ratKickAcc);
-        ratingsVector.addElement(ratKickFum);
-        return ratingsVector;
-    }
-    
-    @Override
+    }@Override
     public void advanceSeason() {
         recordSeasonSnapshot();
         year++;
@@ -228,6 +188,8 @@ public class PlayerK extends Player {
         careerXPMade += statsXPMade;
         careerFGAtt += statsFGAtt;
         careerFGMade += statsFGMade;
+        careerPuntAtt += statsPuntAtt;
+        careerPuntYards += statsPuntYards;
         careerGamesPlayed += gamesPlayed;
         careerWins += statsWins;
 
@@ -239,6 +201,8 @@ public class PlayerK extends Player {
         statsXPMade = 0;
         statsFGAtt = 0;
         statsFGMade = 0;
+        statsPuntAtt = 0;
+        statsPuntYards = 0;
     }
 
     @Override
@@ -265,31 +229,7 @@ public class PlayerK extends Player {
         pStats.add("Kick Accuracy: " + getLetterGrade(ratKickAcc) + ">Clumsiness: " + getLetterGrade(ratKickFum));
         pStats.add(" > ");
         return pStats;
-    }
-
-    @Override
-    public ArrayList<String> getDetailAllStatsList(int games) {
-        ArrayList<String> pStats = new ArrayList<>();
-        if (statsXPAtt > 0) {
-            pStats.add("XP Made/Att: " + statsXPMade + "/" + statsXPAtt + ">XP Percent: " + (100 * statsXPMade / (statsXPAtt)) + "%");
-        } else {
-            pStats.add("XP Made/Att: 0/0>XP Percent: 0%");
-        }
-
-        if (statsFGAtt > 0) {
-            pStats.add("FG Made/Att: " + statsFGMade+"/"+statsFGAtt+">FG Percent: " + (100*statsFGMade/statsFGAtt+"%"));
-        } else {
-            pStats.add("FG Made/Att: 0/0>FG Percent: 0%");
-        }
-        pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed-statsWins) + ")" + ">Durability: " + getLetterGrade(ratDur));
-        pStats.add("Football IQ: " + getLetterGrade(ratFootIQ) + ">Kick Strength: " + getLetterGrade(ratKickPow));
-        pStats.add("Kick Accuracy: " + getLetterGrade(ratKickAcc) + ">Clumsiness: " + getLetterGrade(ratKickFum));
-        pStats.add("[B]CAREER STATS:");
-        pStats.addAll(getCareerStatsList());
-        return pStats;
-    }
-
-    @Override
+    }@Override
     public ArrayList<String> getCareerStatsList() {
         ArrayList<String> pStats = new ArrayList<>();
         if ((statsXPAtt+careerXPAtt) > 0) {
@@ -307,12 +247,4 @@ public class PlayerK extends Player {
         }
         pStats.addAll(super.getCareerStatsList());
         return pStats;
-    }
-
-    @Override
-    public String getInfoForLineup() {
-        if (injury != null) return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " " + injury.toString();
-        return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " (" +
-                getLetterGrade(ratKickPow) + ", " + getLetterGrade(ratKickAcc) + ", " + getLetterGrade(ratKickFum) + ")";
-    }
-}
+    }}

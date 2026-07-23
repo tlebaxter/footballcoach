@@ -11,7 +11,6 @@ import CFBsimPack.PlayerS;
 import CFBsimPack.PlayerTE;
 import CFBsimPack.PlayerWR;
 import CFBsimPack.Team;
-import CFBsimPack.TeamStrategy;
 
 import java.util.List;
 import java.util.Random;
@@ -48,7 +47,13 @@ public final class PlayResolver {
             return fieldGoal(offense, defense, state, call);
         }
         if (call.offensePlay == OffensePlay.PUNT) {
-            return punt(offense, state, call);
+            return punt(offense, defense, state, call);
+        }
+        if (call.offensePlay == OffensePlay.FAKE_PUNT) {
+            return fakePunt(offense, defense, offEleven, defEleven, state, call);
+        }
+        if (call.offensePlay == OffensePlay.KICKOFF) {
+            return kickoff(offense, defense, state, call);
         }
         if (call.offensePlay == OffensePlay.PASS) {
             return pass(offense, defense, offEleven, defEleven, state, call);
@@ -98,11 +103,7 @@ public final class PlayResolver {
             return sack(offense, state, call, qb);
         }
 
-        TeamStrategy offS = offense.teamStratOff;
-        TeamStrategy defS = defense.teamStratDef;
         double intChance = (pressure + def.coverageComposite() - (qb.ratPassAcc + qb.ratFootIQ + 100) / 3.0) / 18.0;
-        if (offS != null) intChance += offS.getPAB() * 0.01;
-        if (defS != null) intChance += defS.getPAB() * 0.01;
         intChance *= cov.intMod;
         if (concept.depth == DepthBand.DEEP) intChance *= 1.12;
         if (intChance < 0.015) intChance = 0.015;
@@ -133,8 +134,6 @@ public final class PlayResolver {
         double completion = (normalize(qb.ratPassAcc) + normalize(cat) - normalize(cbCov)) / 2.0
                 + 18.25 - pressure / 16.8 + homeField(offense, state);
         completion *= cov.completionMod * concept.completionMod;
-        if (offS != null) completion -= offS.getPAB();
-        if (defS != null) completion -= defS.getPAB();
         completion += cov.passFitBonus();
         completion += concept.matchupBonus(cov);
 
@@ -170,8 +169,6 @@ public final class PlayResolver {
                 * cov.yardsMod * concept.yardsMod);
         if (concept.depth == DepthBand.DEEP) yards += (int) (4 + 8 * rng.nextDouble());
         else if (concept.depth == DepthBand.SHORT) yards = (int) (yards * 0.85);
-        if (offS != null) yards += offS.getPYB() / 2;
-        if (defS != null) yards -= defS.getPYB();
         if (yards < 0) yards = 0;
 
         PlayerS s = defense.getS(0);
@@ -195,15 +192,11 @@ public final class PlayResolver {
         }
         CoverageCall cov = call.coverage;
         DefensiveSystem sys = defense.defSystem != null ? defense.defSystem : DefensiveSystem.BASE_4_3;
-        TeamStrategy offS = offense.teamStratOff;
-        TeamStrategy defS = defense.teamStratDef;
 
         int blockAdv = (int) ((off.olRushComposite() - def.runStopComposite() * sys.runWeight)
                 + cov.runFitBonus() + concept.matchupBonus(cov));
         int yards = (int) ((rb.ratRushSpd + blockAdv + homeField(offense, state))
                 * rng.nextDouble() / 10.0 * concept.runYardsMod);
-        if (offS != null) yards += offS.getRYB() / 2;
-        if (defS != null) yards -= defS.getRYB() / 2;
         if (yards < 2) {
             yards += rb.ratRushPow / 20 - 3;
         } else if (rng.nextDouble() < 0.28) {
@@ -231,10 +224,16 @@ public final class PlayResolver {
             r.touchdown = true;
             r.stoppedClock = true;
             r.clockBurned = (int) (8 + 12 * rng.nextDouble() * tempo);
-            creditTd(offense, state, qb, ballCarrier, actual, wasPass);
-            r.logLine = (wasPass ? "PASS TD! " : "RUSH TD! ") + offense.abbr + " "
-                    + (ballCarrier != null ? ballCarrier.name : "") + " " + actual + " yards"
-                    + " (" + concept.displayName + " · " + call.resolvedDefenseConcept().displayName + ").";
+            if (state.pendingTry && state.tryIsTwoPoint) {
+                r.logLine = "2-POINT CONVERSION GOOD! " + offense.abbr
+                        + (ballCarrier != null ? " " + ballCarrier.name : "")
+                        + " (" + concept.displayName + " · " + call.resolvedDefenseConcept().displayName + ").";
+            } else {
+                creditTd(offense, state, qb, ballCarrier, actual, wasPass);
+                r.logLine = (wasPass ? "PASS TD! " : "RUSH TD! ") + offense.abbr + " "
+                        + (ballCarrier != null ? ballCarrier.name : "") + " " + actual + " yards"
+                        + " (" + concept.displayName + " · " + call.resolvedDefenseConcept().displayName + ").";
+            }
             return r;
         }
 
@@ -326,18 +325,250 @@ public final class PlayResolver {
         return r;
     }
 
-    private PlayResult punt(Team offense, GameState state, PlayCall call) {
+    private PlayResult punt(Team offense, Team defense, GameState state, PlayCall call) {
         PlayResult r = new PlayResult();
         r.playType = OffensePlay.PUNT;
-        int puntYards = 35 + (int) (25 * rng.nextDouble());
-        state.yardLine += puntYards;
-        if (state.yardLine >= 100) state.yardLine = 80 + (int) (15 * rng.nextDouble());
-        r.possessionChanged = true;
         r.clockBurned = (int) (5 + 10 * rng.nextDouble());
         r.stoppedClock = true;
-        r.logLine = offense.abbr + " punts " + puntYards + " yards ("
-                + call.resolvedOffenseConcept().displayName + ").";
+        PlayerK k = offense.getK(0);
+        String defId = call.resolvedDefenseConcept().id;
+
+        // Block attempt before the kick
+        if ("punt_block".equals(defId)) {
+            double blockChance = 0.08 + (defense.getEDGE(0) != null ? defense.getEDGE(0).ratOvr : 70) / 800.0;
+            Player ls = offense.getLongSnapper();
+            if (ls != null) blockChance -= ls.ratOvr / 1200.0;
+            blockChance -= k.ratKickFum / 2000.0;
+            if (rng.nextDouble() < Math.max(0.03, Math.min(0.22, blockChance))) {
+                r.puntBlocked = true;
+                r.possessionChanged = true;
+                r.turnover = true;
+                state.yardLine = Math.max(1, state.yardLine - 10);
+                if (gameStats != null) {
+                    // credit block loosely on EDGE
+                    if (defense.getEDGE(0) != null) gameStats.line(defense.getEDGE(0)).puntBlk++;
+                }
+                r.logLine = "PUNT BLOCKED! " + defense.abbr + " recovers ("
+                        + call.resolvedDefenseConcept().displayName + ").";
+                return r;
+            }
+        }
+
+        int power = k != null ? k.ratKickPow : 70;
+        int puntYards = 32 + (int) ((power - 50) * 0.35) + (int) (18 * rng.nextDouble());
+        if (puntYards < 28) puntYards = 28;
+        if (puntYards > 62) puntYards = 62;
+        if (k != null) {
+            k.statsPuntAtt++;
+            k.statsPuntYards += puntYards;
+            if (gameStats != null) {
+                gameStats.line(k).puntAtt++;
+                gameStats.line(k).puntYards += puntYards;
+            }
+        }
+
+        int landing = state.yardLine + puntYards;
+        if (landing >= 100) {
+            // Touchback-ish: receiving team at own 20 after flip → spot at 80 from kicker view
+            state.yardLine = 80;
+            r.touchback = true;
+            r.possessionChanged = true;
+            r.logLine = offense.abbr + " punts " + puntYards + " yards into the end zone (touchback).";
+            return r;
+        }
+
+        state.yardLine = landing;
+        Player returner = defense.getPuntReturner();
+        String retName = returner != null ? returner.name : "returner";
+
+        if ("fair_catch".equals(defId) || "defend_scrimmage".equals(defId)) {
+            r.fairCatch = true;
+            r.possessionChanged = true;
+            if (returner != null) {
+                returner.statsFairCatches++;
+                if (gameStats != null) gameStats.line(returner).fairCatches++;
+            }
+            r.returnerName = retName;
+            r.logLine = offense.abbr + " punts " + puntYards + " yards; " + retName + " fair catches.";
+            return r;
+        }
+
+        // Return (punt_return, punt_block miss, or coverage shell used as soft return)
+        int gunnerCov = 0;
+        if (offense.getGunner1() != null) gunnerCov += Team.returnSkill(offense.getGunner1()) / 4;
+        if (offense.getGunner2() != null) gunnerCov += Team.returnSkill(offense.getGunner2()) / 4;
+        int retSkill = Team.returnSkill(returner);
+        // Muff recovered by coverage — kicking team keeps the ball at the landing spot
+        if (rng.nextDouble() < 0.03) {
+            state.down = 1;
+            state.yardsNeed = 10;
+            r.yardsGained = puntYards;
+            r.possessionChanged = false;
+            r.turnover = false;
+            r.logLine = retName + " muffs the punt! " + offense.abbr + " recovers.";
+            return r;
+        }
+
+        int returnYards = (int) (8 + (retSkill - gunnerCov) / 25.0 + 18 * rng.nextDouble());
+        if ("punt_block".equals(defId)) returnYards = Math.max(0, returnYards / 2); // poor return setup
+        if (returnYards < 0) returnYards = 0;
+        if (returnYards > 75) returnYards = 75;
+
+        int endSpot = landing - returnYards;
+        if (endSpot <= 0) {
+            // Return TD — ball crosses kicking team's goal
+            state.yardLine = 100; // will score for receiving team after flip logic in applyResult
+            r.returnTd = true;
+            r.touchdown = true;
+            r.possessionChanged = true;
+            r.returnYards = returnYards;
+            r.returnerName = retName;
+            creditReturn(returner, returnYards, true, true);
+            r.logLine = offense.abbr + " punts " + puntYards + " yards; " + retName
+                    + " returns " + returnYards + " for a TOUCHDOWN!";
+            // Possession must be receiving team for TD scoring — flip first in applyResult via touchdown
+            // Problem: touchdown scores for current possession (kickers). Need to flip before score.
+            // Mark returnTd and possessionChanged; Game.applyResult will handle return TD specially.
+            r.touchdown = true;
+            return r;
+        }
+        state.yardLine = Math.max(1, endSpot);
+        r.returnYards = returnYards;
+        r.returnerName = retName;
+        r.possessionChanged = true;
+        creditReturn(returner, returnYards, true, false);
+        r.logLine = offense.abbr + " punts " + puntYards + " yards; " + retName
+                + " returns " + returnYards + " (" + call.resolvedDefenseConcept().displayName + ").";
         return r;
+    }
+
+    private PlayResult kickoff(Team offense, Team defense, GameState state, PlayCall call) {
+        PlayResult r = new PlayResult();
+        r.playType = OffensePlay.KICKOFF;
+        r.clockBurned = (int) (4 + 6 * rng.nextDouble());
+        r.stoppedClock = true;
+        PlayerK k = offense.getK(0);
+        int power = k != null ? k.ratKickPow : 70;
+        // Kick from ~35; distance 50–75 into field
+        int kickYards = 55 + (int) ((power - 60) * 0.25) + (int) (15 * rng.nextDouble());
+        int landing = state.yardLine + kickYards;
+        String defId = call.resolvedDefenseConcept().id;
+        Player returner = defense.getKickReturner();
+        String retName = returner != null ? returner.name : "returner";
+
+        if (landing >= 100 || "kick_fair_catch".equals(defId) && landing >= 90) {
+            state.yardLine = 75; // flip → receiving at 25
+            r.touchback = true;
+            r.possessionChanged = true;
+            r.logLine = offense.abbr + " kickoff — touchback.";
+            return r;
+        }
+        if (landing > 99) landing = 99;
+        state.yardLine = landing;
+
+        if ("kick_fair_catch".equals(defId)) {
+            r.fairCatch = true;
+            r.possessionChanged = true;
+            if (returner != null) {
+                returner.statsFairCatches++;
+                if (gameStats != null) gameStats.line(returner).fairCatches++;
+            }
+            r.returnerName = retName;
+            r.logLine = offense.abbr + " kickoff; " + retName + " fair catches.";
+            return r;
+        }
+
+        int retSkill = Team.returnSkill(returner);
+        int returnYards = (int) (15 + retSkill / 30.0 + 20 * rng.nextDouble());
+        if (returnYards > 95) returnYards = 95;
+        int endSpot = landing - returnYards;
+        if (endSpot <= 0) {
+            state.yardLine = 100;
+            r.returnTd = true;
+            r.touchdown = true;
+            r.possessionChanged = true;
+            r.returnYards = returnYards;
+            r.returnerName = retName;
+            creditReturn(returner, returnYards, false, true);
+            r.logLine = offense.abbr + " kickoff; " + retName + " returns " + returnYards
+                    + " for a TOUCHDOWN!";
+            return r;
+        }
+        state.yardLine = Math.max(1, endSpot);
+        r.returnYards = returnYards;
+        r.returnerName = retName;
+        r.possessionChanged = true;
+        creditReturn(returner, returnYards, false, false);
+        r.logLine = offense.abbr + " kickoff; " + retName + " returns " + returnYards + ".";
+        return r;
+    }
+
+    private PlayResult fakePunt(Team offense, Team defense, OnFieldEleven off, OnFieldEleven def,
+                                GameState state, PlayCall call) {
+        PlayResult r = new PlayResult();
+        r.playType = OffensePlay.FAKE_PUNT;
+        String defId = call.resolvedDefenseConcept().id;
+        boolean blockLook = "punt_block".equals(defId);
+        boolean defend = "defend_scrimmage".equals(defId) || !Playbook.isSpecialTeamsDefense(call.resolvedDefenseConcept());
+        // Fake as a short run with elevated risk
+        double stopBias = blockLook ? 0.35 : (defend ? 0.25 : 0.05);
+        int yards = (int) (2 + 12 * rng.nextDouble() - stopBias * 10);
+        if (rng.nextDouble() < 0.12 + stopBias) {
+            yards = -2 - (int) (6 * rng.nextDouble());
+        }
+        r.yardsGained = yards;
+        r.clockBurned = (int) (6 + 8 * rng.nextDouble());
+        state.yardLine += yards;
+        if (state.yardLine >= 100) {
+            r.touchdown = true;
+            state.yardLine = 100;
+            r.logLine = offense.abbr + " fake punt — TOUCHDOWN!";
+            return r;
+        }
+        if (state.yardLine <= 0) {
+            r.safety = true;
+            state.yardLine = 1;
+            r.logLine = offense.abbr + " fake punt stuffed for a SAFETY!";
+            return r;
+        }
+        if (yards >= state.yardsNeed) {
+            r.firstDown = true;
+            state.down = 1;
+            state.yardsNeed = 10;
+            r.logLine = offense.abbr + " fake punt works for " + yards + " and a FIRST DOWN!";
+        } else {
+            state.down++;
+            state.yardsNeed -= yards;
+            if (state.yardsNeed < 1) state.yardsNeed = 1;
+            r.logLine = offense.abbr + " fake punt gains " + yards
+                    + (blockLook || defend ? " (defense was ready)." : ".");
+        }
+        return r;
+    }
+
+    private void creditReturn(Player returner, int yards, boolean puntReturn, boolean td) {
+        if (returner == null) return;
+        if (puntReturn) {
+            returner.statsPrAtt++;
+            returner.statsPrYards += yards;
+            if (td) returner.statsPrTd++;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(returner);
+                line.prAtt++;
+                line.prYards += yards;
+                if (td) line.prTd++;
+            }
+        } else {
+            returner.statsKrAtt++;
+            returner.statsKrYards += yards;
+            if (td) returner.statsKrTd++;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(returner);
+                line.krAtt++;
+                line.krYards += yards;
+                if (td) line.krTd++;
+            }
+        }
     }
 
     private void creditTd(Team offense, GameState state, PlayerQB qb, Player ballCarrier, int yards, boolean wasPass) {
@@ -346,23 +577,56 @@ public final class PlayResolver {
             qb.statsPassComp++;
             qb.statsPassYards += yards;
             offense.teamPassYards += yards;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(qb);
+                line.passComp++;
+                line.passYards += yards;
+                line.passTd++;
+            }
         }
         if (ballCarrier instanceof PlayerWR) {
             PlayerWR wr = (PlayerWR) ballCarrier;
             wr.statsTD++;
             wr.statsReceptions++;
             wr.statsRecYards += yards;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(wr);
+                line.receptions++;
+                line.recYards += yards;
+                line.recTd++;
+            }
         } else if (ballCarrier instanceof PlayerTE) {
             PlayerTE te = (PlayerTE) ballCarrier;
             te.statsTD++;
             te.statsReceptions++;
             te.statsRecYards += yards;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(te);
+                line.receptions++;
+                line.recYards += yards;
+                line.recTd++;
+            }
         } else if (ballCarrier instanceof PlayerRB) {
             PlayerRB rb = (PlayerRB) ballCarrier;
             rb.statsTD++;
-            rb.statsRushAtt++;
-            rb.statsRushYards += yards;
-            offense.teamRushYards += yards;
+            if (wasPass) {
+                if (gameStats != null) {
+                    PlayerGameStats.Line line = gameStats.line(rb);
+                    line.receptions++;
+                    line.recYards += yards;
+                    line.recTd++;
+                }
+            } else {
+                rb.statsRushAtt++;
+                rb.statsRushYards += yards;
+                offense.teamRushYards += yards;
+                if (gameStats != null) {
+                    PlayerGameStats.Line line = gameStats.line(rb);
+                    line.rushAtt++;
+                    line.rushYards += yards;
+                    line.rushTd++;
+                }
+            }
         }
         if (state.possessionHome) state.homeYards += yards;
         else state.awayYards += yards;
@@ -373,17 +637,45 @@ public final class PlayResolver {
             qb.statsPassComp++;
             qb.statsPassYards += yards;
             offense.teamPassYards += yards;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(qb);
+                line.passComp++;
+                line.passYards += yards;
+            }
         }
         if (ballCarrier instanceof PlayerWR) {
             ((PlayerWR) ballCarrier).statsReceptions++;
             ((PlayerWR) ballCarrier).statsRecYards += yards;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(ballCarrier);
+                line.receptions++;
+                line.recYards += yards;
+            }
         } else if (ballCarrier instanceof PlayerTE) {
             ((PlayerTE) ballCarrier).statsReceptions++;
             ((PlayerTE) ballCarrier).statsRecYards += yards;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(ballCarrier);
+                line.receptions++;
+                line.recYards += yards;
+            }
         } else if (ballCarrier instanceof PlayerRB) {
-            ((PlayerRB) ballCarrier).statsRushAtt++;
-            ((PlayerRB) ballCarrier).statsRushYards += yards;
-            offense.teamRushYards += yards;
+            if (wasPass) {
+                if (gameStats != null) {
+                    PlayerGameStats.Line line = gameStats.line(ballCarrier);
+                    line.receptions++;
+                    line.recYards += yards;
+                }
+            } else {
+                ((PlayerRB) ballCarrier).statsRushAtt++;
+                ((PlayerRB) ballCarrier).statsRushYards += yards;
+                offense.teamRushYards += yards;
+                if (gameStats != null) {
+                    PlayerGameStats.Line line = gameStats.line(ballCarrier);
+                    line.rushAtt++;
+                    line.rushYards += yards;
+                }
+            }
         }
         if (state.possessionHome) state.homeYards += yards;
         else state.awayYards += yards;

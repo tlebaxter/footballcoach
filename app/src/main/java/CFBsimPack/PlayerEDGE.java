@@ -1,7 +1,6 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
-import java.util.Vector;
 
 /** Edge rusher / boundary defender. */
 public class PlayerEDGE extends Player {
@@ -62,9 +61,7 @@ public class PlayerEDGE extends Player {
     }
 
     private void finishConstruct() {
-        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 50 + (int) (Math.random() * 100) - 50;
-        ratingsVector = new Vector();
-        wonHeisman = false;
+        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 50 + (int) (Math.random() * 100) - 50;wonHeisman = false;
         wonAllAmerican = false;
         wonAllConference = false;
         statsWins = 0;
@@ -108,20 +105,4 @@ public class PlayerEDGE extends Player {
         pStats.add("Run Stop: " + getLetterGrade(ratRush) + ">Pass Rush: " + getLetterGrade(ratPass));
         pStats.add(" > ");
         return pStats;
-    }
-
-    @Override
-    public ArrayList<String> getDetailAllStatsList(int games) {
-        ArrayList<String> pStats = getDetailStatsList(games);
-        pStats.set(pStats.size() - 1, "[B]CAREER STATS:");
-        pStats.addAll(getCareerStatsList());
-        return pStats;
-    }
-
-    @Override
-    public String getInfoForLineup() {
-        if (injury != null) return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " " + injury.toString();
-        return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " (" +
-                getLetterGrade(ratPow) + ", " + getLetterGrade(ratRush) + ", " + getLetterGrade(ratPass) + ")";
-    }
-}
+    }}

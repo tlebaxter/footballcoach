@@ -412,6 +412,7 @@ private fun DepthChartPanel(state: MainUiState, viewModel: MainViewModel) {
                 "QB (1 starter)", "RB (2 starters)", "FB (1 starter)", "WR (3 starters)",
                 "TE (1 starter)", "OL (5 starters)", "K (1 starter)", "S (1 starter)",
                 "CB (3 starters)", "EDGE (2 starters)", "DL (3 starters)", "LB (3 starters)",
+                "PR (punt return)", "KR (kick return)", "Gunner 1", "Gunner 2", "LS (long snap)",
             ),
             selectedIndex = state.lineupPositionIndex,
             onSelect = viewModel::selectLineupPosition,
@@ -683,30 +684,6 @@ private fun TeamPanel(state: MainUiState, viewModel: MainViewModel, modifier: Mo
                             selectedIndex = state.defSystemIndex,
                             onSelect = viewModel::setDefSystem,
                         )
-                        Text(
-                            "WEEKLY GAME PLAN",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = FcPrimary,
-                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
-                        )
-                        StrategySpinner(
-                            label = "Offense Strategy",
-                            options = state.offStrategies,
-                            selectedIndex = state.offStrategyIndex,
-                            onSelect = viewModel::setOffStrategy,
-                        )
-                        Text(
-                            state.offStrategies.getOrNull(state.offStrategyIndex)?.description.orEmpty(),
-                            modifier = Modifier.padding(bottom = 12.dp),
-                        )
-                        StrategySpinner(
-                            label = "Defense Strategy",
-                            options = state.defStrategies,
-                            selectedIndex = state.defStrategyIndex,
-                            onSelect = viewModel::setDefStrategy,
-                        )
-                        Text(state.defStrategies.getOrNull(state.defStrategyIndex)?.description.orEmpty())
                     }
                 }
             }
@@ -871,22 +848,6 @@ private fun PosFilterDropdown(filter: String, onSelect: (String) -> Unit) {
         options = ROSTER_FILTERS,
         selectedIndex = ROSTER_FILTERS.indexOf(filter).coerceAtLeast(0),
         onSelect = { onSelect(ROSTER_FILTERS[it]) },
-    )
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun StrategySpinner(
-    label: String,
-    options: List<StrategyOptionUi>,
-    selectedIndex: Int,
-    onSelect: (Int) -> Unit,
-) {
-    SpinnerDropdown(
-        label = label,
-        options = options.map { it.name },
-        selectedIndex = selectedIndex,
-        onSelect = onSelect,
     )
 }
 
@@ -2061,35 +2022,6 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                     }
                 }
 
-                if (!dialog.played && dialog.showStrategy) {
-                    Text(
-                        "GAME PLAN",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = FcPrimary,
-                    )
-                    Column(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(cardShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .padding(12.dp),
-                        verticalArrangement = Arrangement.spacedBy(4.dp),
-                    ) {
-                        SpinnerDropdown(
-                            label = "Offense",
-                            options = dialog.offStrategies,
-                            selectedIndex = dialog.offSelected,
-                            onSelect = viewModel::setScoutOffStrategy,
-                        )
-                        SpinnerDropdown(
-                            label = "Defense",
-                            options = dialog.defStrategies,
-                            selectedIndex = dialog.defSelected,
-                            onSelect = viewModel::setScoutDefStrategy,
-                        )
-                    }
-                }
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }

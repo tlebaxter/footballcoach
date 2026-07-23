@@ -20,6 +20,8 @@ public class PlayerSeasonRecord {
     public int rushAtt, rushYards, rushTd, rushFumbles;
     public int targets, receptions, recYards, recTd, drops, recFumbles;
     public int xpAtt, xpMade, fgAtt, fgMade;
+    public int prAtt, prYards, prTd, krAtt, krYards, krTd, fairCatches;
+    public int puntAtt, puntYards;
 
     public PlayerSeasonRecord() {}
 
@@ -34,6 +36,14 @@ public class PlayerSeasonRecord {
         this.wonAllAmerican = p.wonAllAmerican;
         this.wonAllConference = p.wonAllConference;
         this.position = p.position;
+
+        prAtt = p.statsPrAtt;
+        prYards = p.statsPrYards;
+        prTd = p.statsPrTd;
+        krAtt = p.statsKrAtt;
+        krYards = p.statsKrYards;
+        krTd = p.statsKrTd;
+        fairCatches = p.statsFairCatches;
 
         if (p instanceof PlayerQB) {
             PlayerQB q = (PlayerQB) p;
@@ -63,6 +73,8 @@ public class PlayerSeasonRecord {
             xpMade = k.statsXPMade;
             fgAtt = k.statsFGAtt;
             fgMade = k.statsFGMade;
+            puntAtt = k.statsPuntAtt;
+            puntYards = k.statsPuntYards;
         }
     }
 
@@ -92,6 +104,13 @@ public class PlayerSeasonRecord {
         } else if ("K".equals(position)) {
             sb.append("  FG ").append(fgMade).append("/").append(fgAtt)
                     .append(", XP ").append(xpMade).append("/").append(xpAtt);
+            if (puntAtt > 0) {
+                sb.append(", Punt ").append(puntAtt).append("/").append(puntYards);
+            }
+        }
+        if (prAtt > 0 || krAtt > 0) {
+            if (prAtt > 0) sb.append("  PR ").append(prYards).append(" yds");
+            if (krAtt > 0) sb.append("  KR ").append(krYards).append(" yds");
         }
         return sb.toString();
     }
@@ -105,7 +124,9 @@ public class PlayerSeasonRecord {
                 + passAtt + ":" + passComp + ":" + passYards + ":" + passTd + ":" + passInt + ":" + sacked + ":"
                 + rushAtt + ":" + rushYards + ":" + rushTd + ":" + rushFumbles + ":"
                 + targets + ":" + receptions + ":" + recYards + ":" + recTd + ":" + drops + ":" + recFumbles + ":"
-                + xpAtt + ":" + xpMade + ":" + fgAtt + ":" + fgMade;
+                + xpAtt + ":" + xpMade + ":" + fgAtt + ":" + fgMade + ":"
+                + prAtt + ":" + prYards + ":" + prTd + ":" + krAtt + ":" + krYards + ":" + krTd + ":"
+                + fairCatches + ":" + puntAtt + ":" + puntYards;
     }
 
     public static PlayerSeasonRecord fromSaveToken(String token) {
@@ -145,6 +166,17 @@ public class PlayerSeasonRecord {
                 r.xpMade = Integer.parseInt(p[25]);
                 r.fgAtt = Integer.parseInt(p[26]);
                 r.fgMade = Integer.parseInt(p[27]);
+            }
+            if (p.length > 36) {
+                r.prAtt = Integer.parseInt(p[28]);
+                r.prYards = Integer.parseInt(p[29]);
+                r.prTd = Integer.parseInt(p[30]);
+                r.krAtt = Integer.parseInt(p[31]);
+                r.krYards = Integer.parseInt(p[32]);
+                r.krTd = Integer.parseInt(p[33]);
+                r.fairCatches = Integer.parseInt(p[34]);
+                r.puntAtt = Integer.parseInt(p[35]);
+                r.puntYards = Integer.parseInt(p[36]);
             }
         } catch (Exception e) {
             return null;

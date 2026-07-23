@@ -545,18 +545,30 @@ private fun OfferBottomSheet(
 @Composable
 private fun ScheduleTabContent(state: TalentHubUiState, viewModel: TalentHubViewModel) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = "OOC slots ${state.filledOocSlots} filled · ${state.openOocSlots} open. Bye weeks are locked.",
-            style = MaterialTheme.typography.bodyMedium,
-            modifier = Modifier.padding(vertical = 8.dp),
-        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = "Suggested OOC slate — tap a week to change. " +
+                    "${state.filledOocSlots} filled · ${state.openOocSlots} open.",
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = viewModel::resuggestOocSchedule) {
+                Text("Resuggest")
+            }
+        }
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             verticalArrangement = Arrangement.spacedBy(8.dp),
             contentPadding = PaddingValues(bottom = 80.dp),
         ) {
             items(state.scheduleWeeks, key = { it.week }) { week ->
-                val clickable = !week.locked && (week.open || week.status.startsWith("OOC"))
+                val clickable = !week.locked
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()

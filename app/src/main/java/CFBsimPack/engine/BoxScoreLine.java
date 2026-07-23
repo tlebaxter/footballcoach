@@ -18,6 +18,18 @@ public final class BoxScoreLine {
     public final int receptions;
     public final int recYards;
     public final int recTd;
+    public final int prAtt;
+    public final int prYards;
+    public final int prTd;
+    public final int krAtt;
+    public final int krYards;
+    public final int krTd;
+    public final int fgMade;
+    public final int fgAtt;
+    public final int xpMade;
+    public final int xpAtt;
+    public final int puntAtt;
+    public final int puntYards;
 
     public BoxScoreLine(
             String name,
@@ -33,7 +45,19 @@ public final class BoxScoreLine {
             int rushTd,
             int receptions,
             int recYards,
-            int recTd
+            int recTd,
+            int prAtt,
+            int prYards,
+            int prTd,
+            int krAtt,
+            int krYards,
+            int krTd,
+            int fgMade,
+            int fgAtt,
+            int xpMade,
+            int xpAtt,
+            int puntAtt,
+            int puntYards
     ) {
         this.name = name != null ? name : "";
         this.position = position != null ? position : "";
@@ -49,5 +73,17 @@ public final class BoxScoreLine {
         this.receptions = receptions;
         this.recYards = recYards;
         this.recTd = recTd;
+        this.prAtt = prAtt;
+        this.prYards = prYards;
+        this.prTd = prTd;
+        this.krAtt = krAtt;
+        this.krYards = krYards;
+        this.krTd = krTd;
+        this.fgMade = fgMade;
+        this.fgAtt = fgAtt;
+        this.xpMade = xpMade;
+        this.xpAtt = xpAtt;
+        this.puntAtt = puntAtt;
+        this.puntYards = puntYards;
     }
 }

@@ -1,7 +1,6 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
-import java.util.Vector;
 
 /** Fullback — lead block / short yardage. */
 public class PlayerFB extends Player {
@@ -37,9 +36,7 @@ public class PlayerFB extends Player {
         ratRec = (int) (50 + year * 5 + stars * 4 - 25 * Math.random());
         ratOvr = (ratRushPow + ratBlock * 3 + ratRec) / 5;
         position = "FB";
-        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 40 + (int) (Math.random() * 80) - 40;
-        ratingsVector = new Vector();
-        wonHeisman = false;
+        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 40 + (int) (Math.random() * 80) - 40;wonHeisman = false;
         wonAllAmerican = false;
         wonAllConference = false;
         statsWins = 0;
@@ -69,9 +66,7 @@ public class PlayerFB extends Player {
         ratDur = dur;
         isRedshirt = rs;
         position = "FB";
-        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 40 + (int) (Math.random() * 80) - 40;
-        ratingsVector = new Vector();
-        wonHeisman = false;
+        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 40 + (int) (Math.random() * 80) - 40;wonHeisman = false;
         wonAllAmerican = false;
         wonAllConference = false;
         statsWins = 0;
@@ -111,20 +106,4 @@ public class PlayerFB extends Player {
         pStats.add("Hands: " + getLetterGrade(ratRec) + ">Durability: " + getLetterGrade(ratDur));
         pStats.add(" > ");
         return pStats;
-    }
-
-    @Override
-    public ArrayList<String> getDetailAllStatsList(int games) {
-        ArrayList<String> pStats = getDetailStatsList(games);
-        pStats.set(pStats.size() - 1, "[B]CAREER STATS:");
-        pStats.addAll(getCareerStatsList());
-        return pStats;
-    }
-
-    @Override
-    public String getInfoForLineup() {
-        if (injury != null) return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " " + injury.toString();
-        return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " (" +
-                getLetterGrade(ratRushPow) + ", " + getLetterGrade(ratBlock) + ", " + getLetterGrade(ratRec) + ")";
-    }
-}
+    }}

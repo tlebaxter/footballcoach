@@ -1,7 +1,6 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
-import java.util.Vector;
 
 /** Interior / defensive line (NT, DT, DE roles). */
 public class PlayerDL extends Player {
@@ -34,9 +33,7 @@ public class PlayerDL extends Player {
         ratPass = (int) (60 + year * 5 + stars * 5 - 25 * Math.random());
         ratOvr = (ratPow * 3 + ratRush + ratPass) / 5;
         position = "DL";
-        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 50 + (int) (Math.random() * 100) - 50;
-        ratingsVector = new Vector();
-        wonHeisman = false;
+        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 50 + (int) (Math.random() * 100) - 50;wonHeisman = false;
         wonAllAmerican = false;
         wonAllConference = false;
         statsWins = 0;
@@ -63,9 +60,7 @@ public class PlayerDL extends Player {
         ratDur = dur;
         isRedshirt = rs;
         position = "DL";
-        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 50 + (int) (Math.random() * 100) - 50;
-        ratingsVector = new Vector();
-        wonHeisman = false;
+        cost = (int) (Math.pow((float) ratOvr - 55, 2) / 6) + 50 + (int) (Math.random() * 100) - 50;wonHeisman = false;
         wonAllAmerican = false;
         wonAllConference = false;
         statsWins = 0;
@@ -107,20 +102,4 @@ public class PlayerDL extends Player {
         pStats.add("Run Stop: " + getLetterGrade(ratRush) + ">Pass Rush: " + getLetterGrade(ratPass));
         pStats.add(" > ");
         return pStats;
-    }
-
-    @Override
-    public ArrayList<String> getDetailAllStatsList(int games) {
-        ArrayList<String> pStats = getDetailStatsList(games);
-        pStats.set(pStats.size() - 1, "[B]CAREER STATS:");
-        pStats.addAll(getCareerStatsList());
-        return pStats;
-    }
-
-    @Override
-    public String getInfoForLineup() {
-        if (injury != null) return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " " + injury.toString();
-        return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " (" +
-                getLetterGrade(ratPow) + ", " + getLetterGrade(ratRush) + ", " + getLetterGrade(ratPass) + ")";
-    }
-}
+    }}

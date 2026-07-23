@@ -40,7 +40,7 @@ fun TutorialScreen(onBack: () -> Unit) {
         "Playing a Season" to stringResource(R.string.tutPlayingSeason),
         "Rankings" to stringResource(R.string.tutRankings),
         "Roster" to stringResource(R.string.tutRoster),
-        "Team Strategies" to stringResource(R.string.tutTeamStrategy),
+        "Team System" to stringResource(R.string.tutTeamStrategy),
     )
     var selectedIndex by remember { mutableIntStateOf(0) }
     var expanded by remember { mutableStateOf(false) }

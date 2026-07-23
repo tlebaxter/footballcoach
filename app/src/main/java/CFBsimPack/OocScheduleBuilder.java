@@ -137,6 +137,117 @@ public final class OocScheduleBuilder {
         return eligible;
     }
 
+    /**
+     * Clears every editable OOC game on the user's schedule.
+     */
+    public static void clearAllUserOocGames(Team user) {
+        if (user == null) {
+            return;
+        }
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            clearUserOocGame(user, week);
+        }
+    }
+
+    /**
+     * Fills the user's currently open OOC weeks with a balanced prestige slate.
+     * Prefers a cross-conference rivalry when both teams share an open week, then
+     * rotates tough / peer / easy opponents by {@link Team#teamPrestige}.
+     *
+     * @return number of games placed
+     */
+    public static int suggestUserOocSchedule(Team user, List<Team> allTeams) {
+        if (user == null || allTeams == null) {
+            return 0;
+        }
+        int placed = 0;
+
+        Team rival = findByAbbreviation(allTeams, user.rivalTeam);
+        if (rival != null
+                && !user.conference.equals(rival.conference)
+                && !alreadyMatched(user, rival)) {
+            int rivalryWeek = findSharedOpenWeek(user, rival);
+            if (rivalryWeek >= 0 && placeUserOocGame(user, rival, rivalryWeek)) {
+                placed++;
+            }
+        }
+
+        ArrayList<Integer> openWeeks = new ArrayList<>();
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            if (user.isOpenOocWeek(week)) {
+                openWeeks.add(week);
+            }
+        }
+
+        int bandIndex = 0;
+        for (int week : openWeeks) {
+            List<Team> eligible = eligibleOpponents(user, week, allTeams);
+            if (eligible.isEmpty()) {
+                continue;
+            }
+            Team pick = pickBalancedOpponent(user, eligible, bandIndex % 3);
+            if (pick != null && placeUserOocGame(user, pick, week)) {
+                placed++;
+                bandIndex++;
+            }
+        }
+        return placed;
+    }
+
+    private static final int PRESTIGE_BAND = 8;
+
+    private static int findSharedOpenWeek(Team user, Team opponent) {
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            if (user.isOpenOocWeek(week) && opponent.isOpenOocWeek(week)) {
+                return week;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * @param bandIndex 0 = tough, 1 = peer, 2 = easy
+     */
+    private static Team pickBalancedOpponent(Team user, List<Team> eligible, int bandIndex) {
+        Team bestInBand = null;
+        int bestInBandDist = Integer.MAX_VALUE;
+        Team bestOverall = null;
+        int bestOverallDist = Integer.MAX_VALUE;
+
+        for (Team candidate : eligible) {
+            int diff = candidate.teamPrestige - user.teamPrestige;
+            int dist = Math.abs(diff);
+            boolean inBand;
+            if (bandIndex == 0) {
+                inBand = diff > PRESTIGE_BAND;
+            } else if (bandIndex == 2) {
+                inBand = diff < -PRESTIGE_BAND;
+            } else {
+                inBand = dist <= PRESTIGE_BAND;
+            }
+
+            if (inBand && isBetterPick(candidate, dist, bestInBand, bestInBandDist)) {
+                bestInBand = candidate;
+                bestInBandDist = dist;
+            }
+            if (isBetterPick(candidate, dist, bestOverall, bestOverallDist)) {
+                bestOverall = candidate;
+                bestOverallDist = dist;
+            }
+        }
+        return bestInBand != null ? bestInBand : bestOverall;
+    }
+
+    private static boolean isBetterPick(Team candidate, int dist, Team current, int currentDist) {
+        if (current == null) {
+            return true;
+        }
+        if (dist != currentDist) {
+            return dist < currentDist;
+        }
+        return candidate.name.compareToIgnoreCase(current.name) < 0;
+    }
+
     private static void placeOocGame(
             Team first,
             Team second,
@@ -153,7 +264,9 @@ public final class OocScheduleBuilder {
     }
 
     private static boolean isOocGame(Game game) {
-        return game.gameName.equals("OOC") || game.gameName.equals("OOC Rivalry");
+        return game.gameName.equals("OOC")
+                || game.gameName.equals("OOC Rivalry")
+                || game.gameName.equals("Rivalry Game OOC");
     }
 
     private static boolean alreadyMatched(Team first, Team second) {

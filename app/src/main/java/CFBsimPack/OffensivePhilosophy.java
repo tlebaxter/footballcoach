@@ -29,31 +29,6 @@ public enum OffensivePhilosophy {
         this.defaultPersonnel = defaultPersonnel;
     }
 
-    public Formation pickFormation(java.util.Random rng) {
-        switch (this) {
-            case AIR_RAID:
-            case RUN_AND_SHOOT:
-                return rng.nextBoolean() ? Formation.EMPTY : Formation.TRIPS;
-            case POWER_RUN:
-            case SMASHMOUTH:
-                return rng.nextDouble() < 0.4 ? Formation.JUMBO : Formation.I_FORM;
-            case OPTION:
-            case FLEXBONE:
-                return rng.nextBoolean() ? Formation.PISTOL : Formation.WISHBONE;
-            case PISTOL:
-                return Formation.PISTOL;
-            case WEST_COAST:
-                return rng.nextBoolean() ? Formation.SLOT : Formation.SINGLEBACK;
-            case SPREAD:
-            case RPO_SPREAD:
-                return rng.nextBoolean() ? Formation.SHOTGUN : Formation.TRIPS;
-            case PRO_STYLE:
-            case MULTIPLE:
-            default:
-                return rng.nextDouble() < 0.5 ? Formation.SHOTGUN : Formation.I_FORM;
-        }
-    }
-
     public boolean wantsFullback() {
         return "21".equals(defaultPersonnel) || "22".equals(defaultPersonnel) || "20".equals(defaultPersonnel);
     }

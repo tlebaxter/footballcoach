@@ -46,6 +46,16 @@ public final class PlayerGameStats {
         public int fgAtt;
         public int xpMade;
         public int xpAtt;
+        public int prAtt;
+        public int prYards;
+        public int prTd;
+        public int krAtt;
+        public int krYards;
+        public int krTd;
+        public int fairCatches;
+        public int puntBlk;
+        public int puntAtt;
+        public int puntYards;
 
         Line(Player player) {
             this.player = player;

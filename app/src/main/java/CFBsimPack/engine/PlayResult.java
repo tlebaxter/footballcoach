@@ -12,6 +12,12 @@ public final class PlayResult {
     public boolean firstDown;
     public boolean incomplete;
     public boolean stoppedClock;
+    public boolean fairCatch;
+    public boolean touchback;
+    public boolean puntBlocked;
+    public int returnYards;
+    public boolean returnTd;
+    public String returnerName = "";
     public String logLine = "";
     public OffensePlay playType;
 

@@ -3,7 +3,6 @@ package CFBsimPack;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
-import java.util.Vector;
 
 /**
  * Base player class that others extend. Has name, overall, potential, and football IQ.
@@ -34,6 +33,22 @@ public class Player {
     public int careerAllConference;
     public int careerWins;
 
+    /** Special-teams return stats (any position can return). */
+    public int statsPrAtt;
+    public int statsPrYards;
+    public int statsPrTd;
+    public int statsKrAtt;
+    public int statsKrYards;
+    public int statsKrTd;
+    public int statsFairCatches;
+    public int careerPrAtt;
+    public int careerPrYards;
+    public int careerPrTd;
+    public int careerKrAtt;
+    public int careerKrYards;
+    public int careerKrTd;
+    public int careerFairCatches;
+
     public boolean isRedshirt;
 
     public boolean isInjured;
@@ -62,12 +77,28 @@ public class Player {
     public int portalRiskTier; // 0 safe, 1-3 at risk
 
     protected final String[] letterGrades = {"F", "F+", "D", "D+", "C", "C+", "B", "B+", "A", "A+"};
-    
-    public Vector ratingsVector;
-
     public void recordSeasonSnapshot() {
         if (team == null || team.league == null) return;
         careerSeasons.add(new PlayerSeasonRecord(this, team.league.getYear()));
+        bankReturnSeasonStats();
+    }
+
+    /** Roll season return stats into career and zero season counters. */
+    protected void bankReturnSeasonStats() {
+        careerPrAtt += statsPrAtt;
+        careerPrYards += statsPrYards;
+        careerPrTd += statsPrTd;
+        careerKrAtt += statsKrAtt;
+        careerKrYards += statsKrYards;
+        careerKrTd += statsKrTd;
+        careerFairCatches += statsFairCatches;
+        statsPrAtt = 0;
+        statsPrYards = 0;
+        statsPrTd = 0;
+        statsKrAtt = 0;
+        statsKrYards = 0;
+        statsKrTd = 0;
+        statsFairCatches = 0;
     }
 
     public void applyOffer(RosterStatus status, int nilAmount) {
@@ -264,13 +295,7 @@ public class Player {
 
     public String getYrOvrPot_Str() {
         return "[" + getYrStr() + "] Ovr: " + ratOvr + ", Pot: " + getLetterGrade(ratPot);
-    }
-
-    public String getPosNameYrOvrPot_NoInjury() {
-        return position + " " + getInitialName() + " [" + getYrStr() + "] Ovr: " + ratOvr + ", Pot: " + getLetterGrade(ratPot);
-    }
-
-    public String getMockDraftStr() {
+    }public String getMockDraftStr() {
         return position + " " + getInitialName() + " [" + getYrStr() + "]>" + team.strRep();
     }
 
@@ -316,13 +341,7 @@ public class Player {
 
     public ArrayList<String> getDetailStatsList(int games) {
         return null;
-    }
-
-    public ArrayList<String> getDetailAllStatsList(int games) {
-        return null;
-    }
-
-    public ArrayList<String> getCareerStatsList() {
+    }public ArrayList<String> getCareerStatsList() {
         ArrayList<String> pStats = new ArrayList<>();
         pStats.add("Games: " + (gamesPlayed+careerGamesPlayed) + " (" + (statsWins+careerWins) + "-" + (gamesPlayed+careerGamesPlayed-(statsWins+careerWins)) + ")"
                 + ">Yrs: " + getYearsPlayed());
@@ -377,20 +396,7 @@ public class Player {
         }
 
         return awardsStr;
-    }
-
-    public String getInfoForLineup() {
-        return null;
-    }
-
-    public String getInfoLineupInjury() {
-        if (injury != null) {
-            return getInitialName() + " [" + getYrStr() + "] " + injury.toString();
-        }
-        return getInitialName() + " [" + getYrStr() + "] " + "Ovr: " + ratOvr + ", Pot: " + getLetterGrade(ratPot);
-    }
-
-    public int getGamesPlayed() {
+    }public int getGamesPlayed() {
         if (gamesPlayed == 0) return 1;
         else return gamesPlayed;
     }

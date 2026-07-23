@@ -5,6 +5,8 @@ public enum OffensePlay {
     PASS,
     FIELD_GOAL,
     PUNT,
+    KICKOFF,
+    FAKE_PUNT,
     KNEEL,
     SPIKE
 }

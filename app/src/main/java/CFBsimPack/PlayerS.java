@@ -6,7 +6,6 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
-import java.util.Vector;
 
 /**
  * Class for the safety player. One on field.
@@ -27,9 +26,6 @@ public class PlayerS extends Player {
     public int ratSSpd;
     //CBTkl affects how good he is at tackling
     public int ratSTkl;
-    
-    //public Vector ratingsVector;
-    
     public PlayerS( String nm, Team t, int yr, int pot, int iq, int cov, int spd, int tkl, boolean rs, int dur ) {
         team = t;
         name = nm;
@@ -47,15 +43,6 @@ public class PlayerS extends Player {
         position = "S";
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/3.5) + 125 + (int)(Math.random()*100) - 50;
-        
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr+" (+"+ratImprovement+")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratSCov);
-        ratingsVector.addElement(ratSSpd);
-        ratingsVector.addElement(ratSTkl);
 
         wonHeisman = false;
         wonAllAmerican = false;
@@ -88,15 +75,6 @@ public class PlayerS extends Player {
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/3.5) + 125 + (int)(Math.random()*100) - 50;
 
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr+" (+"+ratImprovement+")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratSCov);
-        ratingsVector.addElement(ratSSpd);
-        ratingsVector.addElement(ratSTkl);
-
         wonHeisman = false;
         wonAllAmerican = false;
         wonAllConference = false;
@@ -125,15 +103,6 @@ public class PlayerS extends Player {
         position = "S";
 
         cost = (int)(Math.pow((float)ratOvr - 55,2)/3.5) + 125 + (int)(Math.random()*100) - 50;
-        
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr+" (+"+ratImprovement+")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratSCov);
-        ratingsVector.addElement(ratSSpd);
-        ratingsVector.addElement(ratSTkl);
 
         wonHeisman = false;
         wonAllAmerican = false;
@@ -145,21 +114,7 @@ public class PlayerS extends Player {
         careerAllAmerican = 0;
         careerAllConference = 0;
         careerWins = 0;
-    }
-    
-    public Vector getRatingsVector() {
-        ratingsVector = new Vector();
-        ratingsVector.addElement(name+" ("+getYrStr()+")");
-        ratingsVector.addElement(ratOvr+" (+"+ratImprovement+")");
-        ratingsVector.addElement(ratPot);
-        ratingsVector.addElement(ratFootIQ);
-        ratingsVector.addElement(ratSCov);
-        ratingsVector.addElement(ratSSpd);
-        ratingsVector.addElement(ratSTkl);
-        return ratingsVector;
-    }
-    
-    @Override
+    }@Override
     public void advanceSeason() {
         recordSeasonSnapshot();
         year++;
@@ -193,24 +148,4 @@ public class PlayerS extends Player {
         pStats.add("Speed: " + getLetterGrade(ratSSpd) + ">Tackling: " + getLetterGrade(ratSTkl));
         pStats.add(" > ");
         return pStats;
-    }
-
-    @Override
-    public ArrayList<String> getDetailAllStatsList(int games) {
-        ArrayList<String> pStats = new ArrayList<>();
-        pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed-statsWins) + ")" + ">Durability: " + getLetterGrade(ratDur));
-        pStats.add("Football IQ: " + getLetterGrade(ratFootIQ) + ">Coverage: " + getLetterGrade(ratSCov));
-        pStats.add("Speed: " + getLetterGrade(ratSSpd) + ">Tackling: " + getLetterGrade(ratSTkl));
-        pStats.add("[B]CAREER STATS:");
-        pStats.addAll(getCareerStatsList());
-        return pStats;
-    }
-
-    @Override
-    public String getInfoForLineup() {
-        if (injury != null) return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " " + injury.toString();
-        return getInitialName() + " [" + getYrStr() + "] " + ratOvr + "/" + getLetterGrade(ratPot) + " (" +
-                getLetterGrade(ratSCov) + ", " + getLetterGrade(ratSSpd) + ", " + getLetterGrade(ratSTkl) + ")";
-    }
-    
-}
+    }}

@@ -1,28 +1,17 @@
 package achijones.footballcoach.ui.coach
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.spring
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
-import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -32,62 +21,44 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.ripple
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.geometry.CornerRadius
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
-import CFBsimPack.Formation
 import CFBsimPack.engine.AutoSimUntil
-import CFBsimPack.engine.CoverageCall
+import CFBsimPack.engine.DefenseConcept
 import CFBsimPack.engine.GameSituation
-import CFBsimPack.engine.OffensePlay
+import CFBsimPack.engine.OffenseConcept
+import CFBsimPack.engine.Playbook
 import CFBsimPack.engine.TempoCall
 import achijones.footballcoach.ui.components.SegmentedControl
 import achijones.footballcoach.ui.theme.FcAccent
 import achijones.footballcoach.ui.theme.FcOnAccent
 import achijones.footballcoach.ui.theme.FcOnPrimary
 import achijones.footballcoach.ui.theme.FcPrimary
-import achijones.footballcoach.ui.theme.FcPrimaryDark
-import achijones.footballcoach.ui.theme.FcSurface
-import achijones.footballcoach.ui.theme.FcSurfaceVariant
 
-private val PanelShape = RoundedCornerShape(16.dp)
-private val ChipShape = RoundedCornerShape(10.dp)
-private val PlayButtonShape = RoundedCornerShape(14.dp)
-private val FieldShape = RoundedCornerShape(12.dp)
-
-private val FieldGreen = Color(0xFF1B5E20)
-private val FieldGreenDark = Color(0xFF0F3D14)
-private val FieldEndZone = Color(0xFF14532D)
 private val ScoreboardBg = Color(0xFF0D1117)
 private val PanelBg = Color(0xFF121A14)
 private val GhostBorder = Color(0xFF3A4A3C)
 private val MutedText = Color(0xFF9CA3AF)
 private val BallOrange = Color(0xFFF59E0B)
-private val FirstDownYellow = Color(0xFFFDE047)
+private val PanelShape = RoundedCornerShape(16.dp)
+private val PlayButtonShape = RoundedCornerShape(14.dp)
 
 @Composable
 fun CoachGameScreen(
@@ -116,21 +87,14 @@ fun CoachGameScreen(
                 fontWeight = FontWeight.Bold,
             )
             Spacer(Modifier.height(8.dp))
-            Text(
-                "Head back to the season hub.",
-                color = MutedText,
-                style = MaterialTheme.typography.bodyMedium,
-            )
+            Text("Head back to the season hub.", color = MutedText)
             Spacer(Modifier.height(24.dp))
             Button(
                 onClick = {
                     viewModel.finishAndClose()
                     onFinished()
                 },
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = FcPrimary,
-                    contentColor = FcOnPrimary,
-                ),
+                colors = ButtonDefaults.buttonColors(containerColor = FcPrimary, contentColor = FcOnPrimary),
                 shape = PlayButtonShape,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -154,53 +118,17 @@ fun CoachGameScreen(
     ) {
         if (sit != null) {
             ScoreboardHeader(sit)
+            CoachTabBar(state.tab, viewModel::selectTab)
 
-            Column(
-                Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState())
-                    .padding(horizontal = 12.dp),
-            ) {
-                Spacer(Modifier.height(10.dp))
-                SituationStrip(sit)
-                Spacer(Modifier.height(10.dp))
-                EspnField(
-                    yardLine = sit.yardLine,
-                    distance = sit.distance,
-                    possessionHome = sit.possessionHome,
-                    homeAbbr = sit.homeAbbr,
-                    awayAbbr = sit.awayAbbr,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(148.dp),
+            when (state.tab) {
+                CoachTab.CALL_PLAYS -> CallPlaysTab(
+                    sit,
+                    state,
+                    viewModel,
+                    Modifier.weight(1f),
                 )
-                Spacer(Modifier.height(10.dp))
-                LastPlayBanner(sit.lastPlay)
-                Spacer(Modifier.height(12.dp))
-
-                CallSheetPanel {
-                    if (sit.userOnOffense) {
-                        OffenseCallSheet(
-                            selectedFormation = state.selectedFormation,
-                            selectedTempo = state.selectedTempo,
-                            onSelectFormation = viewModel::selectFormation,
-                            onSelectTempo = viewModel::selectTempo,
-                            onCallPlay = viewModel::callPlay,
-                            onTimeout = viewModel::callTimeout,
-                        )
-                    } else {
-                        DefenseCallSheet(
-                            selectedCoverage = state.selectedCoverage,
-                            onSelectCoverage = viewModel::selectCoverage,
-                            onDefend = viewModel::callDefenseOnly,
-                            onTimeout = viewModel::callTimeout,
-                        )
-                    }
-                }
-
-                Spacer(Modifier.height(10.dp))
-                AutoSimRow(onAutoSim = viewModel::autoSim)
-                Spacer(Modifier.height(4.dp))
+                CoachTab.LOG -> Box(Modifier.weight(1f)) { CoachLogTab(sit) }
+                CoachTab.BOX_SCORE -> Box(Modifier.weight(1f)) { CoachBoxScoreTab(sit) }
             }
         } else {
             Box(Modifier.weight(1f), contentAlignment = Alignment.Center) {
@@ -215,10 +143,129 @@ fun CoachGameScreen(
             },
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 4.dp),
+                .padding(horizontal = 8.dp, vertical = 2.dp),
         ) {
             Text("Exit · sim rest if needed", color = MutedText)
         }
+    }
+
+    if (state.showCoinToss && sit != null) {
+        val winnerAbbr = if (sit.homeWonToss) sit.homeAbbr else sit.awayAbbr
+        CoinTossSheet(
+            winnerAbbr = winnerAbbr,
+            onConfirm = viewModel::confirmCoinToss,
+        )
+    }
+
+    if (state.showTryChoice && sit != null) {
+        val scoringAbbr = if (sit.possessionHome) sit.homeAbbr else sit.awayAbbr
+        TryChoiceSheet(
+            scoringAbbr = scoringAbbr,
+            onKickXp = viewModel::chooseKickXp,
+            onGoForTwo = viewModel::chooseGoForTwo,
+        )
+    }
+
+    if (state.showPlayPicker && sit != null && !state.showCoinToss && !state.showTryChoice) {
+        PlayPickerSheet(
+            userOnOffense = sit.userOnOffense,
+            situation = sit,
+            selectedFormation = state.playPickerFormation,
+            selectedOffenseId = state.selectedOffense.id,
+            selectedDefenseId = state.selectedDefense.id,
+            onFormationChange = viewModel::setPlayPickerFormation,
+            onSelectOffense = viewModel::selectOffenseConcept,
+            onSelectDefense = viewModel::selectDefenseConcept,
+            onDismiss = viewModel::closePlayPicker,
+        )
+    }
+}
+
+@Composable
+private fun CoachTabBar(selected: CoachTab, onSelect: (CoachTab) -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .background(ScoreboardBg)
+            .padding(horizontal = 8.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        CoachTab.entries.forEach { tab ->
+            val label = when (tab) {
+                CoachTab.CALL_PLAYS -> "Call Plays"
+                CoachTab.LOG -> "Log"
+                CoachTab.BOX_SCORE -> "Box Score"
+            }
+            val active = tab == selected
+            Box(
+                Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(if (active) FcPrimary.copy(alpha = 0.25f) else Color.Transparent)
+                    .border(
+                        1.dp,
+                        if (active) FcPrimary else GhostBorder.copy(alpha = 0.5f),
+                        RoundedCornerShape(10.dp),
+                    )
+                    .clickable { onSelect(tab) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    label,
+                    color = if (active) FcPrimary else MutedText,
+                    fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
+                    style = MaterialTheme.typography.labelLarge,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CallPlaysTab(
+    sit: GameSituation,
+    state: CoachUiState,
+    viewModel: CoachGameViewModel,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .verticalScroll(rememberScrollState())
+            .padding(horizontal = 12.dp),
+    ) {
+        Spacer(Modifier.height(8.dp))
+        SituationStrip(sit)
+        Spacer(Modifier.height(8.dp))
+        CoachField(
+            yardLine = sit.yardLine,
+            distance = sit.distance,
+            down = sit.down,
+            drivePath = sit.drivePath,
+            possessionHome = sit.possessionHome,
+            homeDefendsLeft = sit.homeDefendsLeft,
+            homeName = sit.homeName,
+            awayName = sit.awayName,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(140.dp),
+        )
+        Spacer(Modifier.height(8.dp))
+        LastPlayBanner(sit)
+        Spacer(Modifier.height(10.dp))
+        ControlCard(sit, state, viewModel)
+        Spacer(Modifier.height(10.dp))
+        SelectedPlayCard(
+            situation = sit,
+            userOnOffense = sit.userOnOffense,
+            offense = state.selectedOffense,
+            defense = state.selectedDefense,
+            onChangePlay = { viewModel.openPlayPicker() },
+            onSuggestion = { viewModel.applySuggestion() },
+        )
+        Spacer(Modifier.height(8.dp))
+        OpponentTeaser(sit, state.selectedDefense)
+        Spacer(Modifier.height(8.dp))
     }
 }
 
@@ -228,13 +275,14 @@ private fun ScoreboardHeader(sit: GameSituation) {
         Modifier
             .fillMaxWidth()
             .background(ScoreboardBg)
-            .padding(horizontal = 16.dp, vertical = 14.dp),
+            .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
         Row(
             Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             TeamScoreBlock(
+                rank = sit.awayRank,
                 abbr = sit.awayAbbr,
                 score = sit.awayScore,
                 hasBall = !sit.possessionHome,
@@ -243,7 +291,7 @@ private fun ScoreboardHeader(sit: GameSituation) {
             )
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 8.dp),
+                modifier = Modifier.padding(horizontal = 6.dp),
             ) {
                 Text(
                     if (sit.playingOT) "OT" else "Q${sit.quarter}",
@@ -260,6 +308,7 @@ private fun ScoreboardHeader(sit: GameSituation) {
                 )
             }
             TeamScoreBlock(
+                rank = sit.homeRank,
                 abbr = sit.homeAbbr,
                 score = sit.homeScore,
                 hasBall = sit.possessionHome,
@@ -267,7 +316,15 @@ private fun ScoreboardHeader(sit: GameSituation) {
                 alignEnd = true,
             )
         }
-        Spacer(Modifier.height(10.dp))
+        Spacer(Modifier.height(8.dp))
+        Text(
+            sit.downDistanceLabel,
+            color = Color.White,
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.titleSmall,
+            modifier = Modifier.align(Alignment.CenterHorizontally),
+        )
+        Spacer(Modifier.height(8.dp))
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
@@ -282,6 +339,7 @@ private fun ScoreboardHeader(sit: GameSituation) {
 
 @Composable
 private fun TeamScoreBlock(
+    rank: Int,
     abbr: String,
     score: Int,
     hasBall: Boolean,
@@ -301,10 +359,12 @@ private fun TeamScoreBlock(
                 Spacer(Modifier.width(6.dp))
             }
             Text(
-                abbr,
+                if (rank in 1..25) "#$rank $abbr" else abbr,
                 color = if (hasBall) Color.White else MutedText,
                 fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleMedium,
+                style = MaterialTheme.typography.titleSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             if (hasBall && alignEnd) {
                 Spacer(Modifier.width(6.dp))
@@ -374,35 +434,56 @@ private fun SituationStrip(sit: GameSituation) {
 }
 
 @Composable
-private fun LastPlayBanner(lastPlay: String) {
-    Row(
+private fun LastPlayBanner(sit: GameSituation) {
+    val lastOff = sit.lastOffenseConceptId?.let { Playbook.offenseById(it) }
+    val lastDef = sit.lastDefenseConceptId?.let { Playbook.defenseById(it) }
+    Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(10.dp))
             .background(Color(0xFF1A241C))
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
+            .padding(12.dp),
     ) {
-        Text(
-            "LAST",
-            color = FcPrimary,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.labelSmall,
-            letterSpacing = 1.sp,
-            modifier = Modifier.padding(end = 10.dp),
-        )
-        Text(
-            lastPlay.ifBlank { "Awaiting play call…" },
-            color = Color(0xFFE5E7EB),
-            style = MaterialTheme.typography.bodyMedium,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "LAST",
+                color = FcPrimary,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelSmall,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(end = 10.dp),
+            )
+            Text(
+                sit.lastPlay.ifBlank { "Awaiting play call…" },
+                color = Color(0xFFE5E7EB),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (lastOff != null || lastDef != null) {
+            Spacer(Modifier.height(8.dp))
+            Text(
+                listOfNotNull(
+                    lastOff?.callSheetLine(),
+                    lastDef?.let { "vs ${it.displayName}" },
+                ).joinToString(" "),
+                color = MutedText,
+                style = MaterialTheme.typography.labelMedium,
+            )
+            if (lastOff?.concept?.isNotBlank() == true) {
+                Text(lastOff.concept, color = Color(0xFFD1D5DB), style = MaterialTheme.typography.bodySmall)
+            }
+        }
     }
 }
 
 @Composable
-private fun CallSheetPanel(content: @Composable ColumnScope.() -> Unit) {
+private fun ControlCard(
+    sit: GameSituation,
+    state: CoachUiState,
+    viewModel: CoachGameViewModel,
+) {
     Column(
         Modifier
             .fillMaxWidth()
@@ -410,406 +491,186 @@ private fun CallSheetPanel(content: @Composable ColumnScope.() -> Unit) {
             .background(PanelBg)
             .border(1.dp, GhostBorder.copy(alpha = 0.6f), PanelShape)
             .padding(14.dp),
-        content = content,
-    )
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun OffenseCallSheet(
-    selectedFormation: Formation,
-    selectedTempo: TempoCall,
-    onSelectFormation: (Formation) -> Unit,
-    onSelectTempo: (TempoCall) -> Unit,
-    onCallPlay: (OffensePlay) -> Unit,
-    onTimeout: () -> Unit,
-) {
-    SectionLabel("Formation")
-    Spacer(Modifier.height(8.dp))
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .horizontalScroll(rememberScrollState()),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Formation.entries.forEach { formation ->
-            SelectableChip(
-                label = formation.displayName,
-                selected = selectedFormation == formation,
-                onClick = { onSelectFormation(formation) },
-            )
-        }
-    }
-
-    Spacer(Modifier.height(16.dp))
-    SectionLabel("Play call")
-    Spacer(Modifier.height(8.dp))
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        PrimaryPlayButton(
-            label = "RUN",
-            subtitle = "Hand off / keep",
-            container = FcPrimary,
-            content = FcOnPrimary,
-            onClick = { onCallPlay(OffensePlay.RUN) },
-            modifier = Modifier.weight(1f),
-        )
-        PrimaryPlayButton(
-            label = "PASS",
-            subtitle = "Dropback / RPO",
-            container = FcPrimaryDark,
-            content = Color.White,
-            onClick = { onCallPlay(OffensePlay.PASS) },
-            modifier = Modifier.weight(1f),
-        )
-    }
-
-    Spacer(Modifier.height(10.dp))
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        SecondaryActionChip("Field Goal", onClick = { onCallPlay(OffensePlay.FIELD_GOAL) })
-        SecondaryActionChip("Punt", onClick = { onCallPlay(OffensePlay.PUNT) })
-        SecondaryActionChip("Spike", onClick = { onCallPlay(OffensePlay.SPIKE) })
-        SecondaryActionChip("Kneel", onClick = { onCallPlay(OffensePlay.KNEEL) })
-        SecondaryActionChip("Timeout", onClick = onTimeout, accent = true)
-    }
-
-    Spacer(Modifier.height(16.dp))
-    SectionLabel("Tempo")
-    Spacer(Modifier.height(8.dp))
-    val tempos = TempoCall.entries
-    SegmentedControl(
-        labels = tempos.map { it.displayLabel() },
-        selected = tempos.indexOf(selectedTempo).coerceAtLeast(0),
-        onSelect = { onSelectTempo(tempos[it]) },
-    )
-}
-
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-private fun DefenseCallSheet(
-    selectedCoverage: CoverageCall,
-    onSelectCoverage: (CoverageCall) -> Unit,
-    onDefend: () -> Unit,
-    onTimeout: () -> Unit,
-) {
-    SectionLabel("Coverage")
-    Spacer(Modifier.height(8.dp))
-    FlowRow(
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        CoverageCall.entries.forEach { coverage ->
-            SelectableChip(
-                label = coverage.displayLabel(),
-                selected = selectedCoverage == coverage,
-                onClick = { onSelectCoverage(coverage) },
-            )
-        }
-    }
-
-    Spacer(Modifier.height(16.dp))
-    PrimaryPlayButton(
-        label = "DEFEND SNAP",
-        subtitle = "Lock coverage · AI offense",
-        container = FcAccent,
-        content = FcOnAccent,
-        onClick = onDefend,
-        modifier = Modifier.fillMaxWidth(),
-    )
-    Spacer(Modifier.height(10.dp))
-    SecondaryActionChip("Timeout", onClick = onTimeout, accent = true, modifier = Modifier.fillMaxWidth())
-}
-
-@Composable
-private fun AutoSimRow(onAutoSim: (AutoSimUntil) -> Unit) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF101610))
-            .padding(12.dp),
-    ) {
-        SectionLabel("Quick sim")
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .horizontalScroll(rememberScrollState()),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            AutoSimUntil.entries.forEach { until ->
-                SecondaryActionChip(
-                    label = until.displayLabel(),
-                    onClick = { onAutoSim(until) },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text.uppercase(),
-        color = FcPrimary,
-        fontWeight = FontWeight.Bold,
-        style = MaterialTheme.typography.labelMedium,
-        letterSpacing = 1.2.sp,
-    )
-}
-
-@Composable
-private fun PrimaryPlayButton(
-    label: String,
-    subtitle: String,
-    container: Color,
-    content: Color,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .heightIn(min = 72.dp)
-            .clip(PlayButtonShape)
-            .background(container)
-            .clickable(role = Role.Button, onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.Center,
     ) {
         Text(
-            label,
-            color = content,
+            if (sit.userOnOffense) "Offense pace" else "Defense call",
+            color = FcPrimary,
             fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.titleLarge,
+            style = MaterialTheme.typography.labelMedium,
             letterSpacing = 1.sp,
         )
-        Text(
-            subtitle,
-            color = content.copy(alpha = 0.75f),
-            style = MaterialTheme.typography.labelSmall,
-        )
-    }
-}
-
-@Composable
-private fun SelectableChip(
-    label: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    val bg by animateColorAsState(
-        targetValue = if (selected) FcPrimary else FcSurfaceVariant,
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "chipBg",
-    )
-    val fg by animateColorAsState(
-        targetValue = if (selected) FcOnPrimary else Color(0xFFE5E7EB),
-        animationSpec = spring(stiffness = Spring.StiffnessMedium),
-        label = "chipFg",
-    )
-    val border by animateColorAsState(
-        targetValue = if (selected) FcPrimary else GhostBorder,
-        label = "chipBorder",
-    )
-    val interaction = remember { MutableInteractionSource() }
-
-    Box(
-        Modifier
-            .clip(ChipShape)
-            .background(bg)
-            .border(1.dp, border, ChipShape)
-            .clickable(
-                interactionSource = interaction,
-                indication = ripple(bounded = true),
-                role = Role.Button,
-                onClick = onClick,
+        Spacer(Modifier.height(8.dp))
+        if (sit.userOnOffense) {
+            val tempos = TempoCall.entries
+            SegmentedControl(
+                labels = tempos.map { it.displayLabel() },
+                selected = tempos.indexOf(state.selectedTempo).coerceAtLeast(0),
+                onSelect = { viewModel.selectTempo(tempos[it]) },
             )
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-    ) {
-        Text(
-            label,
-            color = fg,
-            fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Medium,
-            style = MaterialTheme.typography.labelLarge,
-        )
-    }
-}
-
-@Composable
-private fun SecondaryActionChip(
-    label: String,
-    onClick: () -> Unit,
-    accent: Boolean = false,
-    modifier: Modifier = Modifier,
-) {
-    val interaction = remember { MutableInteractionSource() }
-    Box(
-        modifier = modifier
-            .clip(ChipShape)
-            .background(if (accent) Color(0xFF2A2218) else FcSurface)
-            .border(
-                1.dp,
-                if (accent) FcAccent.copy(alpha = 0.55f) else GhostBorder,
-                ChipShape,
-            )
-            .clickable(
-                interactionSource = interaction,
-                indication = ripple(bounded = true),
-                role = Role.Button,
-                onClick = onClick,
-            )
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(
-            label,
-            color = if (accent) FcAccent else Color(0xFFE5E7EB),
-            fontWeight = FontWeight.Medium,
-            style = MaterialTheme.typography.labelLarge,
-            textAlign = TextAlign.Center,
-        )
-    }
-}
-
-@Composable
-private fun EspnField(
-    yardLine: Int,
-    distance: Int,
-    possessionHome: Boolean,
-    homeAbbr: String,
-    awayAbbr: String,
-    modifier: Modifier = Modifier,
-) {
-    val leftAbbr = if (possessionHome) awayAbbr else homeAbbr
-    val rightAbbr = if (possessionHome) homeAbbr else awayAbbr
-    val density = LocalDensity.current
-    val ballFraction by animateFloatAsState(
-        targetValue = yardLine.coerceIn(0, 100) / 100f,
-        animationSpec = spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessMediumLow),
-        label = "ballX",
-    )
-    val firstDownYard = (yardLine + distance).coerceAtMost(100)
-
-    Box(
-        modifier = modifier
-            .clip(FieldShape)
-            .border(1.dp, Color(0xFF2F5D34), FieldShape),
-    ) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val w = size.width
-            val h = size.height
-            val endZoneW = w * 0.09f
-            val playableW = w - endZoneW * 2f
-
-            drawRect(
-                brush = Brush.verticalGradient(listOf(FieldGreen, FieldGreenDark)),
-                size = size,
-            )
-            drawRect(FieldEndZone, Offset(0f, 0f), Size(endZoneW, h))
-            drawRect(FieldEndZone, Offset(w - endZoneW, 0f), Size(endZoneW, h))
-
-            // Hash / yard lines
-            for (i in 0..10) {
-                val x = endZoneW + playableW * i / 10f
-                val major = i % 5 == 0
-                drawLine(
-                    Color.White.copy(alpha = if (major) 0.45f else 0.22f),
-                    Offset(x, 0f),
-                    Offset(x, h),
-                    strokeWidth = if (major) 2.5f else 1.5f,
-                )
-                if (major && i in 1..9) {
-                    val yard = if (i <= 5) i * 10 else (10 - i) * 10
-                    val paint = android.graphics.Paint().apply {
-                        color = android.graphics.Color.argb(180, 255, 255, 255)
-                        textAlign = android.graphics.Paint.Align.CENTER
-                        textSize = with(density) { 11.sp.toPx() }
-                        isFakeBoldText = true
-                    }
-                    drawContext.canvas.nativeCanvas.drawText(
-                        yard.toString(),
-                        x,
-                        h * 0.22f,
-                        paint,
-                    )
-                }
-            }
-
-            // Sideline frame
-            drawRoundRect(
-                color = Color.White.copy(alpha = 0.2f),
-                topLeft = Offset(1f, 1f),
-                size = Size(w - 2f, h - 2f),
-                cornerRadius = CornerRadius(12.dp.toPx()),
-                style = Stroke(width = 1.5f),
-            )
-
-            val losX = endZoneW + playableW * ballFraction
-            val fdX = endZoneW + playableW * (firstDownYard / 100f)
-
-            // First down
-            drawLine(
-                FirstDownYellow.copy(alpha = 0.95f),
-                Offset(fdX, 6f),
-                Offset(fdX, h - 6f),
-                strokeWidth = 3.5f,
-            )
-            // Line of scrimmage
-            drawLine(
-                Color.White,
-                Offset(losX, 4f),
-                Offset(losX, h - 4f),
-                strokeWidth = 3f,
-            )
-
-            // Football
-            val ballR = 9.dp.toPx()
-            drawOval(
-                color = BallOrange,
-                topLeft = Offset(losX - ballR * 1.15f, h / 2f - ballR * 0.7f),
-                size = Size(ballR * 2.3f, ballR * 1.4f),
-            )
-            drawLine(
-                Color(0xFF3E1400).copy(alpha = 0.55f),
-                Offset(losX - ballR * 0.55f, h / 2f),
-                Offset(losX + ballR * 0.55f, h / 2f),
-                strokeWidth = 2f,
-            )
-
-            // Direction chevron toward opponent end
-            val chevron = Path().apply {
-                val tip = losX + 18.dp.toPx()
-                moveTo(tip, h / 2f)
-                lineTo(tip - 10.dp.toPx(), h / 2f - 7.dp.toPx())
-                lineTo(tip - 10.dp.toPx(), h / 2f + 7.dp.toPx())
-                close()
-            }
-            drawPath(chevron, Color.White.copy(alpha = 0.55f))
+            Spacer(Modifier.height(10.dp))
         }
 
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Button(
+                onClick = viewModel::simPlay,
+                enabled = !sit.awaitingCoinToss,
+                colors = ButtonDefaults.buttonColors(containerColor = FcPrimary, contentColor = FcOnPrimary),
+                shape = PlayButtonShape,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(48.dp),
+            ) {
+                Text("Sim play", fontWeight = FontWeight.Bold)
+            }
+            Box(Modifier.weight(1f)) {
+                Button(
+                    onClick = { viewModel.showSimUntilMenu(true) },
+                    enabled = !sit.awaitingCoinToss,
+                    colors = ButtonDefaults.buttonColors(containerColor = FcAccent, contentColor = FcOnAccent),
+                    shape = PlayButtonShape,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(48.dp),
+                ) {
+                    Text("Sim until…", fontWeight = FontWeight.Bold)
+                }
+                DropdownMenu(
+                    expanded = state.showSimUntilMenu,
+                    onDismissRequest = { viewModel.showSimUntilMenu(false) },
+                ) {
+                    AutoSimUntil.entries.forEach { until ->
+                        DropdownMenuItem(
+                            text = { Text(until.displayLabel()) },
+                            onClick = { viewModel.autoSim(until) },
+                        )
+                    }
+                }
+            }
+        }
+
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Checkbox(
+                checked = state.aiCallMode,
+                onCheckedChange = viewModel::setAiCallMode,
+            )
+            Text("AI call next snap", color = Color(0xFFE5E7EB), style = MaterialTheme.typography.bodyMedium)
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = viewModel::callTimeout) {
+                Text("Timeout", color = FcAccent)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SelectedPlayCard(
+    situation: GameSituation,
+    userOnOffense: Boolean,
+    offense: OffenseConcept,
+    defense: DefenseConcept,
+    onChangePlay: () -> Unit,
+    onSuggestion: () -> Unit,
+) {
+    val stDef = !userOnOffense && situation.specialTeamsDown
+    val twoPoint = situation.tryIsTwoPoint
+    val title = if (userOnOffense) offense.displayName else defense.displayName
+    val meta = when {
+        userOnOffense && situation.pendingKickoff -> "Kickoff snap"
+        twoPoint && userOnOffense -> "2-point try · ${offense.metaLine()}"
+        twoPoint && !userOnOffense -> "Defend the 2-point try"
+        userOnOffense -> offense.metaLine()
+        stDef && situation.pendingKickoff ->
+            "KR ${situation.userKickReturnerName ?: "auto"} · return package"
+        stDef ->
+            "PR ${situation.userPuntReturnerName ?: "auto"} · ST package"
+        else -> "Coverage shell"
+    }
+    val concept = if (userOnOffense) offense.concept else defense.concept
+    val changeLabel = when {
+        userOnOffense && situation.pendingKickoff -> "Kickoff"
+        userOnOffense -> "Change Play"
+        stDef -> "Change Package"
+        else -> "Change Coverage"
+    }
+    val eyebrow = when {
+        userOnOffense && situation.pendingKickoff -> "KICKOFF"
+        twoPoint -> "2-POINT TRY"
+        userOnOffense -> offense.formation.displayName.uppercase()
+        stDef -> "SPECIAL TEAMS"
+        else -> "COVERAGE"
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(PanelShape)
+            .background(PanelBg)
+            .border(1.dp, GhostBorder.copy(alpha = 0.6f), PanelShape)
+            .padding(14.dp),
+    ) {
         Text(
-            leftAbbr,
-            color = Color.White.copy(alpha = 0.85f),
-            style = MaterialTheme.typography.labelSmall,
+            eyebrow,
+            color = FcPrimary,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 8.dp, bottom = 6.dp),
+            style = MaterialTheme.typography.labelMedium,
+            letterSpacing = 1.2.sp,
         )
+        Spacer(Modifier.height(4.dp))
         Text(
-            rightAbbr,
-            color = Color.White.copy(alpha = 0.85f),
-            style = MaterialTheme.typography.labelSmall,
+            title,
+            color = Color.White,
             fontWeight = FontWeight.Bold,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(end = 8.dp, bottom = 6.dp),
+            style = MaterialTheme.typography.headlineSmall,
         )
+        Text(meta, color = MutedText, style = MaterialTheme.typography.labelLarge)
+        if (concept.isNotBlank()) {
+            Spacer(Modifier.height(8.dp))
+            Text(concept, color = Color(0xFFE5E7EB), style = MaterialTheme.typography.bodyMedium)
+        }
+        Spacer(Modifier.height(12.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextButton(
+                onClick = onChangePlay,
+                modifier = Modifier
+                    .weight(1f)
+                    .border(1.dp, GhostBorder, PlayButtonShape),
+            ) {
+                Text(changeLabel, color = Color.White)
+            }
+            Button(
+                onClick = onSuggestion,
+                colors = ButtonDefaults.buttonColors(containerColor = FcPrimary, contentColor = FcOnPrimary),
+                shape = PlayButtonShape,
+                modifier = Modifier.weight(1f),
+            ) {
+                Text("Suggestion", fontWeight = FontWeight.SemiBold)
+            }
+        }
+    }
+}
+
+@Composable
+private fun OpponentTeaser(sit: GameSituation, userDefense: DefenseConcept) {
+    val label = when {
+        sit.userOnOffense -> "Opp defense · Unknown"
+        sit.tryIsTwoPoint -> "Your coverage · ${userDefense.displayName}"
+        sit.specialTeamsDown -> "Your package · ${userDefense.displayName}"
+        else -> "Your coverage · ${userDefense.displayName}"
+    }
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(Color(0xFF101610))
+            .border(1.dp, GhostBorder.copy(alpha = 0.4f), RoundedCornerShape(10.dp))
+            .padding(12.dp),
+    ) {
+        Text(label, color = MutedText, style = MaterialTheme.typography.labelLarge)
     }
 }
 
@@ -817,20 +678,6 @@ private fun TempoCall.displayLabel(): String = when (this) {
     TempoCall.NORMAL -> "Normal"
     TempoCall.HURRY_UP -> "Hurry"
     TempoCall.CHEW_CLOCK -> "Chew"
-}
-
-private fun CoverageCall.displayLabel(): String = when (this) {
-    CoverageCall.COVER_0 -> "Cover 0"
-    CoverageCall.COVER_1 -> "Cover 1"
-    CoverageCall.COVER_2 -> "Cover 2"
-    CoverageCall.COVER_3 -> "Cover 3"
-    CoverageCall.COVER_4 -> "Cover 4"
-    CoverageCall.MAN -> "Man"
-    CoverageCall.ZONE -> "Zone"
-    CoverageCall.STACK_BOX -> "Stack Box"
-    CoverageCall.SPY -> "Spy"
-    CoverageCall.PRESS -> "Press"
-    CoverageCall.OFF_COVERAGE -> "Off"
 }
 
 private fun AutoSimUntil.displayLabel(): String = when (this) {

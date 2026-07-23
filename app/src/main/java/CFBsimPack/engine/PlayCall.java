@@ -37,10 +37,6 @@ public final class PlayCall {
         this.tempo = tempo != null ? tempo : TempoCall.NORMAL;
     }
 
-    public static PlayCall of(OffensePlay play, CoverageCall cov) {
-        return new PlayCall(play, Formation.SHOTGUN, cov, TempoCall.NORMAL);
-    }
-
     public static PlayCall fromConcepts(OffenseConcept offense, DefenseConcept defense, TempoCall tempo) {
         OffenseConcept off = offense != null ? offense : Playbook.defaultOffense();
         DefenseConcept def = defense != null ? defense : Playbook.defaultDefense();
@@ -50,9 +46,11 @@ public final class PlayCall {
     public OffenseConcept resolvedOffenseConcept() {
         if (offenseConcept != null) return offenseConcept;
         // Best-effort map for legacy bare calls
-        if (offensePlay == OffensePlay.PASS) return Playbook.offenseById("slants");
+        if (offensePlay == OffensePlay.PASS) return Playbook.offenseById("gun_slants");
         if (offensePlay == OffensePlay.FIELD_GOAL) return Playbook.offenseById("field_goal");
         if (offensePlay == OffensePlay.PUNT) return Playbook.offenseById("punt");
+        if (offensePlay == OffensePlay.FAKE_PUNT) return Playbook.offenseById("fake_punt");
+        if (offensePlay == OffensePlay.KICKOFF) return Playbook.offenseById("kickoff");
         if (offensePlay == OffensePlay.SPIKE) return Playbook.offenseById("spike");
         if (offensePlay == OffensePlay.KNEEL) return Playbook.offenseById("kneel");
         return Playbook.defaultOffense();

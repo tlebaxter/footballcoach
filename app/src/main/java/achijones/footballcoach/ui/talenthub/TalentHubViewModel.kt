@@ -478,6 +478,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val l = league ?: return
         if (!u.isOpenOocWeek(week) && u.gameSchedule.getOrNull(week)?.let {
                 it.gameName == "OOC" || it.gameName == "OOC Rivalry"
+                    || it.gameName == "Rivalry Game OOC"
             } != true) {
             return
         }
@@ -523,6 +524,38 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
+    fun resuggestOocSchedule() {
+        val u = user ?: return
+        val l = league ?: return
+        OocScheduleBuilder.clearAllUserOocGames(u)
+        OocScheduleBuilder.suggestUserOocSchedule(u, l.teamList)
+        reloadTab()
+    }
+
+    /** Pre-fills OOC when the Schedule phase opens with an empty slate. */
+    private fun maybeAutoSuggestOoc() {
+        val u = user ?: return
+        val l = league ?: return
+        if (OffseasonSession.phase != OffseasonSession.Phase.SCHEDULE) return
+        var open = 0
+        var filled = 0
+        for (week in 0 until League.REGULAR_SEASON_WEEKS) {
+            if (u.isOpenOocWeek(week)) {
+                open++
+                continue
+            }
+            val game = u.gameSchedule.getOrNull(week) ?: continue
+            if (game.gameName == "OOC" || game.gameName == "OOC Rivalry"
+                || game.gameName == "Rivalry Game OOC"
+            ) {
+                filled++
+            }
+        }
+        if (open > 0 && filled == 0) {
+            OocScheduleBuilder.suggestUserOocSchedule(u, l.teamList)
+        }
+    }
+
     private fun approveRetention() {
         viewModelScope.launch {
             val off = offseason ?: return@launch
@@ -552,6 +585,9 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val off = offseason ?: return
         val tab = _uiState.value.selectedTab
         val phase = OffseasonSession.phase
+        if (tab == HubTab.SCHEDULE) {
+            maybeAutoSuggestOoc()
+        }
         val canAct = canActOnTab(tab)
         val phaseName = OffseasonSession.phaseLabel(phase)
         val map = LinkedHashMap<String, Player>()
@@ -739,7 +775,8 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val scheduleWeeks = buildScheduleWeeks(u)
         val openOoc = scheduleWeeks.count { it.open }
         val filledOoc = scheduleWeeks.count {
-            !it.locked && !it.open && (it.status == "OOC" || it.status == "OOC Rivalry")
+            !it.locked && !it.open
+                && (it.status == "OOC" || it.status == "OOC Rivalry" || it.status == "Rivalry Game OOC")
         }
 
         val primaryLabel = when {
@@ -811,6 +848,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             val opp = if (game.homeTeam == u) game.awayTeam else game.homeTeam
             val homeAway = if (game.homeTeam == u) "vs" else "@"
             val isOoc = game.gameName == "OOC" || game.gameName == "OOC Rivalry"
+                || game.gameName == "Rivalry Game OOC"
             weeks.add(
                 ScheduleWeekUi(
                     week = week,

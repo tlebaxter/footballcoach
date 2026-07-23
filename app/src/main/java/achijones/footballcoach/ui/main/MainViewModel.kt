@@ -16,7 +16,6 @@ import CFBsimPack.RosterStatus
 import CFBsimPack.DefensiveSystem
 import CFBsimPack.OffensivePhilosophy
 import CFBsimPack.Team
-import CFBsimPack.TeamStrategy
 import CFBsimPack.TransferReason
 import achijones.footballcoach.ui.util.SaveSlots
 import kotlinx.coroutines.Dispatchers
@@ -61,8 +60,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         "EDGE (2 starters)",
         "DL (3 starters)",
         "LB (3 starters)",
+        "PR (punt return)",
+        "KR (kick return)",
+        "Gunner 1",
+        "Gunner 2",
+        "LS (long snap)",
     )
-    private val lineupRequired = intArrayOf(1, 2, 1, 3, 1, 5, 1, 1, 3, 2, 3, 3)
+    private val lineupRequired = intArrayOf(1, 2, 1, 3, 1, 5, 1, 1, 3, 2, 3, 3, 1, 1, 1, 1, 1)
+    private val stSlotBase = 12
     private val rankingsModes = arrayOf(
         "Poll Votes", "Conference Standings", "Strength of Sched", "Points Per Game",
         "Opp Points Per Game", "Yards Per Game", "Opp Yards Per Game", "Pass Yards Per Game",
@@ -319,6 +324,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun setLineupSectionLocks(starters: Boolean, locked: Boolean) {
         val user = userTeam ?: return
         val posIndex = _uiState.value.lineupPositionIndex
+        if (posIndex >= stSlotBase) {
+            postSnackbar("Special teams slots have no lock groups")
+            return
+        }
         user.setDepthLocks(posIndex, starters, locked)
         val section = if (starters) "starters" else "bench"
         postSnackbar(if (locked) "Locked $section" else "Unlocked $section")
@@ -328,6 +337,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     fun autoSortUnlockedLineup() {
         val user = userTeam ?: return
         val posIndex = _uiState.value.lineupPositionIndex
+        if (posIndex >= stSlotBase) {
+            user.ensureSpecialTeamsDepth()
+            initLineupOrder(posIndex)
+            postSnackbar("Reset ${lineupPositions[posIndex]} from best available")
+            rebuildSnapshot()
+            return
+        }
         user.sortPositionDepth(posIndex)
         initLineupOrder(posIndex)
         postSnackbar("Sorted ${lineupPositions[posIndex]} by OVR")
@@ -347,60 +363,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val posIndex = _uiState.value.lineupPositionIndex
         val ordered = java.util.ArrayList(lineupOrderKeys.mapNotNull { playerByKey[it] })
         if (ordered.isEmpty()) return
-        user.setDepthChart(ordered, posIndex)
+        if (posIndex >= stSlotBase) {
+            // First player in the ST candidate list is the assigned slot holder.
+            user.setSpecialTeamsSlot(posIndex - stSlotBase, ordered[0])
+        } else {
+            user.setDepthChart(ordered, posIndex)
+        }
         if (persistMessage) {
             postSnackbar("Updated depth chart for ${lineupPositions[posIndex]}")
         }
         rebuildSnapshot()
-    }
-
-    fun setOffStrategy(index: Int) {
-        val user = userTeam ?: return
-        val strategies = user.getTeamStrategiesOff()
-        if (index < 0 || index >= strategies.size) return
-        user.teamStratOff = strategies[index]
-        user.teamStratOffNum = index
-        rebuildSnapshot()
-    }
-
-    fun setDefStrategy(index: Int) {
-        val user = userTeam ?: return
-        val strategies = user.getTeamStrategiesDef()
-        if (index < 0 || index >= strategies.size) return
-        user.teamStratDef = strategies[index]
-        user.teamStratDefNum = index
-        rebuildSnapshot()
-    }
-
-    fun setScoutOffStrategy(index: Int) {
-        val user = userTeam ?: return
-        val strategies = user.getTeamStrategiesOff()
-        if (index < 0 || index >= strategies.size) return
-        user.teamStratOff = strategies[index]
-        user.teamStratOffNum = index
-        updateGameDialogStrategies()
-    }
-
-    fun setScoutDefStrategy(index: Int) {
-        val user = userTeam ?: return
-        val strategies = user.getTeamStrategiesDef()
-        if (index < 0 || index >= strategies.size) return
-        user.teamStratDef = strategies[index]
-        user.teamStratDefNum = index
-        updateGameDialogStrategies()
-    }
-
-    private fun updateGameDialogStrategies() {
-        val dialog = _uiState.value.gameDialog ?: return
-        val user = userTeam ?: return
-        _uiState.update {
-            it.copy(
-                gameDialog = dialog.copy(
-                    offSelected = user.teamStratOffNum,
-                    defSelected = user.teamStratDefNum,
-                ),
-            )
-        }
     }
 
     fun selectAwardCategory(index: Int) {
@@ -579,12 +551,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         center = summary[1],
                         right = summary[2],
                         bottom = summary[3] + "\n\n",
-                        showStrategy = false,
                         canCoach = false,
-                        offStrategies = emptyList(),
-                        defStrategies = emptyList(),
-                        offSelected = 0,
-                        defSelected = 0,
                         gameKey = gameKey,
                     ),
                 )
@@ -592,16 +559,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         } else {
             val scout = game.getGameScoutStr()
             val involvesUser = game.awayTeam == user || game.homeTeam == user
-            val off = user.getTeamStrategiesOff()
-            val def = user.getTeamStrategiesDef()
-            var offIdx = 0
-            var defIdx = 0
-            for (i in off.indices) {
-                if (off[i].stratName == user.teamStratOff.stratName) offIdx = i
-            }
-            for (i in def.indices) {
-                if (def[i].stratName == user.teamStratDef.stratName) defIdx = i
-            }
             _uiState.update {
                 it.copy(
                     showGameDialog = true,
@@ -617,12 +574,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         center = scout[1],
                         right = scout[2],
                         bottom = scout[3],
-                        showStrategy = involvesUser,
                         canCoach = involvesUser,
-                        offStrategies = off.map(TeamStrategy::getStratName),
-                        defStrategies = def.map(TeamStrategy::getStratName),
-                        offSelected = offIdx,
-                        defSelected = defIdx,
                         gameKey = gameKey,
                     ),
                 )
@@ -1059,6 +1011,21 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun playersForLineupPosition(user: Team, position: Int): List<Player> {
+        if (position >= stSlotBase) {
+            val slot = position - stSlotBase
+            val pool: MutableList<Player> = when (slot) {
+                0, 1 -> ArrayList(user.specialTeamsReturnPool())
+                2, 3 -> ArrayList(user.specialTeamsGunnerPool())
+                4 -> ArrayList(user.specialTeamsSnapPool())
+                else -> mutableListOf()
+            }
+            val assigned = user.getSpecialTeamsSlot(slot)
+            if (assigned != null) {
+                pool.remove(assigned)
+                pool.add(0, assigned)
+            }
+            return pool
+        }
         val list = when (position) {
             0 -> user.teamQBs
             1 -> user.teamRBs
@@ -1132,11 +1099,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val offStrats = user.getTeamStrategiesOff()
-        val defStrats = user.getTeamStrategiesDef()
-        var offIdx = user.teamStratOffNum
-        var defIdx = user.teamStratDefNum
-
         val injuryLines = if (showInjuryDialog) {
             user.getInjuryReport()?.toList() ?: emptyList()
         } else emptyList()
@@ -1160,14 +1122,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 lineupRows = lineupRows,
                 lineupStarterCount = lineupRows.count { it.starter },
                 lineupBenchCount = lineupRows.count { !it.starter },
-                offStrategies = offStrats.mapIndexed { i, s ->
-                    StrategyOptionUi(s.stratName, s.stratDescription, i)
-                },
-                defStrategies = defStrats.mapIndexed { i, s ->
-                    StrategyOptionUi(s.stratName, s.stratDescription, i)
-                },
-                offStrategyIndex = offIdx,
-                defStrategyIndex = defIdx,
                 offPhilosophyNames = OffensivePhilosophy.values().map { it.displayName },
                 defSystemNames = DefensiveSystem.values().map { it.displayName },
                 offPhilosophyIndex = user.offPhilosophy?.ordinal
@@ -1538,33 +1492,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun positionStatsFromRecord(record: PlayerSeasonRecord): List<StatChipUi> {
-        return when (record.position) {
-            "QB" -> listOf(
+        val base = when (record.position) {
+            "QB" -> mutableListOf(
                 StatChipUi("Pass Yds", record.passYards.toString()),
                 StatChipUi("TD", record.passTd.toString()),
                 StatChipUi("INT", record.passInt.toString()),
                 StatChipUi("Comp", "${record.passComp}/${record.passAtt}"),
                 StatChipUi("Sacks", record.sacked.toString()),
             )
-            "RB" -> listOf(
+            "RB" -> mutableListOf(
                 StatChipUi("Rush Yds", record.rushYards.toString()),
                 StatChipUi("TD", record.rushTd.toString()),
                 StatChipUi("Att", record.rushAtt.toString()),
                 StatChipUi("Fum", record.rushFumbles.toString()),
             )
-            "WR" -> listOf(
+            "WR" -> mutableListOf(
                 StatChipUi("Rec", record.receptions.toString()),
                 StatChipUi("Yards", record.recYards.toString()),
                 StatChipUi("TD", record.recTd.toString()),
                 StatChipUi("Tgts", record.targets.toString()),
                 StatChipUi("Drops", record.drops.toString()),
             )
-            "K" -> listOf(
+            "K" -> mutableListOf(
                 StatChipUi("FG", "${record.fgMade}/${record.fgAtt}"),
                 StatChipUi("XP", "${record.xpMade}/${record.xpAtt}"),
             )
-            else -> emptyList()
+            else -> mutableListOf()
         }
+        if (record.position == "K" && record.puntAtt > 0) {
+            base += StatChipUi("Punt", "${record.puntAtt}/${record.puntYards}")
+        }
+        if (record.prAtt > 0) {
+            base += StatChipUi("PR Yds", record.prYards.toString())
+            if (record.prTd > 0) base += StatChipUi("PR TD", record.prTd.toString())
+        }
+        if (record.krAtt > 0) {
+            base += StatChipUi("KR Yds", record.krYards.toString())
+            if (record.krTd > 0) base += StatChipUi("KR TD", record.krTd.toString())
+        }
+        return base
     }
 
     private fun buildPlayerTimeline(player: Player, displayTeam: Team): List<TimelineEventUi> {

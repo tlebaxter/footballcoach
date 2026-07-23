@@ -295,18 +295,35 @@ public class League {
                 throw new IOException("Unsupported save format: missing team count.");
             }
             int teamCount = Integer.parseInt(line.substring("TEAM_COUNT,".length()));
+            String pendingLine = null;
             for(int i = 0; i < teamCount; ++i) {
                 StringBuilder sbTeam = new StringBuilder();
+                if (pendingLine != null) {
+                    sbTeam.append(pendingLine);
+                    pendingLine = null;
+                }
                 while((line = bufferedReader.readLine()) != null && !line.equals("END_PLAYERS")) {
                     sbTeam.append(line);
                 }
                 Team t = new Team(sbTeam.toString(), this);
+                line = bufferedReader.readLine();
+                if (line != null && line.startsWith("ST_DEPTH,")) {
+                    t.loadSpecialTeamsDepth(line);
+                } else {
+                    t.ensureSpecialTeamsDepth();
+                    pendingLine = line;
+                }
                 getOrCreateConference(t.conference).confTeams.add(t);
                 teamList.add(t);
             }
 
             //Set up user team
-            if ((line = bufferedReader.readLine()) != null) {
+            if (pendingLine != null) {
+                line = pendingLine;
+            } else {
+                line = bufferedReader.readLine();
+            }
+            if (line != null) {
                 for (Team t : teamList) {
                     if (t.name.equals(line)) {
                         userTeam = t;
@@ -1695,7 +1712,7 @@ public class League {
             sb.append(heismanHistory.get(i) + "\n");
         }
             sb.append("END_HEISMAN_HIST\n");
-        sb.append("SAVE_VERSION,2\n");
+        sb.append("SAVE_VERSION,3\n");
         sb.append("TEAM_COUNT," + teamList.size() + "\n");
 
         // Save information about each team like W-L records, as well as all the players
@@ -1705,11 +1722,12 @@ public class League {
             sb.append(t.conference + "," + t.name + "," + t.abbr + "," + t.teamPrestige + "," +
                     (t.totalWins - t.wins) + "," + (t.totalLosses - t.losses) + "," + t.totalCCs + "," + t.totalNCs + "," + t.rivalTeam + "," +
                     t.totalNCLosses + "," + t.totalCCLosses + "," + t.totalBowls + "," + t.totalBowlLosses + "," +
-                    t.teamStratOffNum + "," + t.teamStratDefNum + "," + (t.showPopups ? 1 : 0) + "," +
+                    "1,1," + (t.showPopups ? 1 : 0) + "," +
                     t.yearStartWinStreak.getStreakCSV() + "," +  t.teamTVDeal + "," + t.confTVDeal + "," +
                     offPhil + "," + defSys + "%" + t.evenYearHomeOpp + "%\n");
             sb.append(t.getPlayerInfoSaveFile());
             sb.append("END_PLAYERS\n");
+            sb.append(t.specialTeamsDepthSaveLine() + "\n");
         }
 
         // Save history of the user's team of the W-L and bowl results each year

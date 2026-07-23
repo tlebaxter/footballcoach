@@ -3,7 +3,8 @@ package CFBsimPack.engine;
 import CFBsimPack.Formation;
 
 /**
- * Named offensive play concept with engine modifiers and diagram geometry.
+ * Named offensive play concept with engine modifiers.
+ * Display is text-only: formation + popular call name + concept tagline.
  */
 public final class OffenseConcept {
     public final String id;
@@ -13,6 +14,8 @@ public final class OffenseConcept {
     public final Formation formation;
     public final String personnel;
     public final DepthBand depth;
+    /** Short coach-speak description of the concept (routes / scheme). */
+    public final String concept;
     public final double completionMod;
     public final double yardsMod;
     public final double sackRiskMod;
@@ -20,7 +23,6 @@ public final class OffenseConcept {
     public final double fumbleMod;
     public final TargetBias targetBias;
     public final double clockMultExtra;
-    public final PlayDiagram diagram;
 
     public OffenseConcept(
             String id,
@@ -30,14 +32,14 @@ public final class OffenseConcept {
             Formation formation,
             String personnel,
             DepthBand depth,
+            String concept,
             double completionMod,
             double yardsMod,
             double sackRiskMod,
             double runYardsMod,
             double fumbleMod,
             TargetBias targetBias,
-            double clockMultExtra,
-            PlayDiagram diagram
+            double clockMultExtra
     ) {
         this.id = id;
         this.displayName = displayName;
@@ -46,6 +48,7 @@ public final class OffenseConcept {
         this.formation = formation;
         this.personnel = personnel != null ? personnel : "11";
         this.depth = depth != null ? depth : DepthBand.NONE;
+        this.concept = concept != null ? concept : "";
         this.completionMod = completionMod;
         this.yardsMod = yardsMod;
         this.sackRiskMod = sackRiskMod;
@@ -53,7 +56,6 @@ public final class OffenseConcept {
         this.fumbleMod = fumbleMod;
         this.targetBias = targetBias != null ? targetBias : TargetBias.ANY;
         this.clockMultExtra = clockMultExtra;
-        this.diagram = diagram != null ? diagram : PlayDiagram.offense();
     }
 
     public String depthLabel() {
@@ -74,6 +76,15 @@ public final class OffenseConcept {
         if (family == ConceptFamily.RPO) return "RPO";
         if (family == ConceptFamily.SPECIAL) return "Special";
         return depthLabel() + " Pass";
+    }
+
+    /** e.g. "Shotgun · Mesh · Short Pass" */
+    public String callSheetLine() {
+        return formation.displayName + " · " + displayName + " · " + typeLabel();
+    }
+
+    public String metaLine() {
+        return formation.displayName + " · " + personnel + " pers · " + typeLabel();
     }
 
     /**

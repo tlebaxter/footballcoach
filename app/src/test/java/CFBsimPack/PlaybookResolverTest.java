@@ -22,6 +22,7 @@ import java.nio.file.Paths;
 import java.util.Random;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
@@ -31,12 +32,15 @@ public class PlaybookResolverTest {
     private static final String LAST_NAMES = "K,L,M,N,O,P,Q,R,S,T";
 
     @Test
-    public void playbookHasNamedConcepts() {
+    public void playbookHasNamedConceptsByFormation() {
         assertTrue(Playbook.allOffense().size() >= 20);
         assertTrue(Playbook.allDefense().size() >= 10);
-        assertNotNull(Playbook.offenseById("pa_comebacks"));
-        assertEquals(OffensePlay.PASS, Playbook.offenseById("pa_comebacks").offensePlay);
-        assertNotNull(Playbook.defenseFor(CoverageCall.COVER_3).diagram);
+        assertFalse(Playbook.offenseFormations().isEmpty());
+        assertTrue(Playbook.offenseByFormation(Formation.SHOTGUN).size() >= 5);
+        assertNotNull(Playbook.offenseById("gun_pa_comebacks"));
+        assertEquals(OffensePlay.PASS, Playbook.offenseById("gun_pa_comebacks").offensePlay);
+        assertNotNull(Playbook.defenseFor(CoverageCall.COVER_3).concept);
+        assertTrue(Playbook.offenseById("gun_mesh").concept.length() > 0);
     }
 
     @Test
@@ -44,8 +48,8 @@ public class PlaybookResolverTest {
         League league = createLeague();
         Team home = league.teamList.get(0);
         Team away = league.teamList.get(1);
-        OffenseConcept deep = Playbook.offenseById("four_verts");
-        OffenseConcept shortPlay = Playbook.offenseById("slants");
+        OffenseConcept deep = Playbook.offenseById("gun_four_verts");
+        OffenseConcept shortPlay = Playbook.offenseById("gun_slants");
         double deepAvg = avgYards(home, away, deep, 80);
         double shortAvg = avgYards(home, away, shortPlay, 80);
         assertTrue("deep=" + deepAvg + " short=" + shortAvg, deepAvg > shortAvg);

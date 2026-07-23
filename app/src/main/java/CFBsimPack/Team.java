@@ -5,9 +5,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * Team class.
@@ -119,13 +117,19 @@ public class Team {
     public ArrayList<Player> playersInjuredAll;
     public ArrayList<Player> playersTransferring;
 
-    public TeamStrategy teamStratOff;
-    public TeamStrategy teamStratDef;
-    public int teamStratOffNum;
-    public int teamStratDefNum;
+    /** Legacy save columns 13–14; always persisted as 1,1 (weekly game plan removed). */
+    public int teamStratOffNum = 1;
+    public int teamStratDefNum = 1;
 
     public OffensivePhilosophy offPhilosophy = OffensivePhilosophy.MULTIPLE;
     public DefensiveSystem defSystem = DefensiveSystem.BASE_4_3;
+
+    /** Special-teams depth overlays (point at existing roster players). */
+    public Player puntReturner;
+    public Player kickReturner;
+    public Player gunner1;
+    public Player gunner2;
+    public Player longSnapper;
 
     public boolean confTVDeal;
     public boolean teamTVDeal;
@@ -185,6 +189,7 @@ public class Team {
                 NilMoney.INIT_OL, NilMoney.INIT_K, NilMoney.INIT_S, NilMoney.INIT_CB,
                 NilMoney.INIT_EDGE, NilMoney.INIT_DL, NilMoney.INIT_LB);
         assignInitialRosterStatuses();
+        ensureSpecialTeamsDepth();
         recruitMoney = NilMoney.yearlyBudget(teamPrestige);
 
         //set stats
@@ -217,9 +222,7 @@ public class Team {
 
         teamPollScore = teamPrestige + getOffTalent() + getDefTalent();
 
-        teamStratOff = new TeamStrategy();
-        teamStratDef = new TeamStrategy();
-        teamStratOffNum = 1; // 1 is the default strats
+        teamStratOffNum = 1;
         teamStratDefNum = 1;
         numRecruits = 30;
         playersLeaving = new ArrayList<>();
@@ -304,9 +307,10 @@ public class Team {
                 totalCCLosses = Integer.parseInt(teamInfo[10]);
                 totalBowls = Integer.parseInt(teamInfo[11]);
                 totalBowlLosses = Integer.parseInt(teamInfo[12]);
-                if (teamInfo.length >= 16) {
-                    teamStratOffNum = Integer.parseInt(teamInfo[13]);
-                    teamStratDefNum = Integer.parseInt(teamInfo[14]);
+                    if (teamInfo.length >= 16) {
+                    // Legacy weekly strategy indices — ignored; keep save column alignment
+                    teamStratOffNum = 1;
+                    teamStratDefNum = 1;
                     showPopups = (Integer.parseInt(teamInfo[15]) == 1);
                     if (teamInfo.length >= 20) {
                         winStreak = new TeamStreak(Integer.parseInt(teamInfo[18]),
@@ -352,8 +356,8 @@ public class Team {
         
         
         wonRivalryGame = false;
-        teamStratOff = getTeamStrategiesOff()[teamStratOffNum];
-        teamStratDef = getTeamStrategiesDef()[teamStratDefNum];
+        teamStratOffNum = 1;
+        teamStratDefNum = 1;
         numRecruits = 30;
         playersLeaving = new ArrayList<>();
         playersTransferring = new ArrayList<>();
@@ -365,6 +369,7 @@ public class Team {
         if (defSystem == null) defSystem = DefensiveSystem.BASE_4_3;
         // Only randomize systems when not present in save (pre-v2 fields already rejected at League load)
         DepthChart.applySystems(this);
+        ensureSpecialTeamsDepth();
     }
 
     /**
@@ -2239,6 +2244,7 @@ public class Team {
         Collections.sort(teamJRs, new PlayerComparator());
         Collections.sort(teamSRs, new PlayerComparator());
         Collections.sort(teamGrads, new PlayerComparator());
+        ensureSpecialTeamsDepth();
     }
 
     /**
@@ -2498,6 +2504,199 @@ public class Team {
         } else {
             return teamKs.get(0);
         }
+    }
+
+    public Player getPuntReturner() {
+        if (puntReturner != null && !puntReturner.isInjured) return puntReturner;
+        ensureSpecialTeamsDepth();
+        return puntReturner;
+    }
+
+    public Player getKickReturner() {
+        if (kickReturner != null && !kickReturner.isInjured) return kickReturner;
+        ensureSpecialTeamsDepth();
+        return kickReturner;
+    }
+
+    public Player getGunner1() {
+        if (gunner1 != null && !gunner1.isInjured) return gunner1;
+        ensureSpecialTeamsDepth();
+        return gunner1;
+    }
+
+    public Player getGunner2() {
+        if (gunner2 != null && !gunner2.isInjured) return gunner2;
+        ensureSpecialTeamsDepth();
+        return gunner2;
+    }
+
+    public Player getLongSnapper() {
+        if (longSnapper != null && !longSnapper.isInjured) return longSnapper;
+        ensureSpecialTeamsDepth();
+        return longSnapper;
+    }
+
+    /** Fill missing/injured ST overlays from best available roster talent. */
+    public void ensureSpecialTeamsDepth() {
+        ArrayList<Player> returnPool = specialTeamsReturnPool();
+        ArrayList<Player> gunnerPool = specialTeamsGunnerPool();
+        ArrayList<Player> snapPool = specialTeamsSnapPool();
+
+        if (!isHealthyOnRoster(puntReturner)) {
+            puntReturner = pickBestSpeed(returnPool, null, null);
+        }
+        if (!isHealthyOnRoster(kickReturner)) {
+            kickReturner = pickBestSpeed(returnPool, puntReturner, null);
+            if (kickReturner == null) kickReturner = puntReturner;
+        }
+        if (!isHealthyOnRoster(gunner1)) {
+            gunner1 = pickBestSpeed(gunnerPool, puntReturner, kickReturner);
+            if (gunner1 == null) gunner1 = pickBestSpeed(returnPool, puntReturner, kickReturner);
+        }
+        if (!isHealthyOnRoster(gunner2)) {
+            gunner2 = pickBestSpeed(gunnerPool, gunner1, puntReturner);
+            if (gunner2 == null) gunner2 = pickBestSpeed(returnPool, gunner1, kickReturner);
+        }
+        if (!isHealthyOnRoster(longSnapper)) {
+            longSnapper = snapPool.isEmpty() ? null : snapPool.get(0);
+        }
+    }
+
+    public String specialTeamsDepthSaveLine() {
+        ensureSpecialTeamsDepth();
+        return "ST_DEPTH,"
+                + nameOrEmpty(puntReturner) + ","
+                + nameOrEmpty(kickReturner) + ","
+                + nameOrEmpty(gunner1) + ","
+                + nameOrEmpty(gunner2) + ","
+                + nameOrEmpty(longSnapper);
+    }
+
+    public void loadSpecialTeamsDepth(String line) {
+        if (line == null || !line.startsWith("ST_DEPTH,")) {
+            ensureSpecialTeamsDepth();
+            return;
+        }
+        String[] parts = line.split(",", -1);
+        puntReturner = findRosterPlayerByName(parts.length > 1 ? parts[1] : null);
+        kickReturner = findRosterPlayerByName(parts.length > 2 ? parts[2] : null);
+        gunner1 = findRosterPlayerByName(parts.length > 3 ? parts[3] : null);
+        gunner2 = findRosterPlayerByName(parts.length > 4 ? parts[4] : null);
+        longSnapper = findRosterPlayerByName(parts.length > 5 ? parts[5] : null);
+        ensureSpecialTeamsDepth();
+    }
+
+    /** Candidate pool for PR/KR depth UI (WR/RB/CB/S). */
+    public ArrayList<Player> specialTeamsReturnPool() {
+        ArrayList<Player> pool = new ArrayList<>();
+        pool.addAll(teamWRs);
+        pool.addAll(teamRBs);
+        pool.addAll(teamCBs);
+        pool.addAll(teamSs);
+        sortPoolByReturnSkill(pool);
+        return pool;
+    }
+
+    public ArrayList<Player> specialTeamsGunnerPool() {
+        ArrayList<Player> pool = new ArrayList<>();
+        pool.addAll(teamWRs);
+        pool.addAll(teamCBs);
+        sortPoolByReturnSkill(pool);
+        return pool;
+    }
+
+    public ArrayList<Player> specialTeamsSnapPool() {
+        ArrayList<Player> pool = new ArrayList<>();
+        pool.addAll(teamOLs);
+        pool.addAll(teamTEs);
+        Collections.sort(pool, new PlayerComparator());
+        return pool;
+    }
+
+    public void setSpecialTeamsSlot(int slotIndex, Player player) {
+        if (player == null) return;
+        switch (slotIndex) {
+            case 0: puntReturner = player; break;
+            case 1: kickReturner = player; break;
+            case 2: gunner1 = player; break;
+            case 3: gunner2 = player; break;
+            case 4: longSnapper = player; break;
+            default: break;
+        }
+    }
+
+    public Player getSpecialTeamsSlot(int slotIndex) {
+        switch (slotIndex) {
+            case 0: return getPuntReturner();
+            case 1: return getKickReturner();
+            case 2: return getGunner1();
+            case 3: return getGunner2();
+            case 4: return getLongSnapper();
+            default: return null;
+        }
+    }
+
+    private static String nameOrEmpty(Player p) {
+        return p != null && p.name != null ? p.name : "";
+    }
+
+    private boolean isHealthyOnRoster(Player p) {
+        return p != null && !p.isInjured && getAllPlayers().contains(p);
+    }
+
+    private Player findRosterPlayerByName(String name) {
+        if (name == null || name.isEmpty()) return null;
+        for (Player p : getAllPlayers()) {
+            if (name.equals(p.name)) return p;
+        }
+        return null;
+    }
+
+    private static Player pickBestSpeed(ArrayList<Player> pool, Player excludeA, Player excludeB) {
+        Player best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (Player p : pool) {
+            if (p == null || p.isInjured) continue;
+            if (p == excludeA || p == excludeB) continue;
+            int score = returnSkill(p);
+            if (score > bestScore) {
+                bestScore = score;
+                best = p;
+            }
+        }
+        return best;
+    }
+
+    private static void sortPoolByReturnSkill(ArrayList<Player> pool) {
+        Collections.sort(pool, new Comparator<Player>() {
+            @Override
+            public int compare(Player a, Player b) {
+                boolean ai = a != null && a.isInjured;
+                boolean bi = b != null && b.isInjured;
+                if (ai != bi) return ai ? 1 : -1;
+                return Integer.compare(returnSkill(b), returnSkill(a));
+            }
+        });
+    }
+
+    /** Speed + elusiveness proxy for returner ranking. */
+    public static int returnSkill(Player p) {
+        if (p == null) return 0;
+        if (p instanceof PlayerWR) {
+            PlayerWR w = (PlayerWR) p;
+            return w.ratRecSpd * 2 + w.ratRecEva;
+        }
+        if (p instanceof PlayerRB) {
+            PlayerRB r = (PlayerRB) p;
+            return r.ratRushSpd * 2 + r.ratRushEva;
+        }
+        if (p instanceof PlayerCB) {
+            return ((PlayerCB) p).ratCBSpd * 2 + p.ratOvr / 2;
+        }
+        if (p instanceof PlayerS) {
+            return ((PlayerS) p).ratSSpd * 2 + p.ratOvr / 2;
+        }
+        return p.ratOvr;
     }
 
     public PlayerOL getOL(int depth) {
@@ -2863,156 +3062,6 @@ public class Team {
         }
 
         return summary;
-    }
-
-    /**
-     * Gets player name or detail strings for displaying in the roster tab via expandable list.
-     * Should be separated by a '>' from left text and right text.
-     * @return list of players with their name,ovr,por,etc
-     */
-    public List<String> getPlayerStatsExpandListStr() {
-        ArrayList<String> pList = new ArrayList<String>();
-
-        pList.add(getQB(0).getPosNameYrOvrPot_Str());
-
-        for (int i = 0; i < 2; ++i) {
-            pList.add(getRB(i).getPosNameYrOvrPot_Str());
-        }
-        if (!teamFBs.isEmpty()) pList.add(getFB(0).getPosNameYrOvrPot_Str());
-
-        for (int i = 0; i < 3; ++i) {
-            pList.add(getWR(i).getPosNameYrOvrPot_Str());
-        }
-        if (!teamTEs.isEmpty()) pList.add(getTE(0).getPosNameYrOvrPot_Str());
-
-        for (int i = 0; i < 5; ++i) {
-            pList.add(getOL(i).getPosNameYrOvrPot_Str());
-        }
-
-        pList.add(getK(0).getPosNameYrOvrPot_Str());
-        pList.add(getS(0).getPosNameYrOvrPot_Str());
-
-        for (int i = 0; i < 3; ++i) {
-            pList.add(getCB(i).getPosNameYrOvrPot_Str());
-        }
-        for (int i = 0; i < 2; ++i) {
-            if (i < teamEDGEs.size()) pList.add(getEDGE(i).getPosNameYrOvrPot_Str());
-        }
-        for (int i = 0; i < 3; ++i) {
-            if (i < teamDLs.size()) pList.add(getDL(i).getPosNameYrOvrPot_Str());
-        }
-        for (int i = 0; i < 3; ++i) {
-            if (i < teamLBs.size()) pList.add(getLB(i).getPosNameYrOvrPot_Str());
-        }
-
-        pList.add("BENCH > BENCH");
-
-        return pList;
-    }
-
-    /**
-     * Creates the map needed for making the expandable list view used in the player stats.
-     * @param playerStatsGroupHeaders list of players by name,overall,pot,etc
-     * @return mapping of each player to their detail ratings
-     */
-    public Map<String, List<String>> getPlayerStatsExpandListMap(List<String> playerStatsGroupHeaders) {
-        Map<String, List<String>> playerStatsMap = new LinkedHashMap<String, List<String>>();
-
-        String ph; //player header
-        ArrayList<String> pInfoList;
-
-        //QB
-        ph = playerStatsGroupHeaders.get(0);
-        playerStatsMap.put(ph, getQB(0).getDetailStatsList(numGames()));
-
-        for (int i = 1; i < 3; ++i) {
-            ph = playerStatsGroupHeaders.get(i);
-            playerStatsMap.put(ph, getRB(i - 1).getDetailStatsList(numGames()));
-        }
-
-        for (int i = 3; i < 6; ++i) {
-            ph = playerStatsGroupHeaders.get(i);
-            playerStatsMap.put(ph, getWR(i - 3).getDetailStatsList(numGames()));
-        }
-
-        for (int i = 6; i < 11; ++i) {
-            ph = playerStatsGroupHeaders.get(i);
-            playerStatsMap.put(ph, getOL(i - 6).getDetailStatsList(numGames()));
-        }
-
-        ph = playerStatsGroupHeaders.get(11);
-        playerStatsMap.put(ph, getK(0).getDetailStatsList(numGames()));
-
-        ph = playerStatsGroupHeaders.get(12);
-        playerStatsMap.put(ph, getS(0).getDetailStatsList(numGames()));
-
-        for (int i = 13; i < 16; ++i) {
-            ph = playerStatsGroupHeaders.get(i);
-            playerStatsMap.put(ph, getCB(i - 13).getDetailStatsList(numGames()));
-        }
-
-        int headerIdx = 16;
-        if (headerIdx < playerStatsGroupHeaders.size() && !teamEDGEs.isEmpty()) {
-            for (int i = 0; i < 2 && i < teamEDGEs.size() && headerIdx < playerStatsGroupHeaders.size(); ++i) {
-                ph = playerStatsGroupHeaders.get(headerIdx++);
-                playerStatsMap.put(ph, getEDGE(i).getDetailStatsList(numGames()));
-            }
-        }
-        if (headerIdx < playerStatsGroupHeaders.size() && !teamDLs.isEmpty()) {
-            for (int i = 0; i < 3 && i < teamDLs.size() && headerIdx < playerStatsGroupHeaders.size(); ++i) {
-                ph = playerStatsGroupHeaders.get(headerIdx++);
-                playerStatsMap.put(ph, getDL(i).getDetailStatsList(numGames()));
-            }
-        }
-        if (headerIdx < playerStatsGroupHeaders.size() && !teamLBs.isEmpty()) {
-            for (int i = 0; i < 3 && i < teamLBs.size() && headerIdx < playerStatsGroupHeaders.size(); ++i) {
-                ph = playerStatsGroupHeaders.get(headerIdx++);
-                playerStatsMap.put(ph, getLB(i).getDetailStatsList(numGames()));
-            }
-        }
-
-        //Bench
-        ph = playerStatsGroupHeaders.get(playerStatsGroupHeaders.size() - 1);
-        ArrayList<String> benchStr = new ArrayList<>();
-        for ( int i = 1; i < teamQBs.size(); ++i) {
-            benchStr.add( getQB(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 2; i < teamRBs.size(); ++i) {
-            benchStr.add( getRB(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 3; i < teamWRs.size(); ++i) {
-            benchStr.add( getWR(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 5; i < teamOLs.size(); ++i) {
-            benchStr.add( getOL(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 1; i < teamKs.size(); ++i) {
-            benchStr.add( getK(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 1; i < teamSs.size(); ++i) {
-            benchStr.add(getS(i).getPosNameYrOvrPot_Str());
-        }
-        for ( int i = 3; i < teamCBs.size(); ++i) {
-            benchStr.add( getCB(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 1; i < teamFBs.size(); ++i) {
-            benchStr.add( getFB(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 1; i < teamTEs.size(); ++i) {
-            benchStr.add( getTE(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 2; i < teamEDGEs.size(); ++i) {
-            benchStr.add( getEDGE(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 3; i < teamDLs.size(); ++i) {
-            benchStr.add( getDL(i).getPosNameYrOvrPot_Str() );
-        }
-        for ( int i = 3; i < teamLBs.size(); ++i) {
-            benchStr.add( getLB(i).getPosNameYrOvrPot_Str() );
-        }
-        playerStatsMap.put(ph, benchStr);
-
-        return playerStatsMap;
     }
 
     public Player findBenchPlayer(String line) {
@@ -3631,64 +3680,6 @@ public class Team {
         if (histSuffix != null && !histSuffix.isEmpty()) {
             p.loadCareerSeasonsFromSuffix(histSuffix);
         }
-    }
-
-    /**
-     * Generate all the offense team strategies that can be selected
-     * @return array of all the offense team strats
-     */
-    public TeamStrategy[] getTeamStrategiesOff() {
-        TeamStrategy[] ts = new TeamStrategy[3];
-
-        ts[0] = new TeamStrategy("Aggressive",
-                "Play a more aggressive offense. Will pass with lower completion percentage and higher chance of interception." +
-                        " However, catches will go for more yards.", -1, 2, 3, 1);
-
-        ts[1] = new TeamStrategy("No Preference",
-                "Will play a normal offense with no bonus either way, but no penalties either.", 0, 0, 0, 0);
-
-        ts[2] = new TeamStrategy("Conservative",
-                "Play a more conservative offense, running a bit more and passing slightly less. Passes are more accurate but shorter." +
-                        " Rushes are more likely to gain yards but less likely to break free for big plays.", 1, -2, -3, -1);
-
-        return ts;
-    }
-
-    /**
-     * Generate all the defense team strategies that can be selected
-     * @return array of all the defense team strats
-     */
-    public TeamStrategy[] getTeamStrategiesDef() {
-        TeamStrategy[] ts = new TeamStrategy[3];
-
-        ts[0] = new TeamStrategy("Stack the Box",
-                "Focus on stopping the run. Will give up more big passing plays but will allow less rushing yards and far less big plays from rushing.", 1, 0, -1, -1);
-
-        ts[1] = new TeamStrategy("No Preference",
-                "Will play a normal defense with no bonus either way, but no penalties either.", 0, 0, 0, 0);
-
-        ts[2] = new TeamStrategy("No Fly Zone",
-                "Focus on stopping the pass. Will give up less yards on catches and will be more likely to intercept passes, " +
-                        "but will allow more rushing yards.", -1, 0, 1, 1);
-
-        return ts;
-    }
-
-    /**
-     * Set the starters for a particular position (legacy).
-     * Starters are placed first in the given order (not re-sorted by OVR);
-     * remaining depth players keep relative order behind them.
-     * @param starters new starters to be set
-     * @param position position, 0 - 11
-     */
-    public void setStarters(ArrayList<Player> starters, int position) {
-        ArrayList<? extends Player> current = positionList(position);
-        if (current == null) return;
-        ArrayList<Player> ordered = new ArrayList<>(starters);
-        for (Player oldP : current) {
-            if (!ordered.contains(oldP)) ordered.add(oldP);
-        }
-        setDepthChart(ordered, position);
     }
 
     /**

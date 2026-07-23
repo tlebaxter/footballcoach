@@ -43,6 +43,15 @@ public class PlayerSeasonRecordTest {
         original.xpMade = 0;
         original.fgAtt = 0;
         original.fgMade = 0;
+        original.prAtt = 5;
+        original.prYards = 88;
+        original.prTd = 1;
+        original.krAtt = 12;
+        original.krYards = 310;
+        original.krTd = 0;
+        original.fairCatches = 2;
+        original.puntAtt = 0;
+        original.puntYards = 0;
 
         String token = original.toSaveToken();
         PlayerSeasonRecord loaded = PlayerSeasonRecord.fromSaveToken(token);
@@ -61,6 +70,11 @@ public class PlayerSeasonRecordTest {
         assertEquals(28, loaded.passTd);
         assertEquals(7, loaded.passInt);
         assertEquals(120, loaded.rushYards);
+        assertEquals(5, loaded.prAtt);
+        assertEquals(88, loaded.prYards);
+        assertEquals(1, loaded.prTd);
+        assertEquals(12, loaded.krAtt);
+        assertEquals(310, loaded.krYards);
     }
 
     @Test

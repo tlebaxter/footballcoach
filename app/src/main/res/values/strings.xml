@@ -380,7 +380,7 @@
     </string>
     <string name="tutBasics">
         In College Football Coach, you take the role of a newly hired coach at your college of choice.
-        As coach, it will be your responsibility to manage your team\'s strategy, simulate through seasons, recruit new players, and above all, win championships.
+        As coach, it will be your responsibility to manage your team\'s system, simulate through seasons, recruit new players, and above all, win championships.
     </string>
     <string name="tutPlayingSeason">
         Your team will play 12 games in the regular season using the 2026 FBS conference alignment. Conferences play up to nine conference games, with out-of-conference games filling the rest of the schedule.
@@ -454,26 +454,16 @@
         - Pass Pressure: how much pressure they put on the opposing QB, higher pressure means the QB will have a harder time throwing accurate passes.\n
     </string>
     <string name="tutTeamStrategy">
-        As a coach, you can pick what strategy your team employs on offense and defense as they play through their season. By default both strategies are set to "No Preference",
-        meaning there are no bonuses or penalties either way. But you can change your strategy to any of the following:\n
+        On the Team tab, set your Offense Philosophy and Defense System. These are your scheme identity for the season.\n
         \n
-        [Offense] Aggressive:\n
-        - Utilize a more aggressive offense. Will pass a bit more.\n
-        - Pass with a lower completion percentage and higher chance of interception.\n
-        - However, passes that are caught will go for more yards.\n
+        Offense Philosophy (Air Raid, Power Run, West Coast, and more):\n
+        - Shapes depth chart fit, default personnel, and how the AI calls plays when you auto-sim or let AI call a side.\n
+        - When you coach a game yourself, you pick each play — matchups vs the opponent\'s coverage decide outcomes.\n
         \n
-        [Offense] Conservative:\n
-        - Utilize a more conservative offense. Will run a bit more.\n
-        - Passes are more accurate but go for less yards.\n
-        - Rushes are more likely to gain yards but less likely to break free for big plays.\n
+        Defense System (4-3, Nickel, Bear / 46, Dime, and more):\n
+        - Sets who is on the field and biases AI coverage calls (run-heavy fronts stack the box more; pass packages play more Cover 2/4).\n
+        - Also affects pressure and run-stop strength in the play resolver.\n
         \n
-        [Defense] Stack the Box:\n
-        - Defensive scheme with emphasis on stopping the run.\n
-        - Will give up more big passing plays but will allow less rushing yards and big plays from rushing.\n
-        \n
-        [Defense] No Fly Zone:\n
-        - Defensive scheme with emphasis on limiting the pass.\n
-        - Will give up less yards on catches and be more likely to intercept passes.\n
-        - However, rushing plays will go for more yards.\n
+        After a touchdown in coach mode, choose Kick XP or Go for 2. League sims and the AI pick automatically based on score and clock.\n
     </string>
 </resources>

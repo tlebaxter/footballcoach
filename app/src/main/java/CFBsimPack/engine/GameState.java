@@ -33,6 +33,38 @@ public final class GameState {
     public String lastPlayLog = "";
     public boolean gameOver;
 
+    /** Next snap is a kickoff (or free kick) by the team with possession. */
+    public boolean pendingKickoff;
+    /** Free kick after safety (from the 20). */
+    public boolean freeKick;
+
+    /** After a TD: waiting for PAT / 2-point decision or a 2-point snap. */
+    public boolean pendingTry;
+    /** True while coach/AI has not yet chosen Kick XP vs Go for 2. */
+    public boolean tryAwaitingChoice;
+    /** True when the try is a 2-point conversion snap (not an XP kick). */
+    public boolean tryIsTwoPoint;
+
+    /** Waiting for coin-toss election (receive/defer + end). */
+    public boolean awaitingCoinToss;
+    public boolean homeWonToss;
+    /** Toss winner deferred the ball choice to the second half. */
+    public boolean deferred;
+    public boolean homeReceivesFirstHalf;
+    /** Home team's end zone is on the left of the field display. */
+    public boolean homeDefendsLeft = true;
+    public boolean tossResolved;
+
+    public boolean isSpecialTeamsDown() {
+        return pendingKickoff || (down >= 4 && !pendingTry);
+    }
+
+    public void clearTry() {
+        pendingTry = false;
+        tryAwaitingChoice = false;
+        tryIsTwoPoint = false;
+    }
+
     public int quarter() {
         if (playingOT || phase == GamePhase.OT) return 5 + Math.max(0, numOT - 1);
         if (gameTime <= 0) return 4;

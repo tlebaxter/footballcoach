@@ -12,6 +12,8 @@ public final class GameSituation {
     public final int awayScore;
     public final String homeAbbr;
     public final String awayAbbr;
+    public final String homeName;
+    public final String awayName;
     public final int homeRank;
     public final int awayRank;
     public final int quarter;
@@ -39,9 +41,26 @@ public final class GameSituation {
     public final List<BoxScoreLine> boxScore;
     public final String lastOffenseConceptId;
     public final String lastDefenseConceptId;
+    public final boolean pendingKickoff;
+    public final boolean freeKick;
+    public final boolean specialTeamsDown;
+    public final String userPuntReturnerName;
+    public final String userKickReturnerName;
+    public final boolean awaitingCoinToss;
+    public final boolean homeWonToss;
+    public final boolean homeDefendsLeft;
+    public final boolean userWonToss;
+    public final boolean pendingTry;
+    public final boolean tryAwaitingChoice;
+    public final boolean tryIsTwoPoint;
+    /** User offense scored the TD and must choose Kick XP vs Go for 2. */
+    public final boolean userChoosesTry;
+    /** Opponent is going for 2; user picks defense. */
+    public final boolean userDefendsTwoPoint;
 
     public GameSituation(
             int homeScore, int awayScore, String homeAbbr, String awayAbbr,
+            String homeName, String awayName,
             int homeRank, int awayRank,
             int quarter, String clock, int down, int distance, int yardLine,
             boolean possessionHome, int homeTimeouts, int awayTimeouts,
@@ -50,12 +69,19 @@ public final class GameSituation {
             int homeYards, int awayYards, int homeTOs, int awayTOs,
             int[] homeQScore, int[] awayQScore,
             List<Integer> drivePath, List<PlayLogEntry> playLog, List<BoxScoreLine> boxScore,
-            String lastOffenseConceptId, String lastDefenseConceptId
+            String lastOffenseConceptId, String lastDefenseConceptId,
+            boolean pendingKickoff, boolean freeKick, boolean specialTeamsDown,
+            String userPuntReturnerName, String userKickReturnerName,
+            boolean awaitingCoinToss, boolean homeWonToss, boolean homeDefendsLeft, boolean userWonToss,
+            boolean pendingTry, boolean tryAwaitingChoice, boolean tryIsTwoPoint,
+            boolean userChoosesTry, boolean userDefendsTwoPoint
     ) {
         this.homeScore = homeScore;
         this.awayScore = awayScore;
         this.homeAbbr = homeAbbr;
         this.awayAbbr = awayAbbr;
+        this.homeName = homeName;
+        this.awayName = awayName;
         this.homeRank = homeRank;
         this.awayRank = awayRank;
         this.quarter = quarter;
@@ -88,5 +114,19 @@ public final class GameSituation {
                 : Collections.emptyList();
         this.lastOffenseConceptId = lastOffenseConceptId;
         this.lastDefenseConceptId = lastDefenseConceptId;
+        this.pendingKickoff = pendingKickoff;
+        this.freeKick = freeKick;
+        this.specialTeamsDown = specialTeamsDown;
+        this.userPuntReturnerName = userPuntReturnerName;
+        this.userKickReturnerName = userKickReturnerName;
+        this.awaitingCoinToss = awaitingCoinToss;
+        this.homeWonToss = homeWonToss;
+        this.homeDefendsLeft = homeDefendsLeft;
+        this.userWonToss = userWonToss;
+        this.pendingTry = pendingTry;
+        this.tryAwaitingChoice = tryAwaitingChoice;
+        this.tryIsTwoPoint = tryIsTwoPoint;
+        this.userChoosesTry = userChoosesTry;
+        this.userDefendsTwoPoint = userDefendsTwoPoint;
     }
 }

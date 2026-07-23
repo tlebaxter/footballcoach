@@ -26,7 +26,12 @@ public enum RoleTag {
     FS,
     SS,
     S,
-    K;
+    K,
+    /** Special-teams overlay roles (display / depth UI). */
+    PR,
+    KR,
+    GUNNER,
+    LS;
 
     public PositionGroup preferredGroup() {
         switch (this) {
@@ -34,8 +39,12 @@ public enum RoleTag {
             case RB: return PositionGroup.RB;
             case FB: return PositionGroup.FB;
             case WR:
-            case SLOT: return PositionGroup.WR;
-            case TE: return PositionGroup.TE;
+            case SLOT:
+            case PR:
+            case KR:
+            case GUNNER: return PositionGroup.WR;
+            case TE:
+            case LS: return PositionGroup.TE;
             case OL: return PositionGroup.OL;
             case NT:
             case DT:

@@ -65,12 +65,6 @@ data class LineupRowUi(
     val locked: Boolean,
 )
 
-data class StrategyOptionUi(
-    val name: String,
-    val description: String,
-    val index: Int,
-)
-
 data class BowlRowUi(
     val name: String,
     val away: String,
@@ -148,12 +142,7 @@ data class GameDialogUi(
     val center: String,
     val right: String,
     val bottom: String,
-    val showStrategy: Boolean,
     val canCoach: Boolean,
-    val offStrategies: List<String>,
-    val defStrategies: List<String>,
-    val offSelected: Int,
-    val defSelected: Int,
     val gameKey: Int,
 )
 
@@ -202,10 +191,6 @@ data class MainUiState(
     val lineupRows: List<LineupRowUi> = emptyList(),
     val lineupStarterCount: Int = 0,
     val lineupBenchCount: Int = 0,
-    val offStrategies: List<StrategyOptionUi> = emptyList(),
-    val defStrategies: List<StrategyOptionUi> = emptyList(),
-    val offStrategyIndex: Int = 0,
-    val defStrategyIndex: Int = 0,
     val offPhilosophyNames: List<String> = emptyList(),
     val defSystemNames: List<String> = emptyList(),
     val offPhilosophyIndex: Int = 0,

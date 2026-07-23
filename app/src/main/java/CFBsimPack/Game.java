@@ -2,18 +2,24 @@ package CFBsimPack;
 
 import CFBsimPack.engine.AiPlayCaller;
 import CFBsimPack.engine.AutoSimUntil;
-import CFBsimPack.engine.CoverageCall;
+import CFBsimPack.engine.BoxScoreLine;
+import CFBsimPack.engine.DefenseConcept;
 import CFBsimPack.engine.GamePhase;
 import CFBsimPack.engine.GameSituation;
 import CFBsimPack.engine.GameState;
+import CFBsimPack.engine.OffenseConcept;
 import CFBsimPack.engine.OffensePlay;
 import CFBsimPack.engine.PlayCall;
+import CFBsimPack.engine.PlayLogEntry;
 import CFBsimPack.engine.PlayResolver;
 import CFBsimPack.engine.PlayResult;
+import CFBsimPack.engine.Playbook;
 import CFBsimPack.engine.PlayerGameStats;
 import CFBsimPack.engine.TempoCall;
 
 import java.io.Serializable;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Random;
 
 /**
@@ -37,25 +43,13 @@ public class Game implements Serializable {
     public int homeTOs;
     public int awayTOs;
 
-    // Legacy slot arrays kept empty-compatible for any leftover UI; prefer playerGameStats
-    public int[] HomeQBStats = new int[6];
-    public int[] AwayQBStats = new int[6];
-    public int[] HomeRB1Stats = new int[4];
-    public int[] HomeRB2Stats = new int[4];
-    public int[] AwayRB1Stats = new int[4];
-    public int[] AwayRB2Stats = new int[4];
-    public int[] HomeWR1Stats = new int[6];
-    public int[] HomeWR2Stats = new int[6];
-    public int[] HomeWR3Stats = new int[6];
-    public int[] AwayWR1Stats = new int[6];
-    public int[] AwayWR2Stats = new int[6];
-    public int[] AwayWR3Stats = new int[6];
-    public int[] HomeKStats = new int[6];
-    public int[] AwayKStats = new int[6];
-
     public transient PlayerGameStats playerGameStats = new PlayerGameStats();
     public transient GameState state;
     public transient String gameEventLog = "";
+    public transient List<Integer> drivePath = new ArrayList<>();
+    public transient List<PlayLogEntry> playLog = new ArrayList<>();
+    public transient String lastOffenseConceptId;
+    public transient String lastDefenseConceptId;
 
     private transient PlayResolver resolver;
     private transient AiPlayCaller aiCaller;
@@ -96,19 +90,23 @@ public class Game implements Serializable {
     private void tagRivalry() {
         if (homeTeam.rivalTeam.equals(awayTeam.abbr) || awayTeam.rivalTeam.equals(homeTeam.abbr)) {
             if (gameName.equals("In Conf")) gameName = "Rivalry Game";
-            else if (gameName.equals("OOC")) gameName = "Rivalry Game OOC";
+            else if (gameName.equals("OOC")) gameName = "OOC Rivalry";
         }
     }
 
     public void setRandom(Random random) {
         this.rng = random != null ? random : new Random();
         this.resolver = new PlayResolver(this.rng);
+        if (playerGameStats != null) this.resolver.setGameStats(playerGameStats);
         this.aiCaller = new AiPlayCaller(this.rng);
     }
 
     private void ensureEngine() {
         if (rng == null) setRandom(new Random());
         if (playerGameStats == null) playerGameStats = new PlayerGameStats();
+        if (resolver != null) resolver.setGameStats(playerGameStats);
+        if (drivePath == null) drivePath = new ArrayList<>();
+        if (playLog == null) playLog = new ArrayList<>();
     }
 
     public void startGame() {
@@ -116,37 +114,161 @@ public class Game implements Serializable {
         ensureEngine();
         DepthChart.applySystems(homeTeam);
         DepthChart.applySystems(awayTeam);
+        homeTeam.ensureSpecialTeamsDepth();
+        awayTeam.ensureSpecialTeamsDepth();
         state = new GameState();
         state.gameTime = GameState.REG_SECONDS;
         state.possessionHome = true;
-        state.yardLine = 25;
+        state.yardLine = 35;
         state.down = 1;
         state.yardsNeed = 10;
+        state.pendingKickoff = false;
+        state.freeKick = false;
         state.phase = GamePhase.REGULATION;
+        state.homeWonToss = rng.nextBoolean();
+        state.awaitingCoinToss = true;
+        state.tossResolved = false;
+        state.homeDefendsLeft = true;
         started = true;
         prevQuarter = 1;
+        drivePath = new ArrayList<>();
+        playLog = new ArrayList<>();
+        lastOffenseConceptId = null;
+        lastDefenseConceptId = null;
+        playerGameStats = new PlayerGameStats();
+        if (resolver != null) resolver.setGameStats(playerGameStats);
+        String tossWinner = state.homeWonToss ? homeTeam.abbr : awayTeam.abbr;
         gameEventLog = "LOG: #" + awayTeam.rankTeamPollScore + " " + awayTeam.abbr + " (" + awayTeam.wins + "-" + awayTeam.losses
                 + ") @ #" + homeTeam.rankTeamPollScore + " " + homeTeam.abbr + " (" + homeTeam.wins + "-" + homeTeam.losses + ")\n"
                 + "---------------------------------------------------------\n\n"
-                + awayTeam.abbr + " Offense: " + awayTeam.offPhilosophy.displayName + " / " + awayTeam.teamStratOff.getStratName() + "\n"
-                + awayTeam.abbr + " Defense: " + awayTeam.defSystem.displayName + " / " + awayTeam.teamStratDef.getStratName() + "\n"
-                + homeTeam.abbr + " Offense: " + homeTeam.offPhilosophy.displayName + " / " + homeTeam.teamStratOff.getStratName() + "\n"
-                + homeTeam.abbr + " Defense: " + homeTeam.defSystem.displayName + " / " + homeTeam.teamStratDef.getStratName() + "\n";
+                + awayTeam.abbr + " Offense: " + awayTeam.offPhilosophy.displayName + "\n"
+                + awayTeam.abbr + " Defense: " + awayTeam.defSystem.displayName + "\n"
+                + homeTeam.abbr + " Offense: " + homeTeam.offPhilosophy.displayName + "\n"
+                + homeTeam.abbr + " Defense: " + homeTeam.defSystem.displayName + "\n"
+                + tossWinner + " wins the coin toss.\n";
+
+        boolean userOnHome = homeTeam.userControlled;
+        boolean userOnAway = awayTeam.userControlled;
+        boolean userWonToss = (userOnHome && state.homeWonToss) || (userOnAway && !state.homeWonToss);
+        if (!userWonToss) {
+            // League sims and AI toss winners resolve immediately.
+            autoResolveCoinToss();
+        }
+    }
+
+    /**
+     * Toss winner elects receive or defer, and which end they defend.
+     *
+     * @param receive    true to receive first half; false to defer
+     * @param defendLeft true if the toss winner defends the left end zone
+     */
+    public boolean applyTossChoice(boolean receive, boolean defendLeft) {
+        if (state == null || !state.awaitingCoinToss || state.tossResolved) return false;
+        state.deferred = !receive;
+        state.homeReceivesFirstHalf = receive ? state.homeWonToss : !state.homeWonToss;
+        state.homeDefendsLeft = state.homeWonToss ? defendLeft : !defendLeft;
+        state.possessionHome = !state.homeReceivesFirstHalf;
+        state.yardLine = 35;
+        state.down = 1;
+        state.yardsNeed = 10;
+        state.pendingKickoff = true;
+        state.freeKick = false;
+        state.awaitingCoinToss = false;
+        state.tossResolved = true;
+        resetDrive(35);
+
+        String winner = state.homeWonToss ? homeTeam.abbr : awayTeam.abbr;
+        String election = receive ? "elected to receive" : "elected to defer";
+        String end = defendLeft ? "defend left" : "defend right";
+        String msg = winner + " " + election + " and will " + end + ".";
+        state.lastPlayLog = msg;
+        gameEventLog += msg + "\nOpening kickoff pending.\n";
+        return true;
+    }
+
+    /** AI / league toss resolution: ~55% receive, random end. */
+    public void autoResolveCoinToss() {
+        if (state == null || !state.awaitingCoinToss) return;
+        boolean receive = rng.nextDouble() < 0.55;
+        boolean defendLeft = rng.nextBoolean();
+        applyTossChoice(receive, defendLeft);
+    }
+
+    public boolean userWonCoinToss() {
+        if (state == null) return false;
+        if (homeTeam.userControlled) return state.homeWonToss;
+        if (awayTeam.userControlled) return !state.homeWonToss;
+        return false;
     }
 
     public GameSituation getSituation() {
         if (state == null) startGame();
         Team user = homeTeam.userControlled ? homeTeam : (awayTeam.userControlled ? awayTeam : null);
         boolean userOff = user != null && ((state.possessionHome && user == homeTeam) || (!state.possessionHome && user == awayTeam));
-        String dd = ordinal(state.down) + " & " + state.yardsNeed + " · "
-                + (state.yardLine <= 50 ? "OWN " + state.yardLine : "OPP " + (100 - state.yardLine));
+        String dd;
+        if (state.awaitingCoinToss) {
+            dd = "Coin toss";
+        } else if (state.pendingTry && state.tryAwaitingChoice) {
+            dd = "PAT / 2-Point";
+        } else if (state.pendingTry && state.tryIsTwoPoint) {
+            dd = "2-Point Try · OPP 3";
+        } else if (state.pendingKickoff) {
+            dd = (state.freeKick ? "Free kick" : "Kickoff") + " pending";
+        } else {
+            dd = ordinal(state.down) + " & " + state.yardsNeed + " · "
+                    + (state.yardLine <= 50 ? "OWN " + state.yardLine : "OPP " + (100 - state.yardLine));
+        }
+        String prName = null;
+        String krName = null;
+        if (user != null) {
+            if (user.getPuntReturner() != null) prName = user.getPuntReturner().name;
+            if (user.getKickReturner() != null) krName = user.getKickReturner().name;
+        }
+        boolean userChoosesTry = state.pendingTry && state.tryAwaitingChoice && userOff;
+        boolean userDefendsTwoPoint = state.pendingTry && state.tryIsTwoPoint && !userOff;
         return new GameSituation(
                 state.homeScore, state.awayScore, homeTeam.abbr, awayTeam.abbr,
+                homeTeam.name, awayTeam.name,
+                homeTeam.rankTeamPollScore, awayTeam.rankTeamPollScore,
                 state.quarter(), state.clockDisplay(), state.down, state.yardsNeed, state.yardLine,
                 state.possessionHome, state.homeTimeouts, state.awayTimeouts,
                 state.playingOT, state.gameOver || hasPlayed, userOff,
-                state.lastPlayLog, dd
+                state.lastPlayLog, dd,
+                state.homeYards, state.awayYards, state.homeTOs, state.awayTOs,
+                state.homeQScore, state.awayQScore,
+                drivePath, playLog, buildBoxScore(),
+                lastOffenseConceptId, lastDefenseConceptId,
+                state.pendingKickoff, state.freeKick, state.isSpecialTeamsDown(),
+                prName, krName,
+                state.awaitingCoinToss, state.homeWonToss, state.homeDefendsLeft, userWonCoinToss(),
+                state.pendingTry, state.tryAwaitingChoice, state.tryIsTwoPoint,
+                userChoosesTry, userDefendsTwoPoint
         );
+    }
+
+    /**
+     * Build a full play call, filling any missing side via AI so every snap is a matchup.
+     */
+    public PlayCall buildMatchedCall(OffenseConcept offenseConcept, DefenseConcept defenseConcept, TempoCall tempo) {
+        ensureEngine();
+        if (state == null) startGame();
+        Team offense = state.possessionHome ? homeTeam : awayTeam;
+        Team defense = state.possessionHome ? awayTeam : homeTeam;
+        OffenseConcept off = offenseConcept;
+        DefenseConcept def = defenseConcept;
+        if (off == null) {
+            off = aiCaller.suggestOffense(offense, defense, state);
+        }
+        if (def == null) {
+            def = aiCaller.suggestDefense(defense, state, off);
+        }
+        TempoCall t = tempo != null ? tempo : TempoCall.NORMAL;
+        return PlayCall.fromConcepts(off, def, t);
+    }
+
+    public AiPlayCaller getAiCaller() {
+        ensureEngine();
+        return aiCaller;
     }
 
     public boolean callTimeout(boolean home) {
@@ -163,9 +285,27 @@ public class Game implements Serializable {
         if (hasPlayed) return PlayResult.logOnly("Game already final.", 0);
         if (state == null) startGame();
         if (state.gameOver) return PlayResult.logOnly("Game over.", 0);
+        ensureEngine();
+        if (state.awaitingCoinToss) {
+            return PlayResult.logOnly("Coin toss pending.", 0);
+        }
+        if (state.pendingTry && state.tryAwaitingChoice) {
+            if (userControlsOffense()) {
+                return PlayResult.logOnly("PAT / 2-point choice pending.", 0);
+            }
+            autoResolveTryIfNeeded();
+            if (state.pendingTry && state.tryAwaitingChoice) {
+                return PlayResult.logOnly("PAT / 2-point choice pending.", 0);
+            }
+            if (!state.pendingTry) {
+                syncPublicFields();
+                return PlayResult.logOnly(state.lastPlayLog != null ? state.lastPlayLog : "Try resolved.", 0);
+            }
+            // AI elected go-for-2; fall through to snap if a call was provided / AI both sides
+        }
 
         // Turnover on downs before snap
-        if (state.down > 4) {
+        if (!state.pendingKickoff && !state.pendingTry && state.down > 4) {
             return handleTurnoverOnDowns();
         }
 
@@ -173,10 +313,34 @@ public class Game implements Serializable {
         Team defense = state.possessionHome ? awayTeam : homeTeam;
         if (call == null) {
             call = aiCaller.choose(offense, defense, state);
+        } else if (call.offenseConcept == null || call.defenseConcept == null) {
+            // Preserve bare OffensePlay / CoverageCall mappings; AI-fill only a truly missing side
+            OffenseConcept off = call.offenseConcept != null
+                    ? call.offenseConcept
+                    : call.resolvedOffenseConcept();
+            DefenseConcept def = call.defenseConcept != null
+                    ? call.defenseConcept
+                    : aiCaller.suggestDefense(defense, state, off);
+            call = PlayCall.fromConcepts(off, def, call.tempo != null ? call.tempo : TempoCall.NORMAL);
+        }
+        if (state.pendingKickoff) {
+            // Force kickoff snap; keep defense package from the call
+            call = PlayCall.fromConcepts(
+                    Playbook.offenseById("kickoff"),
+                    call.resolvedDefenseConcept(),
+                    call.tempo != null ? call.tempo : TempoCall.NORMAL
+            );
         }
 
+        int yardBefore = state.yardLine;
+        int downBefore = state.down;
+        int distBefore = state.yardsNeed;
+        String clockBefore = state.clockDisplay();
         int qBefore = state.quarter();
+        boolean possBefore = state.possessionHome;
+
         PlayResult result = resolver.resolve(homeTeam, awayTeam, state, call);
+        recordPlay(call, result, clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
         applyResult(result, call);
         syncPublicFields();
 
@@ -189,21 +353,128 @@ public class Game implements Serializable {
             }
         }
         if (qBefore == 2 && state.quarter() >= 3) {
-            state.resetTimeoutsForHalf();
+            beginSecondHalf();
         }
         return result;
+    }
+
+    /** Halftime: swap ends, reset timeouts, schedule second-half kickoff. */
+    private void beginSecondHalf() {
+        state.resetTimeoutsForHalf();
+        state.homeDefendsLeft = !state.homeDefendsLeft;
+        boolean homeReceivesSecond = state.deferred
+                ? state.homeWonToss
+                : !state.homeReceivesFirstHalf;
+        state.possessionHome = !homeReceivesSecond;
+        state.yardLine = 35;
+        state.down = 1;
+        state.yardsNeed = 10;
+        state.pendingKickoff = true;
+        state.freeKick = false;
+        resetDrive(35);
+        String receiver = homeReceivesSecond ? homeTeam.abbr : awayTeam.abbr;
+        String msg = "Halftime — ends switch; " + receiver + " to receive.";
+        state.lastPlayLog = msg;
+        gameEventLog += prefix() + msg + "\n";
+    }
+
+    private void recordPlay(
+            PlayCall call,
+            PlayResult result,
+            String clockBefore,
+            int quarter,
+            int down,
+            int distance,
+            int yardBefore,
+            boolean possessionHome
+    ) {
+        if (call != null) {
+            lastOffenseConceptId = call.resolvedOffenseConcept().id;
+            lastDefenseConceptId = call.resolvedDefenseConcept().id;
+        }
+        if (drivePath == null) drivePath = new ArrayList<>();
+        if (playLog == null) playLog = new ArrayList<>();
+        if (drivePath.isEmpty()) drivePath.add(yardBefore);
+        int endYard = state != null ? state.yardLine : yardBefore;
+        if (result != null && !result.possessionChanged && !result.touchdown && !result.scoreFg && !result.safety) {
+            drivePath.add(Math.max(0, Math.min(100, endYard)));
+        }
+        playLog.add(new PlayLogEntry(
+                clockBefore,
+                quarter,
+                down,
+                distance,
+                yardBefore,
+                result != null ? result.yardsGained : 0,
+                call != null ? call.resolvedOffenseConcept().id : null,
+                call != null ? call.resolvedOffenseConcept().displayName : "",
+                call != null ? call.resolvedDefenseConcept().id : null,
+                call != null ? call.resolvedDefenseConcept().displayName : "",
+                result != null ? result.logLine : "",
+                possessionHome
+        ));
+    }
+
+    private void resetDrive(int startYard) {
+        drivePath = new ArrayList<>();
+        drivePath.add(Math.max(0, Math.min(100, startYard)));
+    }
+
+    private List<BoxScoreLine> buildBoxScore() {
+        List<BoxScoreLine> lines = new ArrayList<>();
+        if (playerGameStats == null) return lines;
+        for (PlayerGameStats.Line line : playerGameStats.byKey.values()) {
+            if (line.player == null) continue;
+            boolean meaningful = line.passAtt > 0 || line.rushAtt > 0 || line.receptions > 0
+                    || line.fgAtt > 0 || line.xpAtt > 0
+                    || line.prAtt > 0 || line.krAtt > 0 || line.puntAtt > 0;
+            if (!meaningful) continue;
+            boolean home = line.player.team == homeTeam;
+            lines.add(new BoxScoreLine(
+                    line.player.name,
+                    line.player.position,
+                    home,
+                    line.passComp,
+                    line.passAtt,
+                    line.passYards,
+                    line.passTd,
+                    line.passInt,
+                    line.rushAtt,
+                    line.rushYards,
+                    line.rushTd,
+                    line.receptions,
+                    line.recYards,
+                    line.recTd,
+                    line.prAtt,
+                    line.prYards,
+                    line.prTd,
+                    line.krAtt,
+                    line.krYards,
+                    line.krTd,
+                    line.fgMade,
+                    line.fgAtt,
+                    line.xpMade,
+                    line.xpAtt,
+                    line.puntAtt,
+                    line.puntYards
+            ));
+        }
+        return lines;
     }
 
     public void autoSimUntil(AutoSimUntil until) {
         if (hasPlayed) return;
         if (state == null) startGame();
-        int startPossFlip = 0;
+        if (state.awaitingCoinToss) {
+            autoResolveCoinToss();
+        }
         boolean startHomePoss = state.possessionHome;
         int startQuarter = state.quarter();
         boolean startFirstHalf = state.gameTime > 1800;
 
         int guard = 0;
         while (!state.gameOver && !hasPlayed && guard++ < 800) {
+            autoResolveTryIfNeeded();
             Team offense = state.possessionHome ? homeTeam : awayTeam;
             Team defense = state.possessionHome ? awayTeam : homeTeam;
             PlayCall call = aiCaller.choose(offense, defense, state);
@@ -234,8 +505,12 @@ public class Game implements Serializable {
     public void playGame() {
         if (hasPlayed) return;
         startGame();
+        if (state.awaitingCoinToss) {
+            autoResolveCoinToss();
+        }
         int guard = 0;
         while (!state.gameOver && guard++ < 900) {
+            autoResolveTryIfNeeded();
             Team offense = state.possessionHome ? homeTeam : awayTeam;
             Team defense = state.possessionHome ? awayTeam : homeTeam;
             executeSnap(aiCaller.choose(offense, defense, state));
@@ -314,11 +589,17 @@ public class Game implements Serializable {
             if (state.gameTime < 0) state.gameTime = 0;
         }
 
+        if (state.pendingTry && state.tryIsTwoPoint) {
+            applyTwoPointResult(result);
+            return;
+        }
         if (result.touchdown) {
+            if (result.returnTd) {
+                // Return TD: scoring team is the receiving side
+                state.possessionHome = !state.possessionHome;
+            }
             addScore(6);
-            kickXp();
-            if (!state.playingOT) kickoffAfterScore();
-            else resetForOT();
+            beginTryAfterTd();
             return;
         }
         if (result.scoreFg) {
@@ -340,8 +621,17 @@ public class Game implements Serializable {
                 if (state.possessionHome) state.homeTOs++;
                 else state.awayTOs++;
             }
+            boolean wasKickoff = state.pendingKickoff || result.playType == OffensePlay.KICKOFF;
             flipPossession(result.playType == OffensePlay.FIELD_GOAL && !result.scoreFg);
+            if (wasKickoff) {
+                state.pendingKickoff = false;
+                state.freeKick = false;
+            }
             return;
+        }
+        if (state.pendingKickoff && result.playType == OffensePlay.KICKOFF) {
+            state.pendingKickoff = false;
+            state.freeKick = false;
         }
     }
 
@@ -373,33 +663,161 @@ public class Game implements Serializable {
         }
         if (state.yardLine < 1) state.yardLine = 20;
         if (state.yardLine > 99) state.yardLine = 80;
+        resetDrive(state.yardLine);
     }
 
     private void kickoffAfterScore() {
-        state.possessionHome = !state.possessionHome;
-        state.yardLine = 25;
+        // Scoring team kicks; keep possession with them for the kickoff snap
+        state.pendingKickoff = true;
+        state.freeKick = false;
+        state.yardLine = 35;
         state.down = 1;
         state.yardsNeed = 10;
+        resetDrive(35);
+        gameEventLog += prefix() + "Kickoff pending.\n";
     }
 
     private void freeKick() {
-        // Receiving team after safety
-        state.possessionHome = !state.possessionHome;
+        // Team that was safetied kicks from its 20
+        state.pendingKickoff = true;
+        state.freeKick = true;
         state.yardLine = 20;
         state.down = 1;
         state.yardsNeed = 10;
+        resetDrive(20);
+        gameEventLog += prefix() + "Free kick pending.\n";
+    }
+
+    private void beginTryAfterTd() {
+        state.pendingTry = true;
+        state.tryAwaitingChoice = true;
+        state.tryIsTwoPoint = false;
+        state.pendingKickoff = false;
+        state.yardLine = 97;
+        state.down = 1;
+        state.yardsNeed = 3;
+        resetDrive(97);
+        gameEventLog += prefix() + "PAT / 2-point choice pending.\n";
+        state.lastPlayLog = "Touchdown — choose Kick XP or Go for 2.";
+        // League / AI offense resolves immediately; coach pauses when user scored.
+        if (!userControlsOffense()) {
+            autoResolveTryIfNeeded();
+        }
+    }
+
+    private boolean userControlsOffense() {
+        Team offense = state.possessionHome ? homeTeam : awayTeam;
+        return offense != null && offense.userControlled;
+    }
+
+    /** Coach: kick the extra point. */
+    public boolean chooseKickXp() {
+        if (state == null || !state.pendingTry || !state.tryAwaitingChoice) return false;
+        state.tryAwaitingChoice = false;
+        state.tryIsTwoPoint = false;
+        kickXp();
+        finishTrySequence();
+        syncPublicFields();
+        return true;
+    }
+
+    /** Coach: go for two — sets up a short-yardage snap. */
+    public boolean chooseGoForTwo() {
+        if (state == null || !state.pendingTry || !state.tryAwaitingChoice) return false;
+        state.tryAwaitingChoice = false;
+        state.tryIsTwoPoint = true;
+        state.yardLine = 97;
+        state.down = 1;
+        state.yardsNeed = 3;
+        resetDrive(97);
+        state.lastPlayLog = "Going for 2.";
+        gameEventLog += prefix() + "Going for 2.\n";
+        syncPublicFields();
+        return true;
+    }
+
+    /**
+     * AI / auto-sim: if a try is awaiting choice and offense is AI (or force), pick and resolve.
+     * When going for 2 with AI offense, leaves tryIsTwoPoint set for the next snap.
+     */
+    public void autoResolveTryIfNeeded() {
+        if (state == null || !state.pendingTry || !state.tryAwaitingChoice) return;
+        if (userControlsOffense()) return;
+        ensureEngine();
+        Team offense = state.possessionHome ? homeTeam : awayTeam;
+        Team defense = state.possessionHome ? awayTeam : homeTeam;
+        boolean goTwo = aiCaller.shouldGoForTwo(offense, state);
+        if (goTwo) {
+            state.tryAwaitingChoice = false;
+            state.tryIsTwoPoint = true;
+            state.yardLine = 97;
+            state.down = 1;
+            state.yardsNeed = 3;
+            resetDrive(97);
+            gameEventLog += prefix() + offense.abbr + " going for 2.\n";
+            state.lastPlayLog = offense.abbr + " going for 2.";
+            // League sim / both-AI: snap immediately. If user defends, pause for coverage.
+            if (!defense.userControlled) {
+                PlayCall call = aiCaller.choose(offense, defense, state);
+                executeSnap(call);
+            }
+        } else {
+            state.tryAwaitingChoice = false;
+            state.tryIsTwoPoint = false;
+            kickXp();
+            finishTrySequence();
+        }
+    }
+
+    private void applyTwoPointResult(PlayResult result) {
+        if (result.touchdown && !result.returnTd) {
+            addScore(2);
+            result.scoreXp = false;
+            gameEventLog += prefix() + "2-point conversion good.\n";
+            state.lastPlayLog = result.logLine != null ? result.logLine : "2-point conversion good.";
+            finishTrySequence();
+            return;
+        }
+        if (result.returnTd) {
+            // Defense returns the try for 2 (NCAA)
+            state.possessionHome = !state.possessionHome;
+            addScore(2);
+            gameEventLog += prefix() + "Defense scores 2 on the return!\n";
+            state.lastPlayLog = "Defense scores 2 on the return!";
+            // Possession is now with the team that just scored on the return — they kick
+            finishTrySequence();
+            return;
+        }
+        gameEventLog += prefix() + "2-point conversion failed.\n";
+        state.lastPlayLog = "2-point conversion failed.";
+        // Restore possession to the team that scored the TD (still has the ball for kickoff)
+        finishTrySequence();
+    }
+
+    private void finishTrySequence() {
+        state.clearTry();
+        if (!state.playingOT) kickoffAfterScore();
+        else resetForOT();
     }
 
     private void kickXp() {
         Team offense = state.possessionHome ? homeTeam : awayTeam;
         PlayerK k = offense.getK(0);
         k.statsXPAtt++;
+        if (playerGameStats != null) {
+            playerGameStats.line(k).xpAtt++;
+        }
         if (rng.nextDouble() * 100 < 92 + (k.ratKickAcc - 70) / 5.0) {
             addScore(1);
             k.statsXPMade++;
+            if (playerGameStats != null) {
+                playerGameStats.line(k).xpMade++;
+            }
             gameEventLog += prefix() + offense.abbr + " XP good.\n";
+            state.lastPlayLog = offense.abbr + " XP good.";
         } else {
             gameEventLog += prefix() + offense.abbr + " XP missed.\n";
+            state.lastPlayLog = offense.abbr + " XP missed.";
         }
     }
 
@@ -431,6 +849,7 @@ public class Game implements Serializable {
         state.down = 1;
         state.yardsNeed = 10;
         state.bottomOT = false;
+        resetDrive(75);
         gameEventLog += prefix() + "OVERTIME!\n";
     }
 
@@ -442,12 +861,14 @@ public class Game implements Serializable {
             state.numOT++;
             state.possessionHome = (state.numOT % 2) == 0;
             state.bottomOT = false;
+            resetDrive(75);
         } else if (!state.bottomOT) {
             state.possessionHome = !state.possessionHome;
             state.yardLine = 75;
             state.yardsNeed = 10;
             state.down = 1;
             state.bottomOT = true;
+            resetDrive(75);
         } else {
             state.playingOT = false;
             state.gameOver = true;
@@ -517,7 +938,7 @@ public class Game implements Serializable {
                 + "\nDef Tal " + homeTeam.getDefTalent()
                 + "\nPrestige " + homeTeam.teamPrestige;
         String notes = "Philosophies and fronts shape personnel and playcalling.\n"
-                + "Set your system on the Team tab. Weekly game plan still applies.";
+                + "Set your Offense Philosophy and Defense System on the Team tab.";
         return new String[]{left, center, right, notes};
     }
 }
