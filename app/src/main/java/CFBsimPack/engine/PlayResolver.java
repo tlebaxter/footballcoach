@@ -113,6 +113,11 @@ public final class PlayResolver {
             r.clockBurned = (int) (8 + 10 * rng.nextDouble() * tempo);
             qb.statsInt++;
             qb.statsPassAtt++;
+            if (gameStats != null) {
+                PlayerGameStats.Line line = gameStats.line(qb);
+                line.passAtt++;
+                line.passInt++;
+            }
             r.logLine = "INTERCEPTION! " + offense.abbr + " QB " + qb.name + " intercepted ("
                     + concept.displayName + ").";
             return r;
@@ -134,6 +139,7 @@ public final class PlayResolver {
         completion += concept.matchupBonus(cov);
 
         qb.statsPassAtt++;
+        if (gameStats != null) gameStats.line(qb).passAtt++;
         if (target instanceof PlayerWR) ((PlayerWR) target).statsTargets++;
 
         if (100 * rng.nextDouble() >= completion) {
@@ -151,7 +157,10 @@ public final class PlayResolver {
             r.stoppedClock = true;
             r.clockBurned = (int) (6 + 8 * rng.nextDouble() * tempo);
             state.down++;
-            if (target instanceof PlayerWR) ((PlayerWR) target).statsDrops++;
+            if (target instanceof PlayerWR) {
+                ((PlayerWR) target).statsDrops++;
+                if (gameStats != null) gameStats.line(target).drops++;
+            }
             r.logLine = "Drop! " + (target != null ? target.name : "Receiver") + " couldn't hang on ("
                     + concept.displayName + ").";
             return r;
@@ -277,6 +286,7 @@ public final class PlayResolver {
         state.yardsNeed += 3;
         state.down++;
         qb.statsSacked++;
+        if (gameStats != null) gameStats.line(qb).sacks++;
         r.clockBurned = (int) (20 + 10 * rng.nextDouble() * tempo);
         if (state.yardLine < 0) {
             r.safety = true;
@@ -300,10 +310,12 @@ public final class PlayResolver {
         r.clockBurned = (int) (5 + 5 * rng.nextDouble());
         r.stoppedClock = true;
         k.statsFGAtt++;
+        if (gameStats != null) gameStats.line(k).fgAtt++;
         if (100 * rng.nextDouble() < Math.max(8, Math.min(95, chance))) {
             r.scoreFg = true;
             r.possessionChanged = true;
             k.statsFGMade++;
+            if (gameStats != null) gameStats.line(k).fgMade++;
             r.logLine = offense.abbr + " K " + k.name + " hits from " + distance
                     + " (" + call.resolvedOffenseConcept().displayName + ").";
         } else {
