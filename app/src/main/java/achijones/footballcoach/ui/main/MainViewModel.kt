@@ -1501,11 +1501,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun buildAttrChips(player: Player): List<StatChipUi> {
         val bag = player.ratings ?: return emptyList()
         val out = mutableListOf<StatChipUi>()
-        out.add(StatChipUi("DUR", letterGrade(bag.dur)))
-        out.add(StatChipUi("IQ", letterGrade(bag.footIq)))
-        out.add(StatChipUi("POT", letterGrade(bag.pot)))
+        out.add(StatChipUi("DUR", bag.dur.toString()))
+        out.add(StatChipUi("IQ", bag.footIq.toString()))
+        out.add(StatChipUi("POT", bag.pot.toString()))
         for (k in PlayerRatings.KEYS) {
-            out.add(StatChipUi(PlayerRatings.displayLabel(k), letterGrade(bag.get(k))))
+            out.add(StatChipUi(PlayerRatings.displayLabel(k), bag.get(k).toString()))
         }
         return out
     }

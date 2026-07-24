@@ -49,6 +49,7 @@ import achijones.footballcoach.ui.theme.FcChipPosBg
 import achijones.footballcoach.ui.theme.FcChipPosText
 import achijones.footballcoach.ui.theme.FcOvrElite
 import achijones.footballcoach.ui.theme.FcPhasePortal
+import achijones.footballcoach.ui.theme.attrScoreColor
 import achijones.footballcoach.ui.theme.gradeColor
 import achijones.footballcoach.ui.theme.gradeColorBg
 import achijones.footballcoach.ui.theme.ovrColor
@@ -56,6 +57,7 @@ import achijones.footballcoach.ui.theme.ovrColor
 private val CareerSegmentLabels = listOf("Season", "Career", "History")
 private val CardShape = RoundedCornerShape(16.dp)
 private val CellShape = RoundedCornerShape(10.dp)
+private val MeterShape = RoundedCornerShape(3.dp)
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -185,7 +187,7 @@ private fun SeasonTab(career: PlayerCareerUi) {
     }
     if (career.attrChips.isNotEmpty()) {
         SectionLabel("Attributes")
-        RatingsGrid(career.attrChips)
+        AttrMetersGrid(career.attrChips)
     }
     if (career.seasonRatings.isNotEmpty()) {
         SectionLabel("Ratings")
@@ -227,6 +229,87 @@ private fun TimelineTab(events: List<TimelineEventUi>) {
                 isLast = index == events.lastIndex,
             )
         }
+    }
+}
+
+@Composable
+private fun AttrMetersGrid(attrs: List<StatChipUi>) {
+    val columns = 2
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(CardShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        attrs.chunked(columns).forEach { rowItems ->
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(14.dp),
+            ) {
+                rowItems.forEach { chip ->
+                    AttrMeterRow(
+                        chip = chip,
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+                repeat(columns - rowItems.size) {
+                    Spacer(modifier = Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun AttrMeterRow(chip: StatChipUi, modifier: Modifier = Modifier) {
+    val score = chip.value.toIntOrNull()
+    val accent = if (score == null) {
+        MaterialTheme.colorScheme.onSurfaceVariant
+    } else {
+        attrScoreColor(score)
+    }
+    val fraction = ((score ?: 0).coerceIn(0, 100)) / 100f
+    Row(
+        modifier = modifier.height(28.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = chip.label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(30.dp),
+        )
+        Box(
+            modifier = Modifier
+                .weight(1f)
+                .height(6.dp)
+                .clip(MeterShape)
+                .background(MaterialTheme.colorScheme.surface),
+        ) {
+            if (fraction > 0f) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxHeight()
+                        .fillMaxWidth(fraction)
+                        .clip(MeterShape)
+                        .background(accent),
+                )
+            }
+        }
+        Text(
+            text = score?.toString() ?: "—",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = accent,
+            textAlign = TextAlign.End,
+            maxLines = 1,
+            modifier = Modifier.width(24.dp),
+        )
     }
 }
 

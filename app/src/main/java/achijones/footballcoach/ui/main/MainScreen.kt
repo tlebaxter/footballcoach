@@ -1588,6 +1588,8 @@ private fun ScheduleCard(
     onOpponentClick: (String?) -> Unit,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
+    val opponentColors = rememberTeamColors(row.opponentTeamName, row.opponentAbbr)
+    val opponentPrimary = if (row.opponentTeamName != null) opponentColors.primary else null
     val rowBrush = when {
         row.isWin == true -> Brush.horizontalGradient(
             listOf(
@@ -1603,6 +1605,13 @@ private fun ScheduleCard(
                 MaterialTheme.colorScheme.surfaceVariant,
             ),
         )
+        opponentPrimary != null -> Brush.horizontalGradient(
+            listOf(
+                opponentPrimary.copy(alpha = 0.72f),
+                opponentPrimary.copy(alpha = 0.28f),
+                MaterialTheme.colorScheme.surfaceVariant,
+            ),
+        )
         else -> Brush.horizontalGradient(
             listOf(
                 MaterialTheme.colorScheme.surfaceVariant,
@@ -1613,11 +1622,13 @@ private fun ScheduleCard(
     val borderColor = when {
         row.isWin == true -> FcWin.copy(alpha = 0.55f)
         row.isLoss == true -> FcLoss.copy(alpha = 0.55f)
+        opponentPrimary != null -> opponentPrimary.copy(alpha = 0.55f)
         else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
     }
     val logoBackground = when {
         row.isWin == true -> FcWin.copy(alpha = 0.72f)
         row.isLoss == true -> FcLoss.copy(alpha = 0.72f)
+        opponentPrimary != null -> opponentPrimary.copy(alpha = 0.72f)
         else -> MaterialTheme.colorScheme.surface
     }
     val contrastBoost = rememberLogoNeedsContrastBoost(row.opponentTeamName, logoBackground)
@@ -1630,9 +1641,10 @@ private fun ScheduleCard(
             .clickable { onGameClick(row.gameKey) }
             .padding(horizontal = 12.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Column(
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f, fill = false),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Text(

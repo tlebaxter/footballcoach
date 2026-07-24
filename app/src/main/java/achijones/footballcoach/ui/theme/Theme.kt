@@ -187,6 +187,15 @@ fun ovrColor(ovr: Int): Color = when {
     else -> FcOvrDepth
 }
 
+/** Accent for 0-100 attribute meters (elite gold → weak red). */
+fun attrScoreColor(score: Int): Color = when {
+    score >= 90 -> FcOvrElite
+    score >= 80 -> FcOvrStarter
+    score >= 70 -> Color(0xFFFFB74D)
+    score >= 60 -> FcAccent
+    else -> Color(0xFFEF5350)
+}
+
 /** Letter-grade accent for rating chips (A gold → F red). */
 fun gradeColor(grade: String, primary: Color = FcPrimary): Color = when {
     grade.startsWith("A", ignoreCase = true) -> FcOvrElite

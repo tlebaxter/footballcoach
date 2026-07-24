@@ -16,6 +16,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+/** Series return legs land a few years out, matching how real home-and-homes are booked. */
+private const val DEFAULT_HH_RETURN_OFFSET = 2
+
 enum class DealSite {
     HOME,
     AWAY,
@@ -118,7 +121,7 @@ data class ScheduleUiState(
     val twoForOneQuote: String = "",
     val twoForOneAllowed: Boolean = false,
     val dealSite: DealSite = DealSite.HOME,
-    val hhReturnOffset: Int = 1,
+    val hhReturnOffset: Int = DEFAULT_HH_RETURN_OFFSET,
     val cancelConfirmId: String? = null,
     val cancelConfirmLabel: String? = null,
     val rescheduleContractId: String? = null,
@@ -602,7 +605,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 twoForOneQuote = "",
                 twoForOneAllowed = false,
                 dealSite = DealSite.HOME,
-                hhReturnOffset = 1,
+                hhReturnOffset = DEFAULT_HH_RETURN_OFFSET,
             )
         }
     }

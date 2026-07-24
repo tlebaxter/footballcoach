@@ -824,6 +824,8 @@ public final class OocContractBook {
     private static final int AUTO_DEAL_LIMIT = 45;
     /** How often a program may be booked as someone's buy-game visitor per pass. */
     private static final int MAX_SOFT_BOOKINGS = 2;
+    /** Gaps the market uses between series legs, matching real deferred H&H deals. */
+    private static final int[] SERIES_LEG_OFFSETS = {2, 3, 4};
 
     /**
      * AI: fill CPU out-of-conference slates with a realistic market mix — home buy
@@ -989,7 +991,10 @@ public final class OocContractBook {
         return false;
     }
 
-    /** Books a free peer home-and-home, preferring a rivalry when one exists. */
+    /**
+     * Books a free peer home-and-home, preferring a rivalry when one exists. The return
+     * leg lands two to four years out rather than the following season.
+     */
     private boolean signPeerSeriesWith(
             Team team, List<Team> candidates, int startYear, List<String> trackIds) {
         Team best = null;
@@ -998,7 +1003,7 @@ public final class OocContractBook {
             if (!isTradePartner(team, other, startYear)) {
                 continue;
             }
-            if (alreadyContracted(team, other, startYear + 1)) {
+            if (openSeriesReturnYear(team, other, startYear) == 0) {
                 continue;
             }
             int gap = Math.abs(
@@ -1015,7 +1020,11 @@ public final class OocContractBook {
         if (best == null) {
             return false;
         }
-        OocContract contract = signHomeAndHome(team, best, startYear, startYear + 1, true);
+        int returnYear = openSeriesReturnYear(team, best, startYear);
+        if (returnYear == 0) {
+            return false;
+        }
+        OocContract contract = signHomeAndHome(team, best, startYear, returnYear, true);
         if (contract == null) {
             return false;
         }
@@ -1049,7 +1058,13 @@ public final class OocContractBook {
                     power.programProfile, soft.programProfile) * 2) {
                 continue;
             }
-            OocContract contract = signTwoForOne(power, soft, startYear, 1, true);
+            OocContract contract = null;
+            for (int offset : preferredSeriesOffsets(power, soft)) {
+                contract = signTwoForOne(power, soft, startYear, offset, true);
+                if (contract != null) {
+                    break;
+                }
+            }
             if (contract != null) {
                 softBookings.add(soft.abbr);
                 if (trackIds != null) {
@@ -1074,6 +1089,30 @@ public final class OocContractBook {
     /** Deterministic stand-in for "some powers prefer a 2-for-1 this cycle". */
     private static boolean prefersTwoForOne(Team power) {
         return Math.abs(power.abbr.hashCode()) % 5 == 0;
+    }
+
+    /**
+     * Per-pair ordering of {@link #SERIES_LEG_OFFSETS}: a matchup always favours the
+     * same gap between legs, falling back to the others when a year is already booked.
+     */
+    private static int[] preferredSeriesOffsets(Team a, Team b) {
+        String key = a.abbr.compareTo(b.abbr) <= 0 ? a.abbr + b.abbr : b.abbr + a.abbr;
+        int rotation = Math.abs(key.hashCode()) % SERIES_LEG_OFFSETS.length;
+        int[] ordered = new int[SERIES_LEG_OFFSETS.length];
+        for (int i = 0; i < ordered.length; i++) {
+            ordered[i] = SERIES_LEG_OFFSETS[(rotation + i) % SERIES_LEG_OFFSETS.length];
+        }
+        return ordered;
+    }
+
+    /** Preferred return year still open for this pair, or 0 when every gap is taken. */
+    private int openSeriesReturnYear(Team a, Team b, int startYear) {
+        for (int offset : preferredSeriesOffsets(a, b)) {
+            if (!alreadyContracted(a, b, startYear + offset)) {
+                return startYear + offset;
+            }
+        }
+        return 0;
     }
 
     private static List<Team> byScheduleTierDesc(List<Team> teams) {

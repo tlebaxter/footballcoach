@@ -539,6 +539,32 @@ public class EngineGreenfieldTest {
         assertFalse(g.getSituation().userChoosesTry);
     }
 
+    @Test
+    public void playGameResolvesUserTryChoice() throws Exception {
+        League league = createLeague();
+        Team home = league.teamList.get(0);
+        Team away = league.teamList.get(1);
+        home.userControlled = true;
+        away.userControlled = false;
+
+        int totalPoints = 0;
+        for (int seed = 0; seed < 5; seed++) {
+            Game g = new Game(home, away);
+            g.setRandom(new Random(700L + seed));
+            g.playGame();
+
+            assertTrue(g.hasPlayed);
+            assertTrue(g.state.gameOver);
+            assertFalse("user try left pending", g.state.pendingTry);
+            assertFalse("user try left awaiting choice", g.state.tryAwaitingChoice);
+            totalPoints += g.homeScore + g.awayScore;
+        }
+
+        // A stalled PAT freezes games on the first user TD (6-0 / 6-7 style finals).
+        assertTrue("expected football-like scoring, got " + totalPoints + " points over 5 games",
+                totalPoints > 5 * 20);
+    }
+
     private int countPassCalls(Team offense, Team defense, int snaps, long seed) {
         Game g = new Game(offense, defense);
         g.setRandom(new Random(seed));

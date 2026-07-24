@@ -665,10 +665,12 @@ public class Game implements Serializable {
         }
         int guard = 0;
         while (!state.gameOver && guard++ < 900) {
-            autoResolveTryIfNeeded();
+            // Force: a user-controlled offense would otherwise leave the try pending forever.
+            autoResolveTryIfNeeded(true);
             Team offense = state.possessionHome ? homeTeam : awayTeam;
             Team defense = state.possessionHome ? awayTeam : homeTeam;
             executeSnap(aiCaller.choose(offense, defense, state));
+            autoResolveTryIfNeeded(true);
         }
         if (!hasPlayed) finalizeGame();
     }

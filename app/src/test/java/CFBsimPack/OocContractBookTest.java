@@ -591,6 +591,36 @@ public class OocContractBookTest {
     }
 
     @Test
+    public void autoSignedSeriesDeferTheReturnLegByTwoToFourYears() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("ALA");
+        assertNotNull(user);
+        league.userTeam = user;
+        user.userControlled = true;
+
+        league.oocContracts.autoSignFutureDeals(league.teamList);
+
+        int series = 0;
+        int twoForOnes = 0;
+        for (OocContract c : league.oocContracts.all()) {
+            int span = c.mustFulfillByYear - c.startYear;
+            if (c.type == OocContract.Type.HOME_AND_HOME) {
+                series++;
+                assertTrue(
+                        "Home-and-home returns should land 2-4 years out, was +" + span,
+                        span >= 2 && span <= 4);
+            } else if (c.type == OocContract.Type.TWO_FOR_ONE) {
+                twoForOnes++;
+                assertTrue(
+                        "2-for-1 soft-home legs should land 2-4 years out, was +" + (span - 1),
+                        span >= 3 && span <= 5);
+            }
+        }
+        assertTrue(series > 0);
+        assertTrue(twoForOnes > 0);
+    }
+
+    @Test
     public void suggestedUserDealsNeverMakeAPowerBillASmallHost() throws Exception {
         League league = createOpenOocLeague();
         Team user = league.findTeamAbbr("ALA");
