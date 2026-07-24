@@ -73,8 +73,10 @@ public class PlayerSeasonRecord {
             xpMade = k.statsXPMade;
             fgAtt = k.statsFGAtt;
             fgMade = k.statsFGMade;
-            puntAtt = k.statsPuntAtt;
-            puntYards = k.statsPuntYards;
+        } else if (p instanceof PlayerP) {
+            PlayerP punter = (PlayerP) p;
+            puntAtt = punter.statsPuntAtt;
+            puntYards = punter.statsPuntYards;
         }
     }
 

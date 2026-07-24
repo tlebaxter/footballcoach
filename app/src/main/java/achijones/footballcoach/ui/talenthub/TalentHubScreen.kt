@@ -68,7 +68,7 @@ import achijones.footballcoach.ui.theme.FcChipPosText
 import achijones.footballcoach.ui.theme.ovrColor
 
 private val POSITIONS = listOf(
-    "ALL", "QB", "RB", "FB", "WR", "TE", "OL", "K", "S", "CB", "EDGE", "DL", "LB",
+    "ALL", "QB", "RB", "FB", "WR", "TE", "OL", "K", "P", "S", "CB", "EDGE", "DL", "LB",
 )
 private val SORTS = listOf("OVR ↓", "Cost ↑", "Name")
 

@@ -81,13 +81,95 @@ public class EngineGreenfieldTest {
     }
 
     @Test
-    public void timeoutDecrements() throws Exception {
+    public void timeoutFollowsCollegeRules() throws Exception {
         League league = createLeague();
         Game g = new Game(league.teamList.get(0), league.teamList.get(1));
         g.setRandom(new Random(3L));
         g.startGame();
+
+        // Coin toss / before opening kickoff: cannot burn timeouts
+        g.state.homeWonToss = true;
+        g.state.awaitingCoinToss = true;
+        g.state.tossResolved = false;
+        g.state.pendingKickoff = false;
+        g.state.halfUnderway = false;
+        assertFalse(g.callTimeout(true));
+        assertEquals(3, g.state.homeTimeouts);
+
+        g.autoResolveCoinToss();
+        assertTrue(g.state.pendingKickoff);
+        assertFalse(g.state.halfUnderway);
+        assertFalse(g.callTimeout(true));
+        assertEquals(3, g.state.homeTimeouts);
+
+        // After opening kickoff: timeouts available
+        settleOpeningKickoff(g);
+        assertTrue(g.state.halfUnderway);
         assertTrue(g.callTimeout(true));
         assertEquals(2, g.state.homeTimeouts);
+        assertTrue(g.getSituation().canCallTimeout);
+
+        // Exhaust remaining timeouts
+        assertTrue(g.callTimeout(true));
+        assertTrue(g.callTimeout(true));
+        assertEquals(0, g.state.homeTimeouts);
+        assertFalse(g.callTimeout(true));
+        assertFalse(g.getSituation().canCallTimeout);
+
+        // Halftime resets to 3 and blocks until second-half kickoff
+        g.state.homeTimeouts = 0;
+        g.state.awayTimeouts = 1;
+        g.state.pendingKickoff = false;
+        g.state.pendingTry = false;
+        g.state.yardLine = 40;
+        g.state.down = 1;
+        g.state.yardsNeed = 10;
+        g.state.gameTime = 1805;
+        assertEquals(2, g.state.quarter());
+        g.executeSnap(null);
+        assertTrue(g.state.quarter() >= 3);
+        assertFalse(g.state.halfUnderway);
+        assertEquals(3, g.state.homeTimeouts);
+        assertEquals(3, g.state.awayTimeouts);
+        assertTrue(g.state.pendingKickoff);
+        assertFalse(g.callTimeout(true));
+
+        g.executeSnap(null); // second-half kickoff
+        assertTrue(g.state.halfUnderway);
+        assertTrue(g.callTimeout(true));
+        assertEquals(2, g.state.homeTimeouts);
+
+        // OT: 1 timeout each; call once then blocked; new OT period restores 1
+        g.state.homeScore = 14;
+        g.state.awayScore = 14;
+        g.state.homeTimeouts = 2;
+        g.state.awayTimeouts = 2;
+        g.state.pendingKickoff = false;
+        g.state.pendingTry = false;
+        g.state.yardLine = 40;
+        g.state.down = 1;
+        g.state.yardsNeed = 10;
+        g.state.gameTime = 0;
+        g.executeSnap(null);
+        assertTrue(g.state.playingOT);
+        assertEquals(1, g.state.homeTimeouts);
+        assertEquals(1, g.state.awayTimeouts);
+        assertTrue(g.state.halfUnderway);
+        assertTrue(g.callTimeout(true));
+        assertEquals(0, g.state.homeTimeouts);
+        assertFalse(g.callTimeout(true));
+
+        g.state.bottomOT = true;
+        g.state.homeScore = 14;
+        g.state.awayScore = 14;
+        g.state.down = 5;
+        g.state.pendingKickoff = false;
+        g.state.pendingTry = false;
+        g.executeSnap(null);
+        assertTrue(g.state.playingOT);
+        assertTrue(g.state.numOT >= 2);
+        assertEquals(1, g.state.homeTimeouts);
+        assertEquals(1, g.state.awayTimeouts);
     }
 
     @Test

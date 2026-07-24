@@ -154,6 +154,8 @@ public final class Playbook {
                 "Punt look; run or pass"));
         addOff(special("kickoff", "Kickoff", OffensePlay.KICKOFF, Formation.ACE, "11",
                 "Kickoff / coverage"));
+        addOff(special("onside", "Onside Kick", OffensePlay.KICKOFF, Formation.ACE, "11",
+                "Rare onside attempt"));
         addOff(special("spike", "Spike", OffensePlay.SPIKE, Formation.SHOTGUN, "11",
                 "Kill clock; incomplete"));
         addOff(special("kneel", "Kneel", OffensePlay.KNEEL, Formation.SHOTGUN, "11",

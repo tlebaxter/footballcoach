@@ -19,6 +19,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Checkbox
@@ -177,6 +178,27 @@ fun CoachGameScreen(
             onSelectOffense = viewModel::selectOffenseConcept,
             onSelectDefense = viewModel::selectDefenseConcept,
             onDismiss = viewModel::closePlayPicker,
+        )
+    }
+
+    if (state.showTimeoutConfirm && sit != null) {
+        val userTimeouts = if (sit.userOnOffense == sit.possessionHome) {
+            sit.homeTimeouts
+        } else {
+            sit.awayTimeouts
+        }
+        AlertDialog(
+            onDismissRequest = viewModel::dismissTimeoutConfirm,
+            title = { Text("Call timeout?") },
+            text = {
+                Text("Use one of your timeouts? ($userTimeouts remaining)")
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmTimeout) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissTimeoutConfirm) { Text("Cancel") }
+            },
         )
     }
 }
@@ -560,8 +582,14 @@ private fun ControlCard(
             )
             Text("AI call next snap", color = Color(0xFFE5E7EB), style = MaterialTheme.typography.bodyMedium)
             Spacer(Modifier.weight(1f))
-            TextButton(onClick = viewModel::callTimeout) {
-                Text("Timeout", color = FcAccent)
+            TextButton(
+                onClick = viewModel::requestTimeout,
+                enabled = sit.canCallTimeout,
+            ) {
+                Text(
+                    "Timeout",
+                    color = if (sit.canCallTimeout) FcAccent else MutedText,
+                )
             }
         }
     }

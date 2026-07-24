@@ -15,7 +15,8 @@ public enum PositionGroup {
     LB("LB"),
     CB("CB"),
     S("S"),
-    K("K");
+    K("K"),
+    P("P");
 
     public final String token;
 

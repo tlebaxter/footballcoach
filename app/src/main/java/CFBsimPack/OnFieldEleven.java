@@ -1,12 +1,14 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 
 /**
- * Resolves the 11 players on offense or defense from depth + system/philosophy.
+ * Resolves the 11 players on offense or defense from depth + system/philosophy/personnel.
+ * Slot fill ranks by {@link PositionOvr#ovr} across the roster (cross-position eligible).
  */
 public final class OnFieldEleven {
 
@@ -18,14 +20,13 @@ public final class OnFieldEleven {
         DefensiveSystem sys = team.defSystem != null ? team.defSystem : DefensiveSystem.BASE_4_3;
         Set<Player> used = new HashSet<>();
         for (RoleTag slot : sys.slots) {
-            Player p = pickUnused(team, slot.preferredGroup(), used);
+            Player p = pickBestForRole(team, slot.preferredGroup(), used, 35);
             if (p == null) {
-                // Fallback across front / secondary
-                p = pickUnused(team, PositionGroup.LB, used);
-                if (p == null) p = pickUnused(team, PositionGroup.DL, used);
-                if (p == null) p = pickUnused(team, PositionGroup.EDGE, used);
-                if (p == null) p = pickUnused(team, PositionGroup.CB, used);
-                if (p == null) p = pickUnused(team, PositionGroup.S, used);
+                p = pickBestForRole(team, PositionGroup.LB, used, 30);
+                if (p == null) p = pickBestForRole(team, PositionGroup.DL, used, 30);
+                if (p == null) p = pickBestForRole(team, PositionGroup.EDGE, used, 30);
+                if (p == null) p = pickBestForRole(team, PositionGroup.CB, used, 30);
+                if (p == null) p = pickBestForRole(team, PositionGroup.S, used, 30);
             }
             if (p != null) {
                 used.add(p);
@@ -36,41 +37,51 @@ public final class OnFieldEleven {
         return eleven;
     }
 
+    /** Philosophy default package (AI / legacy). */
     public static OnFieldEleven forOffense(Team team) {
-        OnFieldEleven eleven = new OnFieldEleven();
         OffensivePhilosophy phil = team.offPhilosophy != null ? team.offPhilosophy : OffensivePhilosophy.MULTIPLE;
+        return forOffense(team, phil.defaultPersonnel);
+    }
+
+    /** Concept personnel string ("11", "21", …) drives package. */
+    public static OnFieldEleven forOffense(Team team, String personnel) {
+        OnFieldEleven eleven = new OnFieldEleven();
         Set<Player> used = new HashSet<>();
+        String pers = personnel != null ? personnel : "11";
 
         add(eleven, used, team, PositionGroup.QB, RoleTag.QB, 1);
         add(eleven, used, team, PositionGroup.OL, RoleTag.OL, 5);
 
-        boolean fb = phil.wantsFullback();
-        boolean te = phil.wantsTightEnd();
         int wrTarget = 3;
-        int rbTarget = 2;
-        int teTarget = te ? 1 : 0;
-        int fbTarget = fb ? 1 : 0;
+        int rbTarget = 1;
+        int teTarget = 1;
+        int fbTarget = 0;
 
-        if ("10".equals(phil.defaultPersonnel)) {
+        if ("10".equals(pers)) {
             wrTarget = 4;
             rbTarget = 1;
             teTarget = 0;
             fbTarget = 0;
-        } else if ("12".equals(phil.defaultPersonnel)) {
+        } else if ("12".equals(pers)) {
             wrTarget = 2;
             teTarget = 2;
             rbTarget = 1;
             fbTarget = 0;
-        } else if ("21".equals(phil.defaultPersonnel)) {
+        } else if ("21".equals(pers)) {
             wrTarget = 2;
             rbTarget = 1;
             fbTarget = 1;
             teTarget = 1;
-        } else if ("20".equals(phil.defaultPersonnel)) {
+        } else if ("20".equals(pers)) {
             wrTarget = 2;
             rbTarget = 2;
             fbTarget = 1;
             teTarget = 0;
+        } else if ("11".equals(pers)) {
+            wrTarget = 3;
+            rbTarget = 1;
+            teTarget = 1;
+            fbTarget = 0;
         }
 
         add(eleven, used, team, PositionGroup.RB, RoleTag.RB, rbTarget);
@@ -78,12 +89,11 @@ public final class OnFieldEleven {
         add(eleven, used, team, PositionGroup.TE, RoleTag.TE, teTarget);
         add(eleven, used, team, PositionGroup.WR, RoleTag.WR, wrTarget);
 
-        // Fill to 11 with WRs / TE / RB
         while (eleven.players.size() < 11) {
-            Player p = pickUnused(team, PositionGroup.WR, used);
-            if (p == null) p = pickUnused(team, PositionGroup.TE, used);
-            if (p == null) p = pickUnused(team, PositionGroup.RB, used);
-            if (p == null) p = pickUnused(team, PositionGroup.FB, used);
+            Player p = pickBestForRole(team, PositionGroup.WR, used, 35);
+            if (p == null) p = pickBestForRole(team, PositionGroup.TE, used, 35);
+            if (p == null) p = pickBestForRole(team, PositionGroup.RB, used, 35);
+            if (p == null) p = pickBestForRole(team, PositionGroup.FB, used, 35);
             if (p == null) break;
             used.add(p);
             eleven.players.add(p);
@@ -95,7 +105,7 @@ public final class OnFieldEleven {
     private static void add(OnFieldEleven eleven, Set<Player> used, Team team,
                             PositionGroup g, RoleTag role, int count) {
         for (int i = 0; i < count; i++) {
-            Player p = pickUnused(team, g, used);
+            Player p = pickBestForRole(team, g, used, 35);
             if (p == null) return;
             used.add(p);
             eleven.players.add(p);
@@ -103,13 +113,30 @@ public final class OnFieldEleven {
         }
     }
 
-    private static Player pickUnused(Team team, PositionGroup g, Set<Player> used) {
-        List<? extends Player> list = team.playersForGroup(g);
-        if (list == null) return null;
-        for (Player p : list) {
-            if (p != null && !p.isInjured && !used.contains(p)) return p;
+    /**
+     * Prefer depth-chart order for primary group; allow cross-pos if ovr(pos) clears cutoff.
+     */
+    static Player pickBestForRole(Team team, PositionGroup g, Set<Player> used, int minOvr) {
+        if (team == null || g == null) return null;
+        // 1) Primary depth chart order
+        List<? extends Player> primary = team.playersForGroup(g);
+        if (primary != null) {
+            for (Player p : primary) {
+                if (p != null && !p.isInjured && !used.contains(p)) return p;
+            }
         }
-        return null;
+        // 2) Cross-position: best ovr(g) on roster above cutoff
+        Player best = null;
+        int bestOvr = minOvr - 1;
+        for (Player p : team.getAllPlayers()) {
+            if (p == null || p.isInjured || used.contains(p)) continue;
+            int o = PositionOvr.ovr(p, g);
+            if (o > bestOvr) {
+                bestOvr = o;
+                best = p;
+            }
+        }
+        return best;
     }
 
     public int avgAttr(AttrGetter getter) {
@@ -123,95 +150,73 @@ public final class OnFieldEleven {
         return n == 0 ? 60 : sum / n;
     }
 
-    public int passRushComposite() {
-        int sum = 0;
-        int n = 0;
-        for (int i = 0; i < players.size(); i++) {
-            Player p = players.get(i);
-            RoleTag r = roles.get(i);
-            if (p instanceof PlayerEDGE) {
-                sum += (((PlayerEDGE) p).ratPass * 2 + ((PlayerEDGE) p).ratPow) / 3;
-                n++;
-            } else if (p instanceof PlayerDL) {
-                sum += (((PlayerDL) p).ratPass + ((PlayerDL) p).ratPow) / 2;
-                n++;
-            } else if (p instanceof PlayerLB && (r == RoleTag.EDGE || r == RoleTag.OLB || r == RoleTag.SAM)) {
-                sum += (((PlayerLB) p).ratRush + ((PlayerLB) p).ratPow) / 2;
-                n++;
+    /** Weighted best-on-field composite (0–100). */
+    public int weightedComposite(String compositeName, PositionGroup[] preferGroups, double[] mainWeights) {
+        List<PlayerScore> scores = new ArrayList<>();
+        for (Player p : players) {
+            if (p == null || p.ratings == null) continue;
+            double c = CompositeWeights.composite(p.ratings, compositeName);
+            int ovrBoost = 0;
+            if (preferGroups != null) {
+                for (PositionGroup g : preferGroups) {
+                    ovrBoost = Math.max(ovrBoost, PositionOvr.ovr(p, g));
+                }
             }
+            double val = (ovrBoost / 100.0 + c) / 2.0;
+            scores.add(new PlayerScore(p, val));
         }
-        return n == 0 ? 60 : sum / n;
+        scores.sort(Comparator.comparingDouble((PlayerScore s) -> s.val).reversed());
+        double sum = 0;
+        double wSum = 0;
+        for (int i = 0; i < scores.size(); i++) {
+            double w = (mainWeights != null && i < mainWeights.length) ? mainWeights[i] : 1.0;
+            sum += scores.get(i).val * w;
+            wSum += w;
+        }
+        if (wSum <= 0) return 60;
+        return (int) Math.round(100.0 * sum / wSum);
+    }
+
+    public int passRushComposite() {
+        return weightedComposite("passRushing",
+                new PositionGroup[]{PositionGroup.EDGE, PositionGroup.DL, PositionGroup.LB},
+                new double[]{5, 4, 3, 2, 2, 1});
     }
 
     public int runStopComposite() {
-        int sum = 0;
-        int n = 0;
-        for (Player p : players) {
-            if (p instanceof PlayerDL) {
-                sum += (((PlayerDL) p).ratRush * 2 + ((PlayerDL) p).ratPow) / 3;
-                n++;
-            } else if (p instanceof PlayerEDGE) {
-                sum += (((PlayerEDGE) p).ratRush + ((PlayerEDGE) p).ratPow) / 2;
-                n++;
-            } else if (p instanceof PlayerLB) {
-                sum += (((PlayerLB) p).ratRush * 2 + ((PlayerLB) p).ratPow) / 3;
-                n++;
-            }
-        }
-        return n == 0 ? 60 : sum / n;
+        return weightedComposite("runStopping",
+                new PositionGroup[]{PositionGroup.DL, PositionGroup.EDGE, PositionGroup.LB},
+                new double[]{5, 4, 3, 2, 2, 1});
     }
 
     public int coverageComposite() {
-        int sum = 0;
-        int n = 0;
-        for (Player p : players) {
-            if (p instanceof PlayerCB) {
-                sum += ((PlayerCB) p).ratCBCov;
-                n++;
-            } else if (p instanceof PlayerS) {
-                sum += ((PlayerS) p).ratSCov;
-                n++;
-            } else if (p instanceof PlayerLB) {
-                sum += ((PlayerLB) p).ratCov;
-                n++;
-            }
-        }
-        return n == 0 ? 60 : sum / n;
+        return weightedComposite("passCoverage",
+                new PositionGroup[]{PositionGroup.CB, PositionGroup.S, PositionGroup.LB},
+                new double[]{5, 4, 3, 2, 1, 1});
     }
 
     public int olPassComposite() {
-        int sum = 0;
-        int n = 0;
-        for (Player p : players) {
-            if (p instanceof PlayerOL) {
-                sum += (((PlayerOL) p).ratOLPow + ((PlayerOL) p).ratOLBkP) / 2;
-                n++;
-            }
-        }
-        return n == 0 ? 60 : sum / n;
+        return weightedComposite("passBlocking",
+                new PositionGroup[]{PositionGroup.OL, PositionGroup.TE, PositionGroup.FB},
+                new double[]{5, 4, 3, 2, 1, 0.5});
     }
 
     public int olRushComposite() {
-        int sum = 0;
-        int n = 0;
-        for (Player p : players) {
-            if (p instanceof PlayerOL) {
-                sum += (((PlayerOL) p).ratOLPow + ((PlayerOL) p).ratOLBkR) / 2;
-                n++;
-            } else if (p instanceof PlayerFB) {
-                sum += ((PlayerFB) p).ratBlock;
-                n++;
-            } else if (p instanceof PlayerTE) {
-                sum += ((PlayerTE) p).ratBlock;
-                n++;
-            }
-        }
-        return n == 0 ? 60 : sum / n;
+        return weightedComposite("runBlocking",
+                new PositionGroup[]{PositionGroup.OL, PositionGroup.FB, PositionGroup.TE},
+                new double[]{5, 4, 3, 2, 1, 0.5});
     }
 
     public Player firstOf(Class<? extends Player> cls) {
         for (Player p : players) {
             if (cls.isInstance(p)) return p;
+        }
+        return null;
+    }
+
+    public Player firstWithRole(RoleTag role) {
+        for (int i = 0; i < roles.size(); i++) {
+            if (roles.get(i) == role) return players.get(i);
         }
         return null;
     }
@@ -226,5 +231,14 @@ public final class OnFieldEleven {
 
     public interface AttrGetter {
         int get(Player p);
+    }
+
+    private static final class PlayerScore {
+        final Player p;
+        final double val;
+        PlayerScore(Player p, double val) {
+            this.p = p;
+            this.val = val;
+        }
     }
 }

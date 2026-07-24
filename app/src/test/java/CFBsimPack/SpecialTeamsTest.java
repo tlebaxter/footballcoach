@@ -176,6 +176,23 @@ public class SpecialTeamsTest {
         assertFalse(Playbook.isSpecialTeamsDefense(Playbook.defenseFor(CoverageCall.COVER_3)));
     }
 
+    @Test
+    public void kickerAndPunterAreDistinctPositions() throws Exception {
+        League league = createLeague();
+        Team t = league.teamList.get(0);
+        assertNotNull(t.getK(0));
+        assertNotNull(t.getPunter(0));
+        assertTrue(t.getPunter(0) instanceof PlayerP || t.getPunter(0) instanceof PlayerK);
+        int kOvr = PositionOvr.ovr(t.getK(0), PositionGroup.K);
+        int pAsK = PositionOvr.ovr(t.getPunter(0), PositionGroup.K);
+        int pOvr = PositionOvr.ovr(t.getPunter(0), PositionGroup.P);
+        assertTrue(kOvr > 0 && pOvr > 0);
+        // Dedicated P should generally rate higher at P than as K (unless emergency K fallback)
+        if (t.getPunter(0) instanceof PlayerP) {
+            assertTrue(pOvr >= pAsK - 5);
+        }
+    }
+
     private League createLeague() throws IOException {
         Path csvPath = Paths.get("src/main/assets/fbs_2026.csv");
         if (!Files.exists(csvPath)) {

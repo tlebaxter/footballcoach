@@ -639,6 +639,7 @@ public class LeagueOffseason {
             case "TE": p = new PlayerTE(name, 1, stars, seedTeam); break;
             case "OL": p = new PlayerOL(name, 1, stars, seedTeam); break;
             case "K": p = new PlayerK(name, 1, stars, seedTeam); break;
+            case "P": p = new PlayerP(name, 1, stars, seedTeam); break;
             case "S": p = new PlayerS(name, 1, stars, seedTeam); break;
             case "CB": p = new PlayerCB(name, 1, stars, seedTeam); break;
             case "EDGE": p = new PlayerEDGE(name, 1, stars, seedTeam); break;

@@ -15,7 +15,8 @@ public final class NilMoney {
     public static final int SUG_WR = 6;
     public static final int SUG_TE = 3;
     public static final int SUG_OL = 10;
-    public static final int SUG_K = 2;
+    public static final int SUG_K = 1;
+    public static final int SUG_P = 1;
     public static final int SUG_S = 3;
     public static final int SUG_CB = 5;
     public static final int SUG_EDGE = 4;
@@ -28,7 +29,8 @@ public final class NilMoney {
     public static final int INIT_WR = 11;
     public static final int INIT_TE = 5;
     public static final int INIT_OL = 16;
-    public static final int INIT_K = 3;
+    public static final int INIT_K = 2;
+    public static final int INIT_P = 2;
     public static final int INIT_S = 4;
     public static final int INIT_CB = 10;
     public static final int INIT_EDGE = 7;
@@ -36,7 +38,7 @@ public final class NilMoney {
     public static final int INIT_LB = 9;
 
     public static final String[] POSITIONS = {
-            "QB", "RB", "FB", "WR", "TE", "OL", "K", "S", "CB", "EDGE", "DL", "LB"
+            "QB", "RB", "FB", "WR", "TE", "OL", "K", "P", "S", "CB", "EDGE", "DL", "LB"
     };
 
     private NilMoney() {}
@@ -112,6 +114,7 @@ public final class NilMoney {
             case "CB": return 1.16;
             case "S": return 0.98;
             case "K": return 0.50;
+            case "P": return 0.48;
             default: return 1.0;
         }
     }
@@ -126,6 +129,7 @@ public final class NilMoney {
             case "TE": return SUG_TE;
             case "OL": return SUG_OL;
             case "K": return SUG_K;
+            case "P": return SUG_P;
             case "S": return SUG_S;
             case "CB": return SUG_CB;
             case "EDGE": return SUG_EDGE;
@@ -145,6 +149,7 @@ public final class NilMoney {
             case "TE": return INIT_TE;
             case "OL": return INIT_OL;
             case "K": return INIT_K;
+            case "P": return INIT_P;
             case "S": return INIT_S;
             case "CB": return INIT_CB;
             case "EDGE": return INIT_EDGE;

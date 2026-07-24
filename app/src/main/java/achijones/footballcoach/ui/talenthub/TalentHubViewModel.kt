@@ -9,6 +9,8 @@ import CFBsimPack.LeagueOffseason
 import CFBsimPack.NilMoney
 import CFBsimPack.OffseasonSession
 import CFBsimPack.Player
+import CFBsimPack.PlayerRatings
+import CFBsimPack.PositionOvr
 import CFBsimPack.ProgramOffers
 import CFBsimPack.RosterStatus
 import CFBsimPack.Team
@@ -579,7 +581,8 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             ovr = p.ratOvr,
                             primary = "${p.name} ${p.getYrStr()}",
                             secondary = "From $prior" +
-                                (if (p.transferReason != null) " · ${p.transferReason.label}" else ""),
+                                (if (p.transferReason != null) " · ${p.transferReason.label}" else "") +
+                                " · ${attrSummary(p)}",
                             costLine = NilMoney.format(cost),
                             statusLabel = min.displayName(),
                             showCheck = false,
@@ -616,7 +619,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             position = p.position,
                             ovr = p.ratOvr,
                             primary = "${p.name} Fr",
-                            secondary = "Pot ${p.ratPot}",
+                            secondary = "Pot ${p.ratPot} · ${attrSummary(p)}",
                             costLine = NilMoney.format(cost),
                             statusLabel = min.displayName(),
                             showCheck = false,
@@ -753,6 +756,25 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         return st.displayName() +
             (if (nil > 0) " ${NilMoney.format(nil)}/yr" else "") +
             " · ${y}yr · year-1 ${NilMoney.format(cost)}"
+    }
+
+    /** Short key-attr preview for recruit cards (not full 3-skill legacy). */
+    private fun attrSummary(p: Player): String {
+        val bag = p.ratings ?: return "OVR ${p.ratOvr}"
+        val primary = PositionOvr.primaryGroup(p)
+        val keys = when (primary) {
+            CFBsimPack.PositionGroup.QB -> arrayOf("tha", "thp", "spd")
+            CFBsimPack.PositionGroup.RB -> arrayOf("spd", "elu", "stre")
+            CFBsimPack.PositionGroup.WR -> arrayOf("hnd", "spd", "rtr")
+            CFBsimPack.PositionGroup.OL -> arrayOf("pbk", "rbk", "stre")
+            CFBsimPack.PositionGroup.EDGE -> arrayOf("prs", "spd", "stre")
+            CFBsimPack.PositionGroup.K -> arrayOf("kpw", "kac")
+            CFBsimPack.PositionGroup.P -> arrayOf("ppw", "pac")
+            else -> arrayOf("spd", "stre", "endu")
+        }
+        return keys.joinToString(" ") { k ->
+            "${PlayerRatings.displayLabel(k)} ${bag.get(k)}"
+        }
     }
 
     private data class Tuple4(

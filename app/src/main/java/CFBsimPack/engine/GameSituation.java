@@ -57,6 +57,8 @@ public final class GameSituation {
     public final boolean userChoosesTry;
     /** Opponent is going for 2; user picks defense. */
     public final boolean userDefendsTwoPoint;
+    /** User team may call a timeout under NCAA-style rules. */
+    public final boolean canCallTimeout;
 
     public GameSituation(
             int homeScore, int awayScore, String homeAbbr, String awayAbbr,
@@ -74,7 +76,8 @@ public final class GameSituation {
             String userPuntReturnerName, String userKickReturnerName,
             boolean awaitingCoinToss, boolean homeWonToss, boolean homeDefendsLeft, boolean userWonToss,
             boolean pendingTry, boolean tryAwaitingChoice, boolean tryIsTwoPoint,
-            boolean userChoosesTry, boolean userDefendsTwoPoint
+            boolean userChoosesTry, boolean userDefendsTwoPoint,
+            boolean canCallTimeout
     ) {
         this.homeScore = homeScore;
         this.awayScore = awayScore;
@@ -128,5 +131,6 @@ public final class GameSituation {
         this.tryIsTwoPoint = tryIsTwoPoint;
         this.userChoosesTry = userChoosesTry;
         this.userDefendsTwoPoint = userDefendsTwoPoint;
+        this.canCallTimeout = canCallTimeout;
     }
 }

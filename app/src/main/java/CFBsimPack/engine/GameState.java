@@ -6,6 +6,7 @@ package CFBsimPack.engine;
 public final class GameState {
     public static final int REG_SECONDS = 3600;
     public static final int TIMEOUTS_PER_HALF = 3;
+    public static final int TIMEOUTS_PER_OT = 1;
 
     public int homeScore;
     public int awayScore;
@@ -29,6 +30,11 @@ public final class GameState {
 
     public int homeTimeouts = TIMEOUTS_PER_HALF;
     public int awayTimeouts = TIMEOUTS_PER_HALF;
+    /**
+     * True after the first snap of the current half (or once OT begins).
+     * Timeouts cannot be called until the half is underway.
+     */
+    public boolean halfUnderway;
 
     public String lastPlayLog = "";
     public boolean gameOver;
@@ -90,13 +96,23 @@ public final class GameState {
         awayTimeouts = TIMEOUTS_PER_HALF;
     }
 
+    public void resetTimeoutsForOt() {
+        homeTimeouts = TIMEOUTS_PER_OT;
+        awayTimeouts = TIMEOUTS_PER_OT;
+    }
+
+    /** NCAA-style: dead ball after half/OT has started, with timeouts remaining. */
+    public boolean canCallTimeout(boolean home) {
+        if (gameOver || awaitingCoinToss || !halfUnderway) return false;
+        return home ? homeTimeouts > 0 : awayTimeouts > 0;
+    }
+
     public boolean callTimeout(boolean home) {
+        if (!canCallTimeout(home)) return false;
         if (home) {
-            if (homeTimeouts <= 0) return false;
             homeTimeouts--;
             return true;
         }
-        if (awayTimeouts <= 0) return false;
         awayTimeouts--;
         return true;
     }

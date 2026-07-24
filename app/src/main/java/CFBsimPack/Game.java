@@ -11,7 +11,14 @@ import CFBsimPack.engine.OffenseConcept;
 import CFBsimPack.engine.OffensePlay;
 import CFBsimPack.engine.PlayCall;
 import CFBsimPack.engine.PlayLogEntry;
+import CFBsimPack.OnFieldEleven;
+import CFBsimPack.engine.FatigueTracker;
+import CFBsimPack.engine.PenaltyCatalog;
+import CFBsimPack.engine.PenaltyResolver;
+import CFBsimPack.engine.PendingPlay;
 import CFBsimPack.engine.PlayResolver;
+import CFBsimPack.engine.PlayState;
+import CFBsimPack.engine.TempoCall;
 import CFBsimPack.engine.PlayResult;
 import CFBsimPack.engine.Playbook;
 import CFBsimPack.engine.PlayerGameStats;
@@ -55,6 +62,7 @@ public class Game implements Serializable {
 
     private transient PlayResolver resolver;
     private transient AiPlayCaller aiCaller;
+    private transient FatigueTracker fatigueTracker;
     private transient Random rng;
     private transient boolean started;
     private transient int prevQuarter = 1;
@@ -106,14 +114,46 @@ public class Game implements Serializable {
         this.resolver = new PlayResolver(this.rng);
         if (playerGameStats != null) this.resolver.setGameStats(playerGameStats);
         this.aiCaller = new AiPlayCaller(this.rng);
+        this.fatigueTracker = new FatigueTracker();
     }
 
     private void ensureEngine() {
         if (rng == null) setRandom(new Random());
         if (playerGameStats == null) playerGameStats = new PlayerGameStats();
         if (resolver != null) resolver.setGameStats(playerGameStats);
+        if (fatigueTracker == null) fatigueTracker = new FatigueTracker();
         if (drivePath == null) drivePath = new ArrayList<>();
         if (playLog == null) playLog = new ArrayList<>();
+    }
+
+    private static void writePlayState(GameState g, PlayState s) {
+        if (g == null || s == null) return;
+        g.down = s.down;
+        g.yardsNeed = s.yardsNeed;
+        g.yardLine = s.yardLine;
+        g.gameTime = s.gameTime;
+        g.possessionHome = s.possessionHome;
+        g.homeScore = s.homeScore;
+        g.awayScore = s.awayScore;
+        g.phase = s.phase;
+    }
+
+    private int betweenPlayRunoff(TempoCall tempo) {
+        TempoCall t = tempo != null ? tempo : TempoCall.NORMAL;
+        if (t == TempoCall.HURRY_UP) return 12;
+        if (t == TempoCall.CHEW_CLOCK) return 38;
+        return 28;
+    }
+
+    private void afterSnapFatigue(PlayCall call, boolean possessionHome) {
+        if (fatigueTracker == null || call == null) return;
+        Team offense = possessionHome ? homeTeam : awayTeam;
+        Team defense = possessionHome ? awayTeam : homeTeam;
+        String pers = call.resolvedOffenseConcept() != null
+                ? call.resolvedOffenseConcept().personnel : null;
+        OnFieldEleven off = OnFieldEleven.forOffense(offense, pers);
+        OnFieldEleven def = OnFieldEleven.forDefense(defense);
+        fatigueTracker.afterSnap(off, def);
     }
 
     public void startGame() {
@@ -233,6 +273,8 @@ public class Game implements Serializable {
         }
         boolean userChoosesTry = state.pendingTry && state.tryAwaitingChoice && userOff;
         boolean userDefendsTwoPoint = state.pendingTry && state.tryIsTwoPoint && !userOff;
+        boolean userIsHome = user == homeTeam;
+        boolean canCallTimeout = user != null && !hasPlayed && state.canCallTimeout(userIsHome);
         return new GameSituation(
                 state.homeScore, state.awayScore, homeTeam.abbr, awayTeam.abbr,
                 homeTeam.name, awayTeam.name,
@@ -249,7 +291,8 @@ public class Game implements Serializable {
                 prName, krName,
                 state.awaitingCoinToss, state.homeWonToss, state.homeDefendsLeft, userWonCoinToss(),
                 state.pendingTry, state.tryAwaitingChoice, state.tryIsTwoPoint,
-                userChoosesTry, userDefendsTwoPoint
+                userChoosesTry, userDefendsTwoPoint,
+                canCallTimeout
         );
     }
 
@@ -346,9 +389,48 @@ public class Game implements Serializable {
         int qBefore = state.quarter();
         boolean possBefore = state.possessionHome;
 
+        PlayState before = PlayState.from(state);
         PlayResult result = resolver.resolve(homeTeam, awayTeam, state, call);
+        // Resolver mutates GameState; snapshot provisional after-play situation
+        PlayState after = PlayState.from(state);
+
+        PendingPlay pending = new PendingPlay(result, before, after);
+        pending.foul = PenaltyCatalog.roll(rng, call.offensePlay);
+        if (pending.foul != null) {
+            PenaltyResolver.resolve(pending);
+        }
+
+        if (pending.foul != null && pending.foulAccepted) {
+            // Accepted foul: discard play outcome; keep penalty spot/down
+            writePlayState(state, pending.after);
+            state.homeScore = before.homeScore;
+            state.awayScore = before.awayScore;
+            state.possessionHome = before.possessionHome;
+            int runoff = betweenPlayRunoff(call.tempo);
+            if (!state.playingOT) {
+                state.gameTime = Math.max(0, before.gameTime - Math.max(result.clockBurned, 0) - runoff);
+            }
+            state.lastPlayLog = result.logLine != null ? result.logLine : "";
+            if (result.logLine != null && !result.logLine.isEmpty()) {
+                gameEventLog += prefix() + result.logLine + "\n";
+            }
+            recordPlay(call, result, clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
+            afterSnapFatigue(call, possBefore);
+            state.halfUnderway = true;
+            syncPublicFields();
+            return result;
+        }
+
+        // No foul or declined: keep resolved play situation, then score/flip via applyResult
+        writePlayState(state, pending.after);
         recordPlay(call, result, clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
         applyResult(result, call);
+        int runoff = betweenPlayRunoff(call.tempo);
+        if (!state.playingOT && runoff > 0) {
+            state.gameTime = Math.max(0, state.gameTime - runoff);
+        }
+        afterSnapFatigue(call, possBefore);
+        state.halfUnderway = true;
         syncPublicFields();
 
         if (!state.playingOT && state.gameTime <= 0) {
@@ -368,6 +450,7 @@ public class Game implements Serializable {
     /** Halftime: swap ends, reset timeouts, schedule second-half kickoff. */
     private void beginSecondHalf() {
         state.resetTimeoutsForHalf();
+        state.halfUnderway = false;
         state.homeDefendsLeft = !state.homeDefendsLeft;
         boolean homeReceivesSecond = state.deferred
                 ? state.homeWonToss
@@ -873,6 +956,8 @@ public class Game implements Serializable {
         state.down = 1;
         state.yardsNeed = 10;
         state.bottomOT = false;
+        state.resetTimeoutsForOt();
+        state.halfUnderway = true;
         resetDrive(75);
         gameEventLog += prefix() + "OVERTIME!\n";
     }
@@ -885,6 +970,7 @@ public class Game implements Serializable {
             state.numOT++;
             state.possessionHome = (state.numOT % 2) == 0;
             state.bottomOT = false;
+            state.resetTimeoutsForOt();
             resetDrive(75);
         } else if (!state.bottomOT) {
             state.possessionHome = !state.possessionHome;

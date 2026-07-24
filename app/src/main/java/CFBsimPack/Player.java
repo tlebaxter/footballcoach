@@ -3,10 +3,11 @@ package CFBsimPack;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Random;
 
 /**
- * Base player class that others extend. Has name, overall, potential, and football IQ.
- * @author Achi
+ * Base player class that others extend. Ratings live in {@link PlayerRatings};
+ * {@code ratOvr}/{@code ratPot}/{@code ratFootIQ}/{@code ratDur} stay synced aliases.
  */
 public class Player {
     
@@ -14,6 +15,7 @@ public class Player {
     public String name;
     public String position;
     public int year;
+    public PlayerRatings ratings = new PlayerRatings();
     public int ratOvr;
     public int ratPot;
     public int ratFootIQ;
@@ -59,6 +61,9 @@ public class Player {
      * (unlocked teammates still sort around them). Injury still bumps them down.
      */
     public boolean depthLocked;
+
+    /** Optional depth/system role label (EDGE/MIKE/etc.). */
+    public RoleTag roleTag;
 
     public RosterStatus rosterStatus = RosterStatus.SCHOLARSHIP;
     public int nilDealAmount;
@@ -259,9 +264,75 @@ public class Player {
         return "ERROR";
     }
     
+    /**
+     * Apply full ratings bag, sync aliases + legacy skill fields, recompute primary OVR.
+     */
+    public void applyRatings(PlayerRatings bag) {
+        this.ratings = bag != null ? bag : new PlayerRatings();
+        this.ratPot = ratings.pot;
+        this.ratFootIQ = ratings.footIq;
+        this.ratDur = ratings.dur;
+        syncLegacySkillsFromRatings();
+        PositionGroup g = PositionOvr.primaryGroup(this);
+        this.ratOvr = PositionOvr.ovr(ratings, g);
+    }
+
+    /** Subclasses map bag → legacy rat* fields used by older UI/sim paths. */
+    protected void syncLegacySkillsFromRatings() {
+        // no-op on base
+    }
+
+    public int ovrFor(PositionGroup pos) {
+        return PositionOvr.ovr(this, pos);
+    }
+
+    public int potFor(PositionGroup pos) {
+        return PositionOvr.pot(this, pos);
+    }
+
+    public void recomputeCost(Random rng) {
+        Random r = rng != null ? rng : new Random();
+        double div = costDivisor();
+        int base = costBase();
+        cost = (int) (Math.pow(Math.max(0, ratOvr - 55), 2) / div) + base + (int) (r.nextDouble() * 100) - 50;
+        if (cost < 1) cost = 1;
+    }
+
+    protected double costDivisor() {
+        return 4.0;
+    }
+
+    protected int costBase() {
+        return 80;
+    }
+
+    public String ratingsSaveCsv() {
+        return ratings.toCsvSegment() + "," + ratOvr + "," + ratImprovement;
+    }
+
     public void advanceSeason() {
-        //add stuff
-        year++;
+        int gp = gamesPlayed;
+        int bonus = 0;
+        if (team != null && team.programProfile != null) {
+            bonus = team.programProfile.developmentBonus();
+        }
+        Random rng = new Random((long) name.hashCode() * 31L + year * 17L + gp);
+        DevelopmentCurve.advance(this, gp, bonus, rng);
+        bankPositionCareerStats();
+    }
+
+    /** Subclasses bank season → career stats and zero season counters. */
+    protected void bankPositionCareerStats() {
+        careerGamesPlayed += gamesPlayed;
+        careerWins += statsWins;
+        if (wonHeisman) careerHeismans++;
+        if (wonAllAmerican) careerAllAmerican++;
+        if (wonAllConference) careerAllConference++;
+        gamesPlayed = 0;
+        statsWins = 0;
+        wonHeisman = false;
+        wonAllAmerican = false;
+        wonAllConference = false;
     }
     
     public int getHeismanScore() {
@@ -410,12 +481,62 @@ public class Player {
             case "TE": return 4;
             case "OL": return 5;
             case "K": return 6;
-            case "S": return 7;
-            case "CB": return 8;
-            case "EDGE": return 9;
-            case "DL": return 10;
-            case "LB": return 11;
-            default: return 12;
+            case "P": return 7;
+            case "S": return 8;
+            case "CB": return 9;
+            case "EDGE": return 10;
+            case "DL": return 11;
+            case "LB": return 12;
+            default: return 13;
+        }
+    }
+
+    public ArrayList<String> getRatingsDetailLines() {
+        ArrayList<String> lines = new ArrayList<>();
+        lines.add("Durability: " + getLetterGrade(ratDur) + ">Football IQ: " + getLetterGrade(ratFootIQ));
+        String[] keys = primaryAttrKeys();
+        for (int i = 0; i < keys.length; i += 2) {
+            String a = keys[i];
+            String left = PlayerRatings.displayLabel(a) + ": " + getLetterGrade(ratings.get(a));
+            if (i + 1 < keys.length) {
+                String b = keys[i + 1];
+                lines.add(left + ">" + PlayerRatings.displayLabel(b) + ": " + getLetterGrade(ratings.get(b)));
+            } else {
+                lines.add(left + "> ");
+            }
+        }
+        PositionGroup primary = PositionOvr.primaryGroup(this);
+        StringBuilder secondary = new StringBuilder("Pos OVR: ");
+        int shown = 0;
+        for (PositionGroup g : PositionGroup.values()) {
+            if (g == primary) continue;
+            int o = ovrFor(g);
+            if (o < 45) continue;
+            if (shown > 0) secondary.append(", ");
+            secondary.append(g.token).append(" ").append(o);
+            if (++shown >= 3) break;
+        }
+        if (shown > 0) lines.add(secondary + "> ");
+        return lines;
+    }
+
+    protected String[] primaryAttrKeys() {
+        PositionGroup g = PositionOvr.primaryGroup(this);
+        switch (g) {
+            case QB: return new String[]{"tha", "thp", "thv", "elu", "spd", "bsc"};
+            case RB: return new String[]{"spd", "elu", "stre", "bsc", "hnd", "rtr"};
+            case FB: return new String[]{"rbk", "pbk", "stre", "bsc", "hnd", "spd"};
+            case WR: return new String[]{"hnd", "rtr", "spd", "elu", "hgt", "bsc"};
+            case TE: return new String[]{"hnd", "rbk", "pbk", "rtr", "hgt", "stre"};
+            case OL: return new String[]{"pbk", "rbk", "stre", "hgt", "endu", "spd"};
+            case EDGE: return new String[]{"prs", "spd", "stre", "tck", "rns", "hgt"};
+            case DL: return new String[]{"rns", "prs", "stre", "tck", "hgt", "endu"};
+            case LB: return new String[]{"tck", "rns", "pcv", "prs", "spd", "stre"};
+            case CB: return new String[]{"pcv", "spd", "tck", "hgt", "endu", "stre"};
+            case S: return new String[]{"pcv", "tck", "spd", "stre", "hgt", "endu"};
+            case K: return new String[]{"kpw", "kac", "endu", "stre"};
+            case P: return new String[]{"ppw", "pac", "endu", "stre"};
+            default: return new String[]{"spd", "stre", "endu", "hgt"};
         }
     }
     

@@ -2,6 +2,7 @@ package CFBsimPack.engine;
 
 import CFBsimPack.DefensiveSystem;
 import CFBsimPack.OffensivePhilosophy;
+import CFBsimPack.PlayerK;
 import CFBsimPack.Team;
 
 import java.util.ArrayList;
@@ -78,9 +79,9 @@ public final class AiPlayCaller {
         int need = state.yardsNeed;
         int time = state.gameTime;
         boolean trailing = trailing(offense, state);
+        int deficit = scoreDeficit(offense, state);
 
         if (!state.playingOT && time <= 30 && trailing) {
-            int deficit = scoreDeficit(offense, state);
             if (deficit <= 3 && yardLine > 60) {
                 return Playbook.offenseById("field_goal");
             }
@@ -88,36 +89,78 @@ public final class AiPlayCaller {
         }
 
         if (state.pendingKickoff) {
+            // Rare onside when trailing late
+            if (!state.playingOT && trailing && time <= 120 && deficit >= 1 && deficit <= 8
+                    && rng.nextDouble() < 0.08) {
+                return Playbook.offenseById("onside");
+            }
             return Playbook.offenseById("kickoff");
         }
 
         if (down >= 4) {
-            int deficit = scoreDeficit(offense, state);
-            if (deficit > 3 && time < 300) {
-                return weightedPick(scoreCandidates(offense, state, false),
-                        need < 3 ? Playbook.offenseById("i_dive") : Playbook.offenseById("gun_slants"));
-            }
-            if (need < 3 && yardLine > 55 && yardLine <= 65) {
-                return Playbook.offenseById("i_dive");
-            }
-            if (yardLine > 60) {
-                return Playbook.offenseById("field_goal");
-            }
-            if (trailing && deficit > 0 && yardLine >= 40 && yardLine <= 55 && rng.nextDouble() < 0.07) {
-                return Playbook.offenseById("fake_punt");
-            }
-            return Playbook.offenseById("punt");
+            return fourthDownCall(offense, state, yardLine, need, time, trailing, deficit);
         }
 
-        if (!state.playingOT && time < 120 && !trailing && yardLine < 50 && down <= 2) {
-            if (rng.nextDouble() < 0.55) {
-                return Playbook.offenseById("kneel");
-            }
-            return Playbook.offenseById("i_dive");
+        // Victory formation: enough kneels to burn remaining clock
+        if (shouldKneel(offense, state, yardLine, down, time, trailing)) {
+            return Playbook.offenseById("kneel");
         }
 
         List<Scored> scored = scoreCandidates(offense, state, false);
         return weightedPick(scored, Playbook.defaultOffense());
+    }
+
+    private OffenseConcept fourthDownCall(Team offense, GameState state, int yardLine, int need,
+                                          int time, boolean trailing, int deficit) {
+        double fgMake = fgMakePct(offense, yardLine);
+        boolean late = !state.playingOT && time < 300;
+
+        // Must-score situations: go for it more aggressively
+        if (trailing && late && deficit > 3) {
+            if (yardLine >= 55 && fgMake >= 0.45 && deficit <= 3) {
+                return Playbook.offenseById("field_goal");
+            }
+            return weightedPick(scoreCandidates(offense, state, need > 4),
+                    need <= 3 ? Playbook.offenseById("i_dive") : Playbook.offenseById("gun_slants"));
+        }
+
+        // Short yardage near midfield: analytics-leaning go
+        if (need <= 2 && yardLine >= 45 && yardLine <= 70) {
+            if (rng.nextDouble() < 0.55) return Playbook.offenseById("i_dive");
+        }
+
+        // FG range
+        if (yardLine > 62 && fgMake >= 0.52) {
+            return Playbook.offenseById("field_goal");
+        }
+        if (yardLine > 68) {
+            return Playbook.offenseById("field_goal");
+        }
+
+        if (trailing && deficit > 0 && yardLine >= 40 && yardLine <= 55 && rng.nextDouble() < 0.07) {
+            return Playbook.offenseById("fake_punt");
+        }
+        return Playbook.offenseById("punt");
+    }
+
+    private boolean shouldKneel(Team offense, GameState state, int yardLine, int down,
+                                int time, boolean trailing) {
+        if (state.playingOT || trailing) return false;
+        if (yardLine >= 50) return false; // still in scoring territory — don't kneel casually
+        // ~40s per kneel including runoff; need enough snaps + clock
+        int snapsLeft = Math.max(1, 5 - down);
+        int estimatedBurn = snapsLeft * 40;
+        if (time > estimatedBurn + 15) return false;
+        if (time < 150 && down <= 2) return true;
+        return time < 90;
+    }
+
+    private double fgMakePct(Team offense, int yardLine) {
+        PlayerK k = offense != null ? offense.getK(0) : null;
+        if (k == null) return 0.35;
+        int distance = 100 - yardLine + 17;
+        double chance = k.ratKickAcc + (k.ratKickPow - 70) - (distance - 30);
+        return Math.max(0.08, Math.min(0.95, chance / 100.0));
     }
 
     private List<Scored> scoreCandidates(Team offense, GameState state, boolean forcePass) {

@@ -1,148 +1,96 @@
 package CFBsimPack;
 
 import java.util.ArrayList;
+import java.util.Random;
 
-/**
- * Class for the CB player. 3 on the field each covering a WR.
- * @author Achi
- */
 public class PlayerCB extends Player {
-    
-    //public String name;
-    //Overall rating, combination of other ratings
-    //public int ratOvr;
-    //Potential, affects how much he gets better in offseason
-    //public int ratPot;
-    //FootIQ, affects how smart he plays
-    //public int ratFootIQ;
-    //CBCov affects how good he is at covering the pass
+
     public int ratCBCov;
-    //CBSpd affects how good he is at not letting up deep passes
     public int ratCBSpd;
-    //CBTkl affects how good he is at tackling
     public int ratCBTkl;
-    public PlayerCB( String nm, Team t, int yr, int pot, int iq, int cov, int spd, int tkl, boolean rs, int dur ) {
-        team = t;
-        name = nm;
-        year = yr;
-        gamesPlayed = 0;
-        isInjured = false;
-        ratOvr = (cov*2 + spd + tkl)/4;
-        ratPot = pot;
-        ratFootIQ = iq;
-        ratDur = dur;
-        ratCBCov = cov;
-        ratCBSpd = spd;
-        ratCBTkl = tkl;
-        isRedshirt = rs;
+
+
+
+    public PlayerCB() {
         position = "CB";
-
-        cost = (int)(Math.pow((float)ratOvr - 55,2)/4.5) + 50 + (int)(Math.random()*100) - 50;
-
-        wonHeisman = false;
-        wonAllAmerican = false;
-        wonAllConference = false;
-        statsWins = 0;
-
-        careerGamesPlayed = 0;
-        careerHeismans = 0;
-        careerAllAmerican = 0;
-        careerAllConference = 0;
-        careerWins = 0;
     }
 
-    public PlayerCB( String nm, Team t, int yr, int pot, int iq, int cov, int spd, int tkl, boolean rs, int dur,
-                     int cGamesPlayed, int cHeismans, int cAA, int cAC, int cWins ) {
-        team = t;
+    public PlayerCB(String nm, Team t, int yr, PlayerRatings bag, boolean rs) {
+        this();
         name = nm;
+        team = t;
         year = yr;
-        gamesPlayed = 0;
-        isInjured = false;
-        ratOvr = (cov*2 + spd + tkl)/4;
-        ratPot = pot;
-        ratFootIQ = iq;
-        ratDur = dur;
-        ratCBCov = cov;
-        ratCBSpd = spd;
-        ratCBTkl = tkl;
         isRedshirt = rs;
-        position = "CB";
+        applyRatings(bag);
+        recomputeCost(new Random(nm != null ? nm.hashCode() : 0));
+    }
 
-        cost = (int)(Math.pow((float)ratOvr - 55,2)/4.5) + 50 + (int)(Math.random()*100) - 50;
+    public PlayerCB(String nm, Team t, int yr, int pot, int iq, int s1, int s2, int s3, boolean rs, int dur) {
+        this();
+        name = nm;
+        team = t;
+        year = yr;
+        isRedshirt = rs;
+        PlayerRatings bag = PlayerFactory.rollRatings(PositionGroup.CB, yr, 3, new Random(nm.hashCode()));
+        bag.pot = pot;
+        bag.footIq = iq;
+        bag.dur = dur;
+        bag.pcv = s1;
+        bag.spd = s2;
+        bag.tck = s3;
+        applyRatings(bag);
+        recomputeCost(new Random());
+    }
 
-        wonHeisman = false;
-        wonAllAmerican = false;
-        wonAllConference = false;
-        statsWins = 0;
-
+    public PlayerCB(String nm, Team t, int yr, int pot, int iq, int s1, int s2, int s3, boolean rs, int dur,
+                    int cGamesPlayed, int cHeismans, int cAA, int cAC, int cWins) {
+        this(nm, t, yr, pot, iq, s1, s2, s3, rs, dur);
         careerGamesPlayed = cGamesPlayed;
         careerHeismans = cHeismans;
         careerAllAmerican = cAA;
         careerAllConference = cAC;
         careerWins = cWins;
     }
-    
-    public PlayerCB( String nm, int yr, int stars, Team t ) {
-        name = nm;
-        year = yr;
-        team = t;
-        gamesPlayed = 0;
-        isInjured = false;
-        ratPot = (int) (50 + 50*Math.random());
-        ratFootIQ = (int) (50 + 50*Math.random());
-        ratDur = (int) (50 + 50*Math.random());
-        ratCBCov = (int) (60 + year*5 + stars*5 - 25*Math.random());
-        ratCBSpd = (int) (60 + year*5 + stars*5 - 25*Math.random());
-        ratCBTkl = (int) (60 + year*5 + stars*5 - 25*Math.random());
-        ratOvr = (ratCBCov*2 + ratCBSpd + ratCBTkl)/4;
+
+    public PlayerCB(String nm, int yr, int stars, Team t) {
+        this();
+        Player p = PlayerFactory.fromStars(PositionGroup.CB, nm, yr, stars, t, new Random());
+        name = p.name;
+        team = p.team;
+        year = p.year;
+        applyRatings(p.ratings);
+        cost = p.cost;
         position = "CB";
-
-        cost = (int)(Math.pow((float)ratOvr - 55,2)/4.5) + 50 + (int)(Math.random()*100) - 50;
-
-        wonHeisman = false;
-        wonAllAmerican = false;
-        wonAllConference = false;
-        statsWins = 0;
-
-        careerGamesPlayed = 0;
-        careerHeismans = 0;
-        careerAllAmerican = 0;
-        careerAllConference = 0;
-        careerWins = 0;
-    }@Override
-    public void advanceSeason() {
-        recordSeasonSnapshot();
-        year++;
-        int oldOvr = ratOvr;
-        // old: ratPot - 25
-        // new ratPot + gamesPlayed - 35
-        ratFootIQ += (int)(Math.random()*(ratPot + gamesPlayed - 35))/10;
-        ratCBCov += (int)(Math.random()*(ratPot + gamesPlayed - 35))/10;
-        ratCBSpd += (int)(Math.random()*(ratPot + gamesPlayed - 35))/10;
-        ratCBTkl += (int)(Math.random()*(ratPot + gamesPlayed - 35))/10;
-        if ( Math.random()*100 < ratPot ) {
-            //breakthrough
-            ratCBCov += (int)(Math.random()*(ratPot + gamesPlayed - 40))/10;
-            ratCBSpd += (int)(Math.random()*(ratPot + gamesPlayed - 40))/10;
-            ratCBTkl += (int)(Math.random()*(ratPot + gamesPlayed - 40))/10;
-        }
-        ratOvr = (ratCBCov*2 + ratCBSpd + ratCBTkl)/4;
-        ratImprovement = ratOvr - oldOvr;
-
-        careerGamesPlayed += gamesPlayed;
-        careerWins += statsWins;
-
-        if (wonHeisman) careerHeismans++;
-        if (wonAllAmerican) careerAllAmerican++;
-        if (wonAllConference) careerAllConference++;
     }
 
     @Override
-     public ArrayList<String> getDetailStatsList(int games) {
+    protected void syncLegacySkillsFromRatings() {
+        ratCBCov = ratings.pcv;
+        ratCBSpd = ratings.spd;
+        ratCBTkl = ratings.tck;
+    }
+
+    @Override
+    protected double costDivisor() { return 4.5; }
+
+    @Override
+    protected int costBase() { return 50; }
+
+    @Override
+    protected void bankPositionCareerStats() {
+        super.bankPositionCareerStats();
+    }
+
+    @Override
+    public int getHeismanScore() {
+        return ratOvr * gamesPlayed;
+    }
+
+    @Override
+    public ArrayList<String> getDetailStatsList(int games) {
         ArrayList<String> pStats = new ArrayList<>();
-        pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed-statsWins) + ")" + ">Durability: " + getLetterGrade(ratDur));
-        pStats.add("Football IQ: " + getLetterGrade(ratFootIQ) + ">Coverage: " + getLetterGrade(ratCBCov));
-        pStats.add("Speed: " + getLetterGrade(ratCBSpd) + ">Tackling: " + getLetterGrade(ratCBTkl));
-        pStats.add(" > ");
+        pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed-statsWins) + ")> ");
+        pStats.addAll(getRatingsDetailLines());
         return pStats;
-    }}
+    }
+}

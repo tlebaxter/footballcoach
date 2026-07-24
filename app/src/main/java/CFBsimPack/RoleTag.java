@@ -27,6 +27,7 @@ public enum RoleTag {
     SS,
     S,
     K,
+    P,
     /** Special-teams overlay roles (display / depth UI). */
     PR,
     KR,
@@ -62,6 +63,7 @@ public enum RoleTag {
             case SS:
             case S: return PositionGroup.S;
             case K: return PositionGroup.K;
+            case P: return PositionGroup.P;
             default: return PositionGroup.LB;
         }
     }

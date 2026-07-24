@@ -295,7 +295,7 @@ public class League {
                 throw new IOException("Save from older version — start a new career.");
             }
             int saveVersion = Integer.parseInt(line.substring("SAVE_VERSION,".length()).trim());
-            if (saveVersion != 5) {
+            if (saveVersion != 6) {
                 throw new IOException("Save from older version — start a new career.");
             }
             line = bufferedReader.readLine();
@@ -1717,7 +1717,7 @@ public class League {
             sb.append(heismanHistory.get(i) + "\n");
         }
             sb.append("END_HEISMAN_HIST\n");
-        sb.append("SAVE_VERSION,5\n");
+        sb.append("SAVE_VERSION,6\n");
         sb.append("TEAM_COUNT," + teamList.size() + "\n");
 
         // Save information about each team like W-L records, as well as all the players

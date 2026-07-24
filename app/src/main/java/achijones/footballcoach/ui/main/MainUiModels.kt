@@ -8,6 +8,8 @@ enum class BrowseSegment { STATS, ROSTER, GAMES }
 
 enum class TeamPanelSegment { DEPTH_CHART, STRATEGY }
 
+enum class DepthFilter { PRIMARY, ELIGIBLE, EVERYONE }
+
 enum class AwardsSegment { HONORS, BOWLS }
 
 enum class PlayersLeavingTab { GRADUATES, MOCK_DRAFT }
@@ -52,7 +54,6 @@ data class ScheduleRowUi(
 )
 
 data class TeamPickerTeamUi(
-    val teamListIndex: Int,
     val name: String,
     val abbr: String,
     val programPower: Int,
@@ -77,6 +78,9 @@ data class TeamPickerConfUi(
 data class LineupRowUi(
     val name: String,
     val ovr: Int,
+    /** OVR at the selected depth-chart position lens. */
+    val posOvr: Int,
+    val primaryPos: String,
     val yearLabel: String,
     val potGrade: String,
     val injured: Boolean,
@@ -146,6 +150,8 @@ data class PlayerCareerUi(
     val teamAbbr: String,
     val rosterStatus: String,
     val nilLabel: String?,
+    val attrChips: List<StatChipUi> = emptyList(),
+    val secondaryPosOvrs: List<String> = emptyList(),
     val seasonRatings: List<StatChipUi>,
     val seasonStats: List<StatChipUi>,
     val careerTotals: List<StatChipUi>,
@@ -210,6 +216,8 @@ data class MainUiState(
     val selectedConfIndex: Int = 0,
     val selectedBrowseTeamIndex: Int = 0,
     val lineupPositionIndex: Int = 0,
+    val lineupDepthFilter: DepthFilter = DepthFilter.PRIMARY,
+    val lineupDepthFilterLabels: List<String> = listOf("Primary", "Eligible", "Everyone"),
     val lineupPositionLabel: String = "",
     val lineupRequired: Int = 1,
     val lineupRows: List<LineupRowUi> = emptyList(),

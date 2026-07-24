@@ -73,9 +73,9 @@ public final class DepthChart {
     }
 
     private static void setRole(Player p, RoleTag tag) {
-        if (p instanceof PlayerEDGE) ((PlayerEDGE) p).roleTag = tag == RoleTag.EDGE ? RoleTag.EDGE : tag;
-        else if (p instanceof PlayerDL) ((PlayerDL) p).roleTag = tag;
-        else if (p instanceof PlayerLB) ((PlayerLB) p).roleTag = tag;
+        if (p instanceof PlayerEDGE) p.roleTag = tag == RoleTag.EDGE ? RoleTag.EDGE : tag;
+        else if (p instanceof PlayerDL) p.roleTag = tag;
+        else if (p instanceof PlayerLB) p.roleTag = tag;
         else if (p instanceof PlayerCB) { /* CB/NB via position string ok */ }
     }
 

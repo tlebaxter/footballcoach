@@ -15,6 +15,9 @@ import CFBsimPack.PlayerSeasonRecord
 import CFBsimPack.RosterStatus
 import CFBsimPack.DefensiveSystem
 import CFBsimPack.OffensivePhilosophy
+import CFBsimPack.PlayerRatings
+import CFBsimPack.PositionGroup
+import CFBsimPack.PositionOvr
 import CFBsimPack.Team
 import CFBsimPack.TransferReason
 import achijones.footballcoach.ui.util.SaveSlots
@@ -55,6 +58,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         "TE (1 starter)",
         "OL (5 starters)",
         "K (1 starter)",
+        "P (1 starter)",
         "S (1 starter)",
         "CB (3 starters)",
         "EDGE (2 starters)",
@@ -66,8 +70,13 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         "Gunner 2",
         "LS (long snap)",
     )
-    private val lineupRequired = intArrayOf(1, 2, 1, 3, 1, 5, 1, 1, 3, 2, 3, 3, 1, 1, 1, 1, 1)
-    private val stSlotBase = 12
+    private val lineupRequired = intArrayOf(1, 2, 1, 3, 1, 5, 1, 1, 1, 3, 2, 3, 3, 1, 1, 1, 1, 1)
+    private val stSlotBase = 13
+    private val lineupPosGroups = listOf(
+        PositionGroup.QB, PositionGroup.RB, PositionGroup.FB, PositionGroup.WR,
+        PositionGroup.TE, PositionGroup.OL, PositionGroup.K, PositionGroup.P,
+        PositionGroup.S, PositionGroup.CB, PositionGroup.EDGE, PositionGroup.DL, PositionGroup.LB,
+    )
     private val rankingsModes = arrayOf(
         "Poll Votes", "Conference Standings", "Strength of Sched", "Points Per Game",
         "Opp Points Per Game", "Yards Per Game", "Opp Yards Per Game", "Pass Yards Per Game",
@@ -383,7 +392,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             // First player in the ST candidate list is the assigned slot holder.
             user.setSpecialTeamsSlot(posIndex - stSlotBase, ordered[0])
         } else {
-            user.setDepthChart(ordered, posIndex)
+            val group = lineupPosGroups.getOrNull(posIndex)
+            val primaryOnly = if (group != null) {
+                java.util.ArrayList(ordered.filter { it.position == group.token })
+            } else {
+                ordered
+            }
+            if (primaryOnly.isNotEmpty()) {
+                user.setDepthChart(primaryOnly, posIndex)
+            }
         }
         if (persistMessage) {
             postSnackbar("Updated depth chart for ${lineupPositions[posIndex]}")
@@ -524,11 +541,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun pickTeam(index: Int) {
+    fun pickTeam(abbr: String) {
         val l = league ?: return
-        if (index < 0 || index >= l.teamList.size) return
+        val picked = l.teamList.firstOrNull { it.abbr == abbr } ?: return
         userTeam?.userControlled = false
-        userTeam = l.teamList[index]
+        userTeam = picked
         l.userTeam = userTeam
         userTeam!!.userControlled = true
         currentTeam = userTeam
@@ -644,6 +661,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             player.getCareerStatsList(),
             skipLabels = setOf("Schools", "Status", "Awards"),
         )
+        val attrChips = buildAttrChips(player)
+        val secondaryPos = buildSecondaryPosOvrs(player)
         _uiState.update {
             it.copy(
                 showPlayerCareer = true,
@@ -661,6 +680,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     } else {
                         null
                     },
+                    attrChips = attrChips,
+                    secondaryPosOvrs = secondaryPos,
                     seasonRatings = seasonChips.ratings,
                     seasonStats = seasonChips.stats,
                     careerTotals = careerChips.stats,
@@ -1049,23 +1070,36 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             return pool
         }
-        val list = when (position) {
-            0 -> user.teamQBs
-            1 -> user.teamRBs
-            2 -> user.teamFBs
-            3 -> user.teamWRs
-            4 -> user.teamTEs
-            5 -> user.teamOLs
-            6 -> user.teamKs
-            7 -> user.teamSs
-            8 -> user.teamCBs
-            9 -> user.teamEDGEs
-            10 -> user.teamDLs
-            11 -> user.teamLBs
-            else -> emptyList()
+        val group = lineupPosGroups.getOrNull(position) ?: return emptyList()
+        val filter = _uiState.value.lineupDepthFilter
+        val primary = user.playersForGroup(group)?.toList().orEmpty()
+        val all = user.allPlayers
+        return when (filter) {
+            DepthFilter.PRIMARY -> primary
+            DepthFilter.ELIGIBLE -> {
+                val minOvr = 40
+                val byOvr = all
+                    .sortedByDescending { PositionOvr.ovr(it, group) }
+                    .filter { PositionOvr.ovr(it, group) >= minOvr || it.position == group.token }
+                val ordered = LinkedHashSet<Player>()
+                primary.forEach { ordered.add(it) }
+                byOvr.forEach { ordered.add(it) }
+                ordered.toList()
+            }
+            DepthFilter.EVERYONE -> {
+                val primarySet = primary.toSet()
+                val rest = all
+                    .filter { it !in primarySet }
+                    .sortedByDescending { PositionOvr.ovr(it, group) }
+                primary + rest
+            }
         }
-        @Suppress("UNCHECKED_CAST")
-        return list as List<Player>
+    }
+
+    fun selectLineupDepthFilter(index: Int) {
+        val filter = DepthFilter.entries.getOrElse(index) { DepthFilter.PRIMARY }
+        _uiState.update { it.copy(lineupDepthFilter = filter) }
+        rebuildSnapshot()
     }
 
     private fun rebuildSnapshot(
@@ -1104,14 +1138,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         initLineupOrder(posIdx)
         val required = lineupRequired[posIdx]
         val lineupPlayers = playersForLineupPosition(user, posIdx)
+        val lensGroup = lineupPosGroups.getOrNull(posIdx)
         val lineupRows = lineupPlayers.mapIndexed { index, p ->
-            val starter = index < required
+            val starter = index < required && (lensGroup == null || p.position == lensGroup.token)
             val injured = p.isInjured && p.injury != null
+            val posOvr = if (lensGroup != null) PositionOvr.ovr(p, lensGroup) else p.ratOvr
             LineupRowUi(
                 name = p.name,
                 ovr = p.ratOvr,
+                posOvr = posOvr,
+                primaryPos = p.position ?: "",
                 yearLabel = p.getYrStr(),
-                potGrade = letterGrade(p.ratPot),
+                potGrade = letterGrade(
+                    if (lensGroup != null) PositionOvr.pot(p, lensGroup) else p.ratPot,
+                ),
                 injured = injured,
                 injuryLabel = if (injured) p.injury.toString() else null,
                 playerKey = playerKey(p),
@@ -1451,6 +1491,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val stats: List<StatChipUi>,
     )
 
+    private fun buildAttrChips(player: Player): List<StatChipUi> {
+        val bag = player.ratings ?: return emptyList()
+        val out = mutableListOf<StatChipUi>()
+        out.add(StatChipUi("DUR", letterGrade(bag.dur)))
+        out.add(StatChipUi("IQ", letterGrade(bag.footIq)))
+        out.add(StatChipUi("POT", letterGrade(bag.pot)))
+        for (k in PlayerRatings.KEYS) {
+            out.add(StatChipUi(PlayerRatings.displayLabel(k), letterGrade(bag.get(k))))
+        }
+        return out
+    }
+
+    private fun buildSecondaryPosOvrs(player: Player): List<String> {
+        val primary = PositionOvr.primaryGroup(player)
+        val ranked = PositionGroup.values()
+            .filter { it != primary }
+            .map { it to player.ovrFor(it) }
+            .filter { it.second >= 45 }
+            .sortedByDescending { it.second }
+            .take(3)
+        return ranked.map { "${it.first.token} ${it.second}" }
+    }
+
     private fun parseStatChips(
         lines: List<String>?,
         skipLabels: Set<String> = emptySet(),
@@ -1696,14 +1759,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun buildTeamPickerConferences(l: League): List<TeamPickerConfUi> {
-        val indexByAbbr = l.teamList.withIndex().associate { it.value.abbr to it.index }
         return l.conferences.map { conf ->
             TeamPickerConfUi(
                 name = conf.confName,
-                teams = conf.confTeams.mapNotNull { team ->
-                    val index = indexByAbbr[team.abbr] ?: return@mapNotNull null
+                teams = conf.confTeams.map { team ->
                     TeamPickerTeamUi(
-                        teamListIndex = index,
                         name = team.name,
                         abbr = team.abbr,
                         programPower = team.programProfile.programPower,

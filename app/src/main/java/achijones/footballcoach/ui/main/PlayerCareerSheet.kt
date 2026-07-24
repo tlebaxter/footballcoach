@@ -165,15 +165,25 @@ private fun PlayerCareerHeader(career: PlayerCareerUi) {
             if (career.nilLabel != null) {
                 MoneyChip(career.nilLabel)
             }
+            for (pos in career.secondaryPosOvrs) {
+                MetaChip(pos)
+            }
         }
     }
 }
 
 @Composable
 private fun SeasonTab(career: PlayerCareerUi) {
-    if (career.seasonRatings.isEmpty() && career.seasonStats.isEmpty()) {
+    if (career.attrChips.isEmpty()
+        && career.seasonRatings.isEmpty()
+        && career.seasonStats.isEmpty()
+    ) {
         EmptyPane("No season stats yet.")
         return
+    }
+    if (career.attrChips.isNotEmpty()) {
+        SectionLabel("Attributes")
+        RatingsGrid(career.attrChips)
     }
     if (career.seasonRatings.isNotEmpty()) {
         SectionLabel("Ratings")

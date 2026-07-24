@@ -34,6 +34,7 @@ data class CoachUiState(
     val showSimUntilMenu: Boolean = false,
     val showCoinToss: Boolean = false,
     val showTryChoice: Boolean = false,
+    val showTimeoutConfirm: Boolean = false,
     val finished: Boolean = false,
     val error: String? = null,
 )
@@ -246,10 +247,21 @@ class CoachGameViewModel : ViewModel() {
         }
     }
 
-    fun callTimeout() {
+    fun requestTimeout() {
+        val sit = _uiState.value.situation ?: return
+        if (!sit.canCallTimeout) return
+        _uiState.update { it.copy(showTimeoutConfirm = true) }
+    }
+
+    fun dismissTimeoutConfirm() {
+        _uiState.update { it.copy(showTimeoutConfirm = false) }
+    }
+
+    fun confirmTimeout() {
         val g = game ?: return
         val userIsHome = g.homeTeam.userControlled
         g.callTimeout(userIsHome)
+        _uiState.update { it.copy(showTimeoutConfirm = false) }
         refresh()
     }
 

@@ -140,7 +140,7 @@ private val STAT_SECTION_ORDER = listOf("Offense", "Defense", "Program")
 private val STAT_SPOTLIGHT_LABELS = listOf("Points", "Opp Points", "Yards", "TO Diff")
 
 private val ROSTER_FILTERS = listOf(
-    "ALL", "QB", "RB", "FB", "WR", "TE", "OL", "K", "S", "CB", "EDGE", "DL", "LB",
+    "ALL", "QB", "RB", "FB", "WR", "TE", "OL", "K", "P", "S", "CB", "EDGE", "DL", "LB",
 )
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -482,12 +482,18 @@ private fun DepthChartPanel(state: MainUiState, viewModel: MainViewModel) {
             label = "Position",
             options = listOf(
                 "QB (1 starter)", "RB (2 starters)", "FB (1 starter)", "WR (3 starters)",
-                "TE (1 starter)", "OL (5 starters)", "K (1 starter)", "S (1 starter)",
+                "TE (1 starter)", "OL (5 starters)", "K (1 starter)", "P (1 starter)", "S (1 starter)",
                 "CB (3 starters)", "EDGE (2 starters)", "DL (3 starters)", "LB (3 starters)",
                 "PR (punt return)", "KR (kick return)", "Gunner 1", "Gunner 2", "LS (long snap)",
             ),
             selectedIndex = state.lineupPositionIndex,
             onSelect = viewModel::selectLineupPosition,
+        )
+        SpinnerDropdown(
+            label = "Filter",
+            options = state.lineupDepthFilterLabels,
+            selectedIndex = state.lineupDepthFilter.ordinal,
+            onSelect = viewModel::selectLineupDepthFilter,
         )
         DepthChartToolbar(
             starterEnabled = state.lineupStarterCount > 0,
@@ -684,6 +690,7 @@ private fun DepthChartCard(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
+                    RosterMetaChip(row.primaryPos)
                     RosterMetaChip(row.yearLabel)
                     if (row.injured && row.injuryLabel != null) {
                         RosterInjuryChip(row.injuryLabel)
@@ -691,7 +698,7 @@ private fun DepthChartCard(
                 }
             }
             Spacer(modifier = Modifier.width(8.dp))
-            OvrPotBadge(ovr = row.ovr, potGrade = row.potGrade)
+            OvrPotBadge(ovr = row.posOvr, potGrade = row.potGrade)
             IconButton(onClick = onToggleLock) {
                 Icon(
                     imageVector = if (row.locked) Icons.Filled.Lock else Icons.Filled.LockOpen,
@@ -1726,7 +1733,7 @@ private fun TeamPickerStatChip(label: String, value: String) {
 @Composable
 private fun TeamPickerScreen(
     conferences: List<TeamPickerConfUi>,
-    onPick: (Int) -> Unit,
+    onPick: (String) -> Unit,
 ) {
     if (conferences.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -2055,7 +2062,7 @@ private fun TeamPickerScreen(
                 }
 
                 Button(
-                    onClick = { if (currentTeam != null) onPick(currentTeam.teamListIndex) },
+                    onClick = { if (currentTeam != null) onPick(currentTeam.abbr) },
                     enabled = currentTeam != null,
                     modifier = Modifier
                         .fillMaxWidth()
