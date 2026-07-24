@@ -3,15 +3,8 @@ package CFBsimPack.engine;
 import CFBsimPack.DefensiveSystem;
 import CFBsimPack.OnFieldEleven;
 import CFBsimPack.Player;
-import CFBsimPack.PlayerCB;
-import CFBsimPack.PlayerFB;
-import CFBsimPack.PlayerK;
-import CFBsimPack.PlayerP;
-import CFBsimPack.PlayerQB;
-import CFBsimPack.PlayerRB;
-import CFBsimPack.PlayerS;
-import CFBsimPack.PlayerTE;
-import CFBsimPack.PlayerWR;
+import CFBsimPack.PlayerRatings;
+import CFBsimPack.PositionGroup;
 import CFBsimPack.RoleTag;
 import CFBsimPack.Team;
 
@@ -98,7 +91,7 @@ public final class PlayResolver {
         PlayResult r = new PlayResult();
         r.playType = OffensePlay.PASS;
         OffenseConcept concept = call.resolvedOffenseConcept();
-        PlayerQB qb = onFieldQb(off, offense);
+        Player qb = onFieldQb(off, offense);
         if (qb == null) {
             return PlayResult.logOnly(offense.abbr + " has no QB on the field.", 5);
         }
@@ -112,16 +105,17 @@ public final class PlayResolver {
                 * sys.passWeight * concept.sackRiskMod);
         if (rng.nextDouble() * 100 < pressure / 8.0) {
             // Designed scramble / escape before sack
-            int qbSpd = qb.ratings != null ? qb.ratings.spd : 55;
+            int qbSpd = rating(qb, x -> x.spd, 55);
             if (rng.nextDouble() < 0.22 + qbSpd / 500.0) {
-                int scrambleYds = (int) ((qbSpd + qb.ratPassEva) / 18.0 * rng.nextDouble());
+                int scrambleYds = (int) ((qbSpd + rating(qb, x -> x.elu, 55)) / 18.0 * rng.nextDouble());
                 if (scrambleYds < 1) scrambleYds = 1;
                 return applyGain(offense, defense, state, call, r, null, qb, scrambleYds, false);
             }
             return sack(offense, state, call, qb);
         }
 
-        double intChance = (pressure + def.coverageComposite() - (qb.ratPassAcc + qb.ratFootIQ + 100) / 3.0) / 18.0;
+        double intChance = (pressure + def.coverageComposite()
+                - (rating(qb, x -> x.tha, 55) + qb.ratFootIQ + 100) / 3.0) / 18.0;
         intChance *= cov.intMod;
         if (concept.depth == DepthBand.DEEP) intChance *= 1.12;
         if (intChance < 0.015) intChance = 0.015;
@@ -130,8 +124,8 @@ public final class PlayResolver {
             r.possessionChanged = true;
             r.stoppedClock = true;
             r.clockBurned = (int) (8 + 10 * rng.nextDouble() * tempo);
-            qb.statsInt++;
-            qb.statsPassAtt++;
+            qb.seasonStats.passInt++;
+            qb.seasonStats.passAtt++;
             if (gameStats != null) {
                 PlayerGameStats.Line line = gameStats.line(qb);
                 line.passAtt++;
@@ -143,21 +137,23 @@ public final class PlayResolver {
         }
 
         Player target = pickReceiver(off, offense, concept.targetBias);
-        PlayerCB cb = onFieldCb(def, defense);
+        Player cb = onFieldCb(def, defense);
         int cat = recvCatch(target);
         int spd = recvSpeed(target);
-        int cbCov = cb != null ? cb.ratCBCov : 70;
-        int cbSpd = cb != null ? cb.ratCBSpd : 70;
+        int cbCov = cb != null ? rating(cb, x -> x.pcv, 70) : 70;
+        int cbSpd = cb != null ? rating(cb, x -> x.spd, 70) : 70;
 
-        double completion = (normalize(qb.ratPassAcc) + normalize(cat) - normalize(cbCov)) / 2.0
+        double completion = (normalize(rating(qb, x -> x.tha, 55)) + normalize(cat) - normalize(cbCov)) / 2.0
                 + 18.25 - pressure / 16.8 + homeField(offense, defense, state);
         completion *= cov.completionMod * concept.completionMod;
         completion += cov.passFitBonus();
         completion += concept.matchupBonus(cov);
 
-        qb.statsPassAtt++;
+        qb.seasonStats.passAtt++;
         if (gameStats != null) gameStats.line(qb).passAtt++;
-        if (target instanceof PlayerWR) ((PlayerWR) target).statsTargets++;
+        if (isPos(target, PositionGroup.WR) || isPos(target, PositionGroup.TE)) {
+            target.seasonStats.targets++;
+        }
 
         if (100 * rng.nextDouble() >= completion) {
             r.incomplete = true;
@@ -174,8 +170,8 @@ public final class PlayResolver {
             r.stoppedClock = true;
             r.clockBurned = (int) (6 + 8 * rng.nextDouble() * tempo);
             state.down++;
-            if (target instanceof PlayerWR) {
-                ((PlayerWR) target).statsDrops++;
+            if (isPos(target, PositionGroup.WR) || isPos(target, PositionGroup.TE)) {
+                target.seasonStats.drops++;
                 if (gameStats != null) gameStats.line(target).drops++;
             }
             r.logLine = "Drop! " + (target != null ? target.name : "Receiver") + " couldn't hang on ("
@@ -183,14 +179,14 @@ public final class PlayResolver {
             return r;
         }
 
-        int yards = (int) ((normalize(qb.ratPassPow) + normalize(spd) - normalize(cbSpd)) * rng.nextDouble() / 3.7
+        int yards = (int) ((normalize(rating(qb, x -> x.thp, 55)) + normalize(spd) - normalize(cbSpd)) * rng.nextDouble() / 3.7
                 * cov.yardsMod * concept.yardsMod);
         if (concept.depth == DepthBand.DEEP) yards += (int) (4 + 8 * rng.nextDouble());
         else if (concept.depth == DepthBand.SHORT) yards = (int) (yards * 0.85);
         if (yards < 0) yards = 0;
 
-        PlayerS s = onFieldS(def, defense);
-        double escape = (normalize(recvEva(target)) * 3 - (cb != null ? cb.ratCBTkl : 70)
+        Player s = onFieldS(def, defense);
+        double escape = (normalize(recvEva(target)) * 3 - (cb != null ? rating(cb, x -> x.tck, 70) : 70)
                 - (s != null ? s.ratOvr : 70)) * rng.nextDouble();
         if (escape > 92 || rng.nextDouble() > 0.95) {
             yards += (int) (3 + spd * rng.nextDouble() / 3);
@@ -232,7 +228,7 @@ public final class PlayResolver {
     }
 
     private PlayResult applyGain(Team offense, Team defense, GameState state, PlayCall call, PlayResult r,
-                                 PlayerQB qb, Player ballCarrier, int yards, boolean wasPass) {
+                                 Player qb, Player ballCarrier, int yards, boolean wasPass) {
         OffenseConcept concept = call.resolvedOffenseConcept();
         double tempo = call.tempo.clockMult * (1.0 + concept.clockMultExtra);
         if (yards < -5) yards = -5;
@@ -271,9 +267,9 @@ public final class PlayResolver {
         creditYards(offense, state, qb, ballCarrier, yards, wasPass);
 
         // Fumble check
-        PlayerS safety = defense.getS(0);
-        int sTkl = safety != null ? safety.ratSTkl : 70;
-        double fum = ballCarrier instanceof PlayerRB
+        Player safety = defense.getS(0);
+        int sTkl = safety != null ? rating(safety, x -> x.tck, 70) : 70;
+        double fum = isPos(ballCarrier, PositionGroup.RB)
                 ? (sTkl + defRun(defense)) / 2.0
                 : sTkl / 2.0;
         fum *= concept.fumbleMod;
@@ -281,8 +277,10 @@ public final class PlayResolver {
             r.turnover = true;
             r.possessionChanged = true;
             r.clockBurned = (int) (12 + 10 * rng.nextDouble() * tempo);
-            if (ballCarrier instanceof PlayerRB) ((PlayerRB) ballCarrier).statsFumbles++;
-            if (ballCarrier instanceof PlayerWR) ((PlayerWR) ballCarrier).statsFumbles++;
+            if (isPos(ballCarrier, PositionGroup.RB)) ballCarrier.seasonStats.fumbles++;
+            if (isPos(ballCarrier, PositionGroup.WR) || isPos(ballCarrier, PositionGroup.TE)) {
+                ballCarrier.seasonStats.recFumbles++;
+            }
             r.logLine = "FUMBLE! " + offense.abbr + " " + (ballCarrier != null ? ballCarrier.name : "")
                     + " lost it (" + concept.displayName + ").";
             return r;
@@ -296,7 +294,7 @@ public final class PlayResolver {
         return r;
     }
 
-    private PlayResult sack(Team offense, GameState state, PlayCall call, PlayerQB qb) {
+    private PlayResult sack(Team offense, GameState state, PlayCall call, Player qb) {
         PlayResult r = new PlayResult();
         OffenseConcept concept = call.resolvedOffenseConcept();
         double tempo = call.tempo.clockMult * (1.0 + concept.clockMultExtra);
@@ -305,7 +303,7 @@ public final class PlayResolver {
         state.yardLine -= 3;
         state.yardsNeed += 3;
         state.down++;
-        qb.statsSacked++;
+        qb.seasonStats.sacked++;
         if (gameStats != null) gameStats.line(qb).sacks++;
         r.clockBurned = (int) (20 + 10 * rng.nextDouble() * tempo);
         if (state.yardLine < 0) {
@@ -324,17 +322,17 @@ public final class PlayResolver {
     private PlayResult fieldGoal(Team offense, Team defense, GameState state, PlayCall call) {
         PlayResult r = new PlayResult();
         r.playType = OffensePlay.FIELD_GOAL;
-        PlayerK k = offense.getK(0);
+        Player k = offense.getK(0);
         int distance = 100 - state.yardLine + 17;
-        double chance = k.ratKickAcc + (k.ratKickPow - 70) - (distance - 30);
+        double chance = rating(k, x -> x.kac, 70) + (rating(k, x -> x.kpw, 70) - 70) - (distance - 30);
         r.clockBurned = (int) (5 + 5 * rng.nextDouble());
         r.stoppedClock = true;
-        k.statsFGAtt++;
+        k.seasonStats.fgAtt++;
         if (gameStats != null) gameStats.line(k).fgAtt++;
         if (100 * rng.nextDouble() < Math.max(8, Math.min(95, chance))) {
             r.scoreFg = true;
             r.possessionChanged = true;
-            k.statsFGMade++;
+            k.seasonStats.fgMade++;
             if (gameStats != null) gameStats.line(k).fgMade++;
             r.logLine = offense.abbr + " K " + k.name + " hits from " + distance
                     + " (" + call.resolvedOffenseConcept().displayName + ").";
@@ -377,23 +375,22 @@ public final class PlayResolver {
         }
 
         int power = 70;
-        if (punter instanceof PlayerP) {
-            power = ((PlayerP) punter).ratPuntPow;
-        } else if (punter instanceof PlayerK) {
-            power = ((PlayerK) punter).ratKickPow;
+        if (isPos(punter, PositionGroup.P)) {
+            power = rating(punter, x -> x.ppw, 70);
+        } else if (isPos(punter, PositionGroup.K)) {
+            power = rating(punter, x -> x.kpw, 70);
         } else if (punter != null && punter.ratings != null) {
             power = punter.ratings.ppw;
         }
         int puntYards = 32 + (int) ((power - 50) * 0.35) + (int) (18 * rng.nextDouble());
         if (puntYards < 28) puntYards = 28;
         if (puntYards > 62) puntYards = 62;
-        if (punter instanceof PlayerP) {
-            PlayerP p = (PlayerP) punter;
-            p.statsPuntAtt++;
-            p.statsPuntYards += puntYards;
+        if (isPos(punter, PositionGroup.P)) {
+            punter.seasonStats.puntAtt++;
+            punter.seasonStats.puntYards += puntYards;
             if (gameStats != null) {
-                gameStats.line(p).puntAtt++;
-                gameStats.line(p).puntYards += puntYards;
+                gameStats.line(punter).puntAtt++;
+                gameStats.line(punter).puntYards += puntYards;
             }
         } else if (punter != null && gameStats != null) {
             gameStats.line(punter).puntAtt++;
@@ -480,8 +477,8 @@ public final class PlayResolver {
         r.playType = OffensePlay.KICKOFF;
         r.clockBurned = (int) (4 + 6 * rng.nextDouble());
         r.stoppedClock = true;
-        PlayerK k = offense.getK(0);
-        int power = k != null ? k.ratKickPow : 70;
+        Player k = offense.getK(0);
+        int power = k != null ? rating(k, x -> x.kpw, 70) : 70;
         boolean onside = call.resolvedOffenseConcept() != null
                 && "onside".equals(call.resolvedOffenseConcept().id);
         if (onside) {
@@ -618,11 +615,11 @@ public final class PlayResolver {
         }
     }
 
-    private void creditTd(Team offense, GameState state, PlayerQB qb, Player ballCarrier, int yards, boolean wasPass) {
+    private void creditTd(Team offense, GameState state, Player qb, Player ballCarrier, int yards, boolean wasPass) {
         if (wasPass && qb != null) {
-            qb.statsTD++;
-            qb.statsPassComp++;
-            qb.statsPassYards += yards;
+            qb.seasonStats.passTd++;
+            qb.seasonStats.passComp++;
+            qb.seasonStats.passYards += yards;
             offense.teamPassYards += yards;
             if (gameStats != null) {
                 PlayerGameStats.Line line = gameStats.line(qb);
@@ -631,69 +628,54 @@ public final class PlayResolver {
                 line.passTd++;
             }
         }
-        if (ballCarrier instanceof PlayerWR) {
-            PlayerWR wr = (PlayerWR) ballCarrier;
-            wr.statsTD++;
-            wr.statsReceptions++;
-            wr.statsRecYards += yards;
+        if (isPos(ballCarrier, PositionGroup.WR) || isPos(ballCarrier, PositionGroup.TE)) {
+            ballCarrier.seasonStats.recTd++;
+            ballCarrier.seasonStats.receptions++;
+            ballCarrier.seasonStats.recYards += yards;
             if (gameStats != null) {
-                PlayerGameStats.Line line = gameStats.line(wr);
+                PlayerGameStats.Line line = gameStats.line(ballCarrier);
                 line.receptions++;
                 line.recYards += yards;
                 line.recTd++;
             }
-        } else if (ballCarrier instanceof PlayerTE) {
-            PlayerTE te = (PlayerTE) ballCarrier;
-            te.statsTD++;
-            te.statsReceptions++;
-            te.statsRecYards += yards;
-            if (gameStats != null) {
-                PlayerGameStats.Line line = gameStats.line(te);
-                line.receptions++;
-                line.recYards += yards;
-                line.recTd++;
-            }
-        } else if (ballCarrier instanceof PlayerRB) {
-            PlayerRB rb = (PlayerRB) ballCarrier;
-            rb.statsTD++;
+        } else if (isPos(ballCarrier, PositionGroup.RB)) {
+            ballCarrier.seasonStats.rushTd++;
             if (wasPass) {
                 if (gameStats != null) {
-                    PlayerGameStats.Line line = gameStats.line(rb);
+                    PlayerGameStats.Line line = gameStats.line(ballCarrier);
                     line.receptions++;
                     line.recYards += yards;
                     line.recTd++;
                 }
             } else {
-                rb.statsRushAtt++;
-                rb.statsRushYards += yards;
+                ballCarrier.seasonStats.rushAtt++;
+                ballCarrier.seasonStats.rushYards += yards;
                 offense.teamRushYards += yards;
                 if (gameStats != null) {
-                    PlayerGameStats.Line line = gameStats.line(rb);
+                    PlayerGameStats.Line line = gameStats.line(ballCarrier);
                     line.rushAtt++;
                     line.rushYards += yards;
                     line.rushTd++;
                 }
             }
-        } else if (ballCarrier instanceof PlayerQB && !wasPass) {
-            PlayerQB q = (PlayerQB) ballCarrier;
-            q.statsRushAtt++;
-            q.statsRushYards += yards;
-            q.statsRushTD++;
+        } else if (isPos(ballCarrier, PositionGroup.QB) && !wasPass) {
+            ballCarrier.seasonStats.rushAtt++;
+            ballCarrier.seasonStats.rushYards += yards;
+            ballCarrier.seasonStats.rushTd++;
             offense.teamRushYards += yards;
             if (gameStats != null) {
-                PlayerGameStats.Line line = gameStats.line(q);
+                PlayerGameStats.Line line = gameStats.line(ballCarrier);
                 line.rushAtt++;
                 line.rushYards += yards;
                 line.rushTd++;
             }
-        } else if (ballCarrier instanceof PlayerFB && !wasPass) {
-            PlayerFB fb = (PlayerFB) ballCarrier;
-            fb.statsRushAtt++;
-            fb.statsRushYards += yards;
-            fb.statsTD++;
+        } else if (isPos(ballCarrier, PositionGroup.FB) && !wasPass) {
+            ballCarrier.seasonStats.rushAtt++;
+            ballCarrier.seasonStats.rushYards += yards;
+            ballCarrier.seasonStats.rushTd++;
             offense.teamRushYards += yards;
             if (gameStats != null) {
-                PlayerGameStats.Line line = gameStats.line(fb);
+                PlayerGameStats.Line line = gameStats.line(ballCarrier);
                 line.rushAtt++;
                 line.rushYards += yards;
                 line.rushTd++;
@@ -703,10 +685,10 @@ public final class PlayResolver {
         else state.awayYards += yards;
     }
 
-    private void creditYards(Team offense, GameState state, PlayerQB qb, Player ballCarrier, int yards, boolean wasPass) {
+    private void creditYards(Team offense, GameState state, Player qb, Player ballCarrier, int yards, boolean wasPass) {
         if (wasPass && qb != null) {
-            qb.statsPassComp++;
-            qb.statsPassYards += yards;
+            qb.seasonStats.passComp++;
+            qb.seasonStats.passYards += yards;
             offense.teamPassYards += yards;
             if (gameStats != null) {
                 PlayerGameStats.Line line = gameStats.line(qb);
@@ -714,23 +696,15 @@ public final class PlayResolver {
                 line.passYards += yards;
             }
         }
-        if (ballCarrier instanceof PlayerWR) {
-            ((PlayerWR) ballCarrier).statsReceptions++;
-            ((PlayerWR) ballCarrier).statsRecYards += yards;
+        if (isPos(ballCarrier, PositionGroup.WR) || isPos(ballCarrier, PositionGroup.TE)) {
+            ballCarrier.seasonStats.receptions++;
+            ballCarrier.seasonStats.recYards += yards;
             if (gameStats != null) {
                 PlayerGameStats.Line line = gameStats.line(ballCarrier);
                 line.receptions++;
                 line.recYards += yards;
             }
-        } else if (ballCarrier instanceof PlayerTE) {
-            ((PlayerTE) ballCarrier).statsReceptions++;
-            ((PlayerTE) ballCarrier).statsRecYards += yards;
-            if (gameStats != null) {
-                PlayerGameStats.Line line = gameStats.line(ballCarrier);
-                line.receptions++;
-                line.recYards += yards;
-            }
-        } else if (ballCarrier instanceof PlayerRB) {
+        } else if (isPos(ballCarrier, PositionGroup.RB)) {
             if (wasPass) {
                 if (gameStats != null) {
                     PlayerGameStats.Line line = gameStats.line(ballCarrier);
@@ -738,8 +712,8 @@ public final class PlayResolver {
                     line.recYards += yards;
                 }
             } else {
-                ((PlayerRB) ballCarrier).statsRushAtt++;
-                ((PlayerRB) ballCarrier).statsRushYards += yards;
+                ballCarrier.seasonStats.rushAtt++;
+                ballCarrier.seasonStats.rushYards += yards;
                 offense.teamRushYards += yards;
                 if (gameStats != null) {
                     PlayerGameStats.Line line = gameStats.line(ballCarrier);
@@ -747,23 +721,21 @@ public final class PlayResolver {
                     line.rushYards += yards;
                 }
             }
-        } else if (ballCarrier instanceof PlayerQB && !wasPass) {
-            PlayerQB q = (PlayerQB) ballCarrier;
-            q.statsRushAtt++;
-            q.statsRushYards += yards;
+        } else if (isPos(ballCarrier, PositionGroup.QB) && !wasPass) {
+            ballCarrier.seasonStats.rushAtt++;
+            ballCarrier.seasonStats.rushYards += yards;
             offense.teamRushYards += yards;
             if (gameStats != null) {
-                PlayerGameStats.Line line = gameStats.line(q);
+                PlayerGameStats.Line line = gameStats.line(ballCarrier);
                 line.rushAtt++;
                 line.rushYards += yards;
             }
-        } else if (ballCarrier instanceof PlayerFB && !wasPass) {
-            PlayerFB fb = (PlayerFB) ballCarrier;
-            fb.statsRushAtt++;
-            fb.statsRushYards += yards;
+        } else if (isPos(ballCarrier, PositionGroup.FB) && !wasPass) {
+            ballCarrier.seasonStats.rushAtt++;
+            ballCarrier.seasonStats.rushYards += yards;
             offense.teamRushYards += yards;
             if (gameStats != null) {
-                PlayerGameStats.Line line = gameStats.line(fb);
+                PlayerGameStats.Line line = gameStats.line(ballCarrier);
                 line.rushAtt++;
                 line.rushYards += yards;
             }
@@ -780,14 +752,14 @@ public final class PlayResolver {
         }
         if (bias == TargetBias.TE) {
             for (Player p : off.players) {
-                if (p instanceof PlayerTE) return p;
+                if (isPos(p, PositionGroup.TE)) return p;
             }
         }
-        List<PlayerWR> wrs = off.receivers();
+        List<Player> wrs = off.receivers();
         if (!wrs.isEmpty() && bias != TargetBias.TE) {
             double best = -1;
-            PlayerWR sel = wrs.get(0);
-            for (PlayerWR wr : wrs) {
+            Player sel = wrs.get(0);
+            for (Player wr : wrs) {
                 double pref = Math.pow(wr.ratOvr, 1) * rng.nextDouble();
                 if (pref > best) {
                     best = pref;
@@ -797,39 +769,39 @@ public final class PlayResolver {
             return sel;
         }
         for (Player p : off.players) {
-            if (p instanceof PlayerTE) return p;
+            if (isPos(p, PositionGroup.TE)) return p;
         }
         if (!wrs.isEmpty()) return wrs.get(0);
         return offense.getWR(0);
     }
 
-    private PlayerQB onFieldQb(OnFieldEleven off, Team offense) {
+    private Player onFieldQb(OnFieldEleven off, Team offense) {
         Player p = off != null ? off.firstWithRole(RoleTag.QB) : null;
-        if (p instanceof PlayerQB) return (PlayerQB) p;
-        p = off != null ? off.firstOf(PlayerQB.class) : null;
-        if (p instanceof PlayerQB) return (PlayerQB) p;
+        if (p != null) return p;
+        p = off != null ? off.firstOf(PositionGroup.QB) : null;
+        if (p != null) return p;
         return offense.getQB(0);
     }
 
-    private PlayerCB onFieldCb(OnFieldEleven def, Team defense) {
+    private Player onFieldCb(OnFieldEleven def, Team defense) {
         Player p = def != null ? def.firstWithRole(RoleTag.CB) : null;
-        if (p instanceof PlayerCB) return (PlayerCB) p;
-        p = def != null ? def.firstOf(PlayerCB.class) : null;
-        if (p instanceof PlayerCB) return (PlayerCB) p;
+        if (p != null) return p;
+        p = def != null ? def.firstOf(PositionGroup.CB) : null;
+        if (p != null) return p;
         return defense.getCB(0);
     }
 
-    private PlayerS onFieldS(OnFieldEleven def, Team defense) {
+    private Player onFieldS(OnFieldEleven def, Team defense) {
         Player p = def != null ? def.firstWithRole(RoleTag.S) : null;
-        if (p instanceof PlayerS) return (PlayerS) p;
-        p = def != null ? def.firstOf(PlayerS.class) : null;
-        if (p instanceof PlayerS) return (PlayerS) p;
+        if (p != null) return p;
+        p = def != null ? def.firstOf(PositionGroup.S) : null;
+        if (p != null) return p;
         return defense.getS(0);
     }
 
     private Player pickCarrier(OnFieldEleven off, Team offense, OffenseConcept concept) {
         // Designed QB keep / option: athletic QBs occasionally keep
-        PlayerQB qb = onFieldQb(off, offense);
+        Player qb = onFieldQb(off, offense);
         int qbSpd = qb != null && qb.ratings != null ? qb.ratings.spd : 55;
         if (qb != null && concept != null && concept.family == ConceptFamily.RUN
                 && rng.nextDouble() < 0.08 + qbSpd / 900.0) {
@@ -842,19 +814,19 @@ public final class PlayResolver {
         }
         Player rbRole = off != null ? off.firstWithRole(RoleTag.RB) : null;
         if (rbRole != null) return rbRole;
-        PlayerRB rb = pickRb(off, offense);
+        Player rb = pickRb(off, offense);
         if (rb != null) return rb;
         return qb;
     }
 
-    private PlayerRB pickRb(OnFieldEleven off, Team offense) {
+    private Player pickRb(OnFieldEleven off, Team offense) {
         if (off != null) {
             for (Player p : off.players) {
-                if (p instanceof PlayerRB) return (PlayerRB) p;
+                if (isPos(p, PositionGroup.RB)) return p;
             }
         }
-        PlayerRB a = offense.getRB(0);
-        PlayerRB b = offense.getRB(1);
+        Player a = offense.getRB(0);
+        Player b = offense.getRB(1);
         if (a == null) return b;
         if (b == null) return a;
         double aPref = Math.pow(a.ratOvr, 1.5) * rng.nextDouble();
@@ -874,42 +846,27 @@ public final class PlayResolver {
     }
 
     private int carrierRushSpd(Player p) {
-        if (p instanceof PlayerRB) return ((PlayerRB) p).ratRushSpd;
-        if (p instanceof PlayerQB) return p.ratings != null ? p.ratings.spd : 55;
-        if (p instanceof PlayerFB) return p.ratings != null ? p.ratings.spd : 55;
-        return p != null && p.ratings != null ? p.ratings.spd : 55;
+        return rating(p, x -> x.spd, 55);
     }
 
     private int carrierRushPow(Player p) {
-        if (p instanceof PlayerRB) return ((PlayerRB) p).ratRushPow;
-        if (p instanceof PlayerQB) return p.ratings != null ? p.ratings.stre : 55;
-        if (p instanceof PlayerFB) return p.ratings != null ? p.ratings.stre : 60;
-        return 55;
+        return rating(p, x -> x.stre, 55);
     }
 
     private int carrierRushEva(Player p) {
-        if (p instanceof PlayerRB) return ((PlayerRB) p).ratRushEva;
-        if (p instanceof PlayerQB) return ((PlayerQB) p).ratPassEva;
-        if (p instanceof PlayerFB) return p.ratings != null ? p.ratings.elu : 50;
-        return 50;
+        return rating(p, x -> x.elu, 50);
     }
 
     private int recvCatch(Player p) {
-        if (p instanceof PlayerWR) return ((PlayerWR) p).ratRecCat;
-        if (p instanceof PlayerTE) return ((PlayerTE) p).ratRecCat;
-        return 60;
+        return rating(p, x -> x.hnd, 60);
     }
 
     private int recvSpeed(Player p) {
-        if (p instanceof PlayerWR) return ((PlayerWR) p).ratRecSpd;
-        if (p instanceof PlayerTE) return ((PlayerTE) p).ratRecSpd;
-        return 55;
+        return rating(p, x -> x.spd, 55);
     }
 
     private int recvEva(Player p) {
-        if (p instanceof PlayerWR) return ((PlayerWR) p).ratRecEva;
-        if (p instanceof PlayerTE) return ((PlayerTE) p).ratRecCat;
-        return 55;
+        return rating(p, x -> x.elu, 55);
     }
 
     private int defRun(Team defense) {
@@ -932,5 +889,18 @@ public final class PlayResolver {
 
     private int normalize(int rating) {
         return (100 + rating) / 2;
+    }
+
+    private static boolean isPos(Player p, PositionGroup g) {
+        return p != null && PositionGroup.fromToken(p.position) == g;
+    }
+
+    private interface RatingGetter {
+        int get(PlayerRatings r);
+    }
+
+    private static int rating(Player p, RatingGetter getter, int fallback) {
+        if (p == null || p.ratings == null) return fallback;
+        return getter.get(p.ratings);
     }
 }

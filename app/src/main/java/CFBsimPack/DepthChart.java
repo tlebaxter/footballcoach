@@ -73,24 +73,24 @@ public final class DepthChart {
     }
 
     private static void setRole(Player p, RoleTag tag) {
-        if (p instanceof PlayerEDGE) p.roleTag = tag == RoleTag.EDGE ? RoleTag.EDGE : tag;
-        else if (p instanceof PlayerDL) p.roleTag = tag;
-        else if (p instanceof PlayerLB) p.roleTag = tag;
-        else if (p instanceof PlayerCB) { /* CB/NB via position string ok */ }
+        if (p == null) return;
+        PositionGroup g = PositionGroup.fromToken(p.position);
+        if (g == PositionGroup.EDGE) p.roleTag = tag == RoleTag.EDGE ? RoleTag.EDGE : tag;
+        else if (g == PositionGroup.DL || g == PositionGroup.LB) p.roleTag = tag;
     }
 
-    private static <T extends Player> void sortUnlocked(ArrayList<T> list, Comparator<? super T> fit) {
+    private static void sortUnlocked(ArrayList<Player> list, Comparator<? super Player> fit) {
         if (list == null || list.size() < 2) return;
-        ArrayList<T> unlocked = new ArrayList<>();
+        ArrayList<Player> unlocked = new ArrayList<>();
         boolean[] wasLocked = new boolean[list.size()];
         for (int i = 0; i < list.size(); i++) {
-            T p = list.get(i);
+            Player p = list.get(i);
             wasLocked[i] = p.depthLocked;
             if (!p.depthLocked) unlocked.add(p);
         }
         Collections.sort(unlocked, fit);
         // Rebuild preserving locked slots
-        ArrayList<T> result = new ArrayList<>(list.size());
+        ArrayList<Player> result = new ArrayList<>(list.size());
         int u = 0;
         for (int i = 0; i < list.size(); i++) {
             if (wasLocked[i]) {
@@ -108,46 +108,64 @@ public final class DepthChart {
         return (a, b) -> Integer.compare(b.ratOvr, a.ratOvr);
     }
 
-    private static Comparator<PlayerFB> byFbFit() {
-        return (a, b) -> Integer.compare(b.ratBlock * 2 + b.ratRushPow, a.ratBlock * 2 + a.ratRushPow);
-    }
-
-    private static Comparator<PlayerTE> byTeFit(OffensivePhilosophy phil) {
-        if (phil == OffensivePhilosophy.AIR_RAID || phil == OffensivePhilosophy.WEST_COAST) {
-            return (a, b) -> Integer.compare(b.ratRecCat * 2 + b.ratRecSpd, a.ratRecCat * 2 + a.ratRecSpd);
-        }
-        return (a, b) -> Integer.compare(b.ratBlock * 2 + b.ratRecCat, a.ratBlock * 2 + a.ratRecCat);
-    }
-
-    private static Comparator<PlayerWR> byWrPassFit() {
+    private static Comparator<Player> byFbFit() {
         return (a, b) -> Integer.compare(
-                b.ratRecCat + b.ratRecSpd + b.ratRecEva,
-                a.ratRecCat + a.ratRecSpd + a.ratRecEva);
+                b.ratings.rbk * 2 + b.ratings.stre,
+                a.ratings.rbk * 2 + a.ratings.stre);
     }
 
-    private static Comparator<PlayerOL> byOlRunFit() {
-        return (a, b) -> Integer.compare(b.ratOLPow + b.ratOLBkR * 2, a.ratOLPow + a.ratOLBkR * 2);
+    private static Comparator<Player> byTeFit(OffensivePhilosophy phil) {
+        if (phil == OffensivePhilosophy.AIR_RAID || phil == OffensivePhilosophy.WEST_COAST) {
+            return (a, b) -> Integer.compare(
+                    b.ratings.hnd * 2 + b.ratings.spd,
+                    a.ratings.hnd * 2 + a.ratings.spd);
+        }
+        return (a, b) -> Integer.compare(
+                b.ratings.rbk * 2 + b.ratings.hnd,
+                a.ratings.rbk * 2 + a.ratings.hnd);
     }
 
-    private static Comparator<PlayerRB> byRbPowerFit() {
-        return (a, b) -> Integer.compare(b.ratRushPow * 2 + b.ratRushSpd, a.ratRushPow * 2 + a.ratRushSpd);
+    private static Comparator<Player> byWrPassFit() {
+        return (a, b) -> Integer.compare(
+                b.ratings.hnd + b.ratings.spd + b.ratings.elu,
+                a.ratings.hnd + a.ratings.spd + a.ratings.elu);
     }
 
-    private static Comparator<PlayerEDGE> byEdgeFit() {
-        return (a, b) -> Integer.compare(b.ratPass * 2 + b.ratPow, a.ratPass * 2 + a.ratPow);
+    private static Comparator<Player> byOlRunFit() {
+        return (a, b) -> Integer.compare(
+                b.ratings.stre + b.ratings.rbk * 2,
+                a.ratings.stre + a.ratings.rbk * 2);
     }
 
-    private static Comparator<PlayerDL> byDlFit(DefensiveSystem sys) {
+    private static Comparator<Player> byRbPowerFit() {
+        return (a, b) -> Integer.compare(
+                b.ratings.stre * 2 + b.ratings.spd,
+                a.ratings.stre * 2 + a.ratings.spd);
+    }
+
+    private static Comparator<Player> byEdgeFit() {
+        return (a, b) -> Integer.compare(
+                b.ratings.prs * 2 + b.ratings.stre,
+                a.ratings.prs * 2 + a.ratings.stre);
+    }
+
+    private static Comparator<Player> byDlFit(DefensiveSystem sys) {
         if (sys == DefensiveSystem.BASE_3_4 || sys == DefensiveSystem.FIVE_TWO || sys == DefensiveSystem.BEAR_46) {
-            return (a, b) -> Integer.compare(b.ratPow * 3 + b.ratRush, a.ratPow * 3 + a.ratRush);
+            return (a, b) -> Integer.compare(
+                    b.ratings.stre * 3 + b.ratings.rns,
+                    a.ratings.stre * 3 + a.ratings.rns);
         }
         return (a, b) -> Integer.compare(b.ratOvr, a.ratOvr);
     }
 
-    private static Comparator<PlayerLB> byLbFit(DefensiveSystem sys) {
+    private static Comparator<Player> byLbFit(DefensiveSystem sys) {
         if (sys == DefensiveSystem.NICKEL || sys == DefensiveSystem.DIME || sys == DefensiveSystem.FOUR_TWO_FIVE) {
-            return (a, b) -> Integer.compare(b.ratCov * 2 + b.ratRush, a.ratCov * 2 + a.ratRush);
+            return (a, b) -> Integer.compare(
+                    b.ratings.pcv * 2 + b.ratings.rns,
+                    a.ratings.pcv * 2 + a.ratings.rns);
         }
-        return (a, b) -> Integer.compare(b.ratRush * 2 + b.ratPow, a.ratRush * 2 + a.ratPow);
+        return (a, b) -> Integer.compare(
+                b.ratings.rns * 2 + b.ratings.stre,
+                a.ratings.rns * 2 + a.ratings.stre);
     }
 }

@@ -5,7 +5,6 @@ import CFBsimPack.LeagueOffseason;
 import CFBsimPack.NilMoney;
 import CFBsimPack.OffseasonSession;
 import CFBsimPack.Player;
-import CFBsimPack.PlayerQB;
 import CFBsimPack.ProgramOffers;
 import CFBsimPack.RosterStatus;
 import CFBsimPack.Team;
@@ -205,7 +204,7 @@ public class OffseasonContractsTest {
         Team t = league.userTeam != null ? league.userTeam : league.teamList.get(0);
         t.recruitMoney = 200000;
         assertTrue(t.canAffordContract(RosterStatus.SCHOLARSHIP, 0, 1));
-        PlayerQB qb = t.teamQBs.isEmpty() ? null : t.teamQBs.get(0);
+        Player qb = t.teamQBs.isEmpty() ? null : t.teamQBs.get(0);
         if (qb != null) {
             qb.rosterStatus = RosterStatus.SCHOLARSHIP_PLUS_NIL;
             qb.nilDealAmount = t.projectedBudget(1);

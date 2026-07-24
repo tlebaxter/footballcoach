@@ -182,13 +182,14 @@ public class SpecialTeamsTest {
         Team t = league.teamList.get(0);
         assertNotNull(t.getK(0));
         assertNotNull(t.getPunter(0));
-        assertTrue(t.getPunter(0) instanceof PlayerP || t.getPunter(0) instanceof PlayerK);
+        String punterPos = t.getPunter(0).position;
+        assertTrue("P".equals(punterPos) || "K".equals(punterPos));
         int kOvr = PositionOvr.ovr(t.getK(0), PositionGroup.K);
         int pAsK = PositionOvr.ovr(t.getPunter(0), PositionGroup.K);
         int pOvr = PositionOvr.ovr(t.getPunter(0), PositionGroup.P);
         assertTrue(kOvr > 0 && pOvr > 0);
         // Dedicated P should generally rate higher at P than as K (unless emergency K fallback)
-        if (t.getPunter(0) instanceof PlayerP) {
+        if ("P".equals(punterPos)) {
             assertTrue(pOvr >= pAsK - 5);
         }
     }

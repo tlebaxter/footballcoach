@@ -2,7 +2,7 @@ package CFBsimPack.engine;
 
 import CFBsimPack.DefensiveSystem;
 import CFBsimPack.OffensivePhilosophy;
-import CFBsimPack.PlayerK;
+import CFBsimPack.Player;
 import CFBsimPack.Team;
 
 import java.util.ArrayList;
@@ -156,10 +156,12 @@ public final class AiPlayCaller {
     }
 
     private double fgMakePct(Team offense, int yardLine) {
-        PlayerK k = offense != null ? offense.getK(0) : null;
+        Player k = offense != null ? offense.getK(0) : null;
         if (k == null) return 0.35;
         int distance = 100 - yardLine + 17;
-        double chance = k.ratKickAcc + (k.ratKickPow - 70) - (distance - 30);
+        int kac = k.ratings != null ? k.ratings.kac : 70;
+        int kpw = k.ratings != null ? k.ratings.kpw : 70;
+        double chance = kac + (kpw - 70) - (distance - 30);
         return Math.max(0.08, Math.min(0.95, chance / 100.0));
     }
 

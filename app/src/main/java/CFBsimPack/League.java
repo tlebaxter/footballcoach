@@ -968,18 +968,15 @@ public class League {
             for (int i = 0; i < 5; ++i) {
                 Player p = heismanCandidates.get(i);
                 heismanTop5 += (i + 1) + ". " + p.team.abbr + "(" + p.team.wins + "-" + p.team.losses + ")" + " - ";
-                if (p instanceof PlayerQB) {
-                    PlayerQB pqb = (PlayerQB) p;
-                    heismanTop5 += " QB " + pqb.name + " [" + pqb.getYrStr() +
-                            "]\n \t\t(" + pqb.statsTD + " TDs, " + pqb.statsInt + " Int, " + pqb.statsPassYards + " Yds)\n\n";
-                } else if (p instanceof PlayerRB) {
-                    PlayerRB prb = (PlayerRB) p;
-                    heismanTop5 += " RB " + prb.name + " [" + prb.getYrStr() +
-                            "]\n \t\t(" + prb.statsTD + " TDs, " + prb.statsFumbles + " Fum, " + prb.statsRushYards + " Yds)\n\n";
-                } else if (p instanceof PlayerWR) {
-                    PlayerWR pwr = (PlayerWR) p;
-                    heismanTop5 += " WR " + pwr.name + " [" + pwr.getYrStr() +
-                            "]\n \t\t(" + pwr.statsTD + " TDs, " + pwr.statsFumbles + " Fum, " + pwr.statsRecYards + " Yds)\n\n";
+                if ("QB".equals(p.position)) {
+                    heismanTop5 += " QB " + p.name + " [" + p.getYrStr() +
+                            "]\n \t\t(" + p.seasonStats.passTd + " TDs, " + p.seasonStats.passInt + " Int, " + p.seasonStats.passYards + " Yds)\n\n";
+                } else if ("RB".equals(p.position)) {
+                    heismanTop5 += " RB " + p.name + " [" + p.getYrStr() +
+                            "]\n \t\t(" + p.seasonStats.rushTd + " TDs, " + p.seasonStats.fumbles + " Fum, " + p.seasonStats.rushYards + " Yds)\n\n";
+                } else if ("WR".equals(p.position)) {
+                    heismanTop5 += " WR " + p.name + " [" + p.getYrStr() +
+                            "]\n \t\t(" + p.seasonStats.recTd + " TDs, " + p.seasonStats.recFumbles + " Fum, " + p.seasonStats.recYards + " Yds)\n\n";
                 }
             }
             return heismanTop5;
@@ -1001,50 +998,44 @@ public class League {
             for (int i = 0; i < 5; ++i) {
                 Player p = heismanCandidates.get(i);
                 heismanTop5 += (i + 1) + ". " + p.team.abbr + "(" + p.team.wins + "-" + p.team.losses + ")" + " - ";
-                if (p instanceof PlayerQB) {
-                    PlayerQB pqb = (PlayerQB) p;
-                    heismanTop5 += " QB " + pqb.getInitialName() + ": " + p.getHeismanScore() + " votes\n\t("
-                            + pqb.statsTD + " TDs, " + pqb.statsInt + " Int, " + pqb.statsPassYards + " Yds)\n\n";
-                } else if (p instanceof PlayerRB) {
-                    PlayerRB prb = (PlayerRB) p;
-                    heismanTop5 += " RB " + prb.getInitialName() + ": " + p.getHeismanScore() + " votes\n\t("
-                            + prb.statsTD + " TDs, " + prb.statsFumbles + " Fum, " + prb.statsRushYards + " Yds)\n\n";
-                } else if (p instanceof PlayerWR) {
-                    PlayerWR pwr = (PlayerWR) p;
-                    heismanTop5 += " WR " + pwr.getInitialName() + ": " + p.getHeismanScore() + " votes\n\t("
-                            + pwr.statsTD + " TDs, " + pwr.statsFumbles + " Fum, " + pwr.statsRecYards + " Yds)\n\n";
+                if ("QB".equals(p.position)) {
+                    heismanTop5 += " QB " + p.getInitialName() + ": " + p.getHeismanScore() + " votes\n\t("
+                            + p.seasonStats.passTd + " TDs, " + p.seasonStats.passInt + " Int, " + p.seasonStats.passYards + " Yds)\n\n";
+                } else if ("RB".equals(p.position)) {
+                    heismanTop5 += " RB " + p.getInitialName() + ": " + p.getHeismanScore() + " votes\n\t("
+                            + p.seasonStats.rushTd + " TDs, " + p.seasonStats.fumbles + " Fum, " + p.seasonStats.rushYards + " Yds)\n\n";
+                } else if ("WR".equals(p.position)) {
+                    heismanTop5 += " WR " + p.getInitialName() + ": " + p.getHeismanScore() + " votes\n\t("
+                            + p.seasonStats.recTd + " TDs, " + p.seasonStats.recFumbles + " Fum, " + p.seasonStats.recYards + " Yds)\n\n";
                 }
             }
             String heismanStats = "";
             String heismanWinnerStr = "";
-            if (heisman instanceof PlayerQB) {
+            if ("QB".equals(heisman.position)) {
                 //qb heisman
-                PlayerQB heisQB = (PlayerQB) heisman;
-                heismanWinnerStr = "Congratulations to the Player of the Year, " + heisQB.team.abbr +
-                        " QB " + heisQB.name + " [" + heisman.getYrStr() + "], who had " +
-                        heisQB.statsTD + " TDs, just " + heisQB.statsInt + " interceptions, and " +
-                        heisQB.statsPassYards + " passing yards. He led " + heisQB.team.name +
-                        " to a " + heisQB.team.wins + "-" + heisQB.team.losses + " record and a #" + heisQB.team.rankTeamPollScore +
+                heismanWinnerStr = "Congratulations to the Player of the Year, " + heisman.team.abbr +
+                        " QB " + heisman.name + " [" + heisman.getYrStr() + "], who had " +
+                        heisman.seasonStats.passTd + " TDs, just " + heisman.seasonStats.passInt + " interceptions, and " +
+                        heisman.seasonStats.passYards + " passing yards. He led " + heisman.team.name +
+                        " to a " + heisman.team.wins + "-" + heisman.team.losses + " record and a #" + heisman.team.rankTeamPollScore +
                         " poll ranking.";
                 heismanStats = heismanWinnerStr + "\n\nFull Results:" + heismanTop5;
-            } else if (heisman instanceof PlayerRB) {
+            } else if ("RB".equals(heisman.position)) {
                 //rb heisman
-                PlayerRB heisRB = (PlayerRB) heisman;
-                heismanWinnerStr = "Congratulations to the Player of the Year, " + heisRB.team.abbr +
-                        " RB " + heisRB.name + " [" + heisman.getYrStr() + "], who had " +
-                        heisRB.statsTD + " TDs, just " + heisRB.statsFumbles + " fumbles, and " +
-                        heisRB.statsRushYards + " rushing yards. He led " + heisRB.team.name +
-                        " to a " + heisRB.team.wins + "-" + heisRB.team.losses + " record and a #" + heisRB.team.rankTeamPollScore +
+                heismanWinnerStr = "Congratulations to the Player of the Year, " + heisman.team.abbr +
+                        " RB " + heisman.name + " [" + heisman.getYrStr() + "], who had " +
+                        heisman.seasonStats.rushTd + " TDs, just " + heisman.seasonStats.fumbles + " fumbles, and " +
+                        heisman.seasonStats.rushYards + " rushing yards. He led " + heisman.team.name +
+                        " to a " + heisman.team.wins + "-" + heisman.team.losses + " record and a #" + heisman.team.rankTeamPollScore +
                         " poll ranking.";
                 heismanStats = heismanWinnerStr + "\n\nFull Results:" + heismanTop5;
-            } else if (heisman instanceof PlayerWR) {
+            } else if ("WR".equals(heisman.position)) {
                 //wr heisman
-                PlayerWR heisWR = (PlayerWR) heisman;
-                heismanWinnerStr = "Congratulations to the Player of the Year, " + heisWR.team.abbr +
-                        " WR " + heisWR.name + " [" + heisman.getYrStr() + "], who had " +
-                        heisWR.statsTD + " TDs, just " + heisWR.statsFumbles + " fumbles, and " +
-                        heisWR.statsRecYards + " receiving yards. He led " + heisWR.team.name +
-                        " to a " + heisWR.team.wins + "-" + heisWR.team.losses + " record and a #" + heisWR.team.rankTeamPollScore +
+                heismanWinnerStr = "Congratulations to the Player of the Year, " + heisman.team.abbr +
+                        " WR " + heisman.name + " [" + heisman.getYrStr() + "], who had " +
+                        heisman.seasonStats.recTd + " TDs, just " + heisman.seasonStats.recFumbles + " fumbles, and " +
+                        heisman.seasonStats.recYards + " receiving yards. He led " + heisman.team.name +
+                        " to a " + heisman.team.wins + "-" + heisman.team.losses + " record and a #" + heisman.team.rankTeamPollScore +
                         " poll ranking.";
                 heismanStats = heismanWinnerStr + "\n\nFull Results:" + heismanTop5;
             }
@@ -1064,35 +1055,35 @@ public class League {
      */
     public String getAllAmericanStr() {
         if (allAmericans.isEmpty()) {
-            ArrayList<PlayerQB> qbs = new ArrayList<>();
-            ArrayList<PlayerRB> rbs = new ArrayList<>();
-            ArrayList<PlayerFB> fbs = new ArrayList<>();
-            ArrayList<PlayerWR> wrs = new ArrayList<>();
-            ArrayList<PlayerTE> tes = new ArrayList<>();
-            ArrayList<PlayerOL> ols = new ArrayList<>();
-            ArrayList<PlayerK> ks = new ArrayList<>();
-            ArrayList<PlayerS> ss = new ArrayList<>();
-            ArrayList<PlayerCB> cbs = new ArrayList<>();
-            ArrayList<PlayerEDGE> edges = new ArrayList<>();
-            ArrayList<PlayerDL> dls = new ArrayList<>();
-            ArrayList<PlayerLB> lbs = new ArrayList<>();
+            ArrayList<Player> qbs = new ArrayList<>();
+            ArrayList<Player> rbs = new ArrayList<>();
+            ArrayList<Player> fbs = new ArrayList<>();
+            ArrayList<Player> wrs = new ArrayList<>();
+            ArrayList<Player> tes = new ArrayList<>();
+            ArrayList<Player> ols = new ArrayList<>();
+            ArrayList<Player> ks = new ArrayList<>();
+            ArrayList<Player> ss = new ArrayList<>();
+            ArrayList<Player> cbs = new ArrayList<>();
+            ArrayList<Player> edges = new ArrayList<>();
+            ArrayList<Player> dls = new ArrayList<>();
+            ArrayList<Player> lbs = new ArrayList<>();
 
             for (Conference c : conferences) {
                 c.getAllConfPlayers();
                 int idx = 0;
-                qbs.add((PlayerQB) c.allConfPlayers.get(idx++));
-                rbs.add((PlayerRB) c.allConfPlayers.get(idx++));
-                rbs.add((PlayerRB) c.allConfPlayers.get(idx++));
-                fbs.add((PlayerFB) c.allConfPlayers.get(idx++));
-                for (int i = 0; i < 3; ++i) wrs.add((PlayerWR) c.allConfPlayers.get(idx++));
-                tes.add((PlayerTE) c.allConfPlayers.get(idx++));
-                for (int i = 0; i < 5; ++i) ols.add((PlayerOL) c.allConfPlayers.get(idx++));
-                ks.add((PlayerK) c.allConfPlayers.get(idx++));
-                ss.add((PlayerS) c.allConfPlayers.get(idx++));
-                for (int i = 0; i < 3; ++i) cbs.add((PlayerCB) c.allConfPlayers.get(idx++));
-                for (int i = 0; i < 2; ++i) edges.add((PlayerEDGE) c.allConfPlayers.get(idx++));
-                for (int i = 0; i < 3; ++i) dls.add((PlayerDL) c.allConfPlayers.get(idx++));
-                for (int i = 0; i < 3; ++i) lbs.add((PlayerLB) c.allConfPlayers.get(idx++));
+                qbs.add(c.allConfPlayers.get(idx++));
+                rbs.add(c.allConfPlayers.get(idx++));
+                rbs.add(c.allConfPlayers.get(idx++));
+                fbs.add(c.allConfPlayers.get(idx++));
+                for (int i = 0; i < 3; ++i) wrs.add(c.allConfPlayers.get(idx++));
+                tes.add(c.allConfPlayers.get(idx++));
+                for (int i = 0; i < 5; ++i) ols.add(c.allConfPlayers.get(idx++));
+                ks.add(c.allConfPlayers.get(idx++));
+                ss.add(c.allConfPlayers.get(idx++));
+                for (int i = 0; i < 3; ++i) cbs.add(c.allConfPlayers.get(idx++));
+                for (int i = 0; i < 2; ++i) edges.add(c.allConfPlayers.get(idx++));
+                for (int i = 0; i < 3; ++i) dls.add(c.allConfPlayers.get(idx++));
+                for (int i = 0; i < 3; ++i) lbs.add(c.allConfPlayers.get(idx++));
             }
 
             Collections.sort(qbs, new PlayerHeismanComp());
@@ -1152,22 +1143,18 @@ public class League {
         for (int i = 0; i < allAmericans.size(); ++i) {
             Player p = allAmericans.get(i);
             allAmerican.append(p.team.abbr + "(" + p.team.wins + "-" + p.team.losses + ")" + " - ");
-            if (p instanceof PlayerQB) {
-                PlayerQB pqb = (PlayerQB) p;
-                allAmerican.append(" QB " + pqb.name + " [" + pqb.getYrStr() + "]\n \t\t" +
-                        pqb.statsTD + " TDs, " + pqb.statsInt + " Int, " + pqb.statsPassYards + " Yds\n");
-            } else if (p instanceof PlayerRB) {
-                PlayerRB prb = (PlayerRB) p;
-                allAmerican.append(" RB " + prb.name + " [" + prb.getYrStr() + "]\n \t\t" +
-                        prb.statsTD + " TDs, " + prb.statsFumbles + " Fum, " + prb.statsRushYards + " Yds\n");
-            } else if (p instanceof PlayerWR) {
-                PlayerWR pwr = (PlayerWR) p;
-                allAmerican.append(" WR " + pwr.name + " [" + pwr.getYrStr() + "]\n \t\t" +
-                        pwr.statsTD + " TDs, " + pwr.statsFumbles + " Fum, " + pwr.statsRecYards + " Yds\n");
-            } else if (p instanceof PlayerK) {
-                PlayerK pk = (PlayerK) p;
-                allAmerican.append(" K " + pk.name + " [" + pk.getYrStr() + "]\n \t\t" +
-                        "FGs: " + pk.statsFGMade + "/" + pk.statsFGAtt + ", XPs: " + pk.statsXPMade + "/" + pk.statsXPAtt + "\n");
+            if ("QB".equals(p.position)) {
+                allAmerican.append(" QB " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        p.seasonStats.passTd + " TDs, " + p.seasonStats.passInt + " Int, " + p.seasonStats.passYards + " Yds\n");
+            } else if ("RB".equals(p.position)) {
+                allAmerican.append(" RB " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        p.seasonStats.rushTd + " TDs, " + p.seasonStats.fumbles + " Fum, " + p.seasonStats.rushYards + " Yds\n");
+            } else if ("WR".equals(p.position)) {
+                allAmerican.append(" WR " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        p.seasonStats.recTd + " TDs, " + p.seasonStats.recFumbles + " Fum, " + p.seasonStats.recYards + " Yds\n");
+            } else if ("K".equals(p.position)) {
+                allAmerican.append(" K " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        "FGs: " + p.seasonStats.fgMade + "/" + p.seasonStats.fgAtt + ", XPs: " + p.seasonStats.xpMade + "/" + p.seasonStats.xpAtt + "\n");
             } else {
                 allAmerican.append(" " + p.position + " " + p.name + " [" + p.getYrStr() + "]\n");
             }
@@ -1189,22 +1176,18 @@ public class League {
         for (int i = 0; i < allConfPlayers.size(); ++i) {
             Player p = allConfPlayers.get(i);
             sb.append(p.team.abbr + "(" + p.team.wins + "-" + p.team.losses + ")" + " - ");
-            if (p instanceof PlayerQB) {
-                PlayerQB pqb = (PlayerQB) p;
-                sb.append(" QB " + pqb.name + " [" + pqb.getYrStr() + "]\n \t\t" +
-                        pqb.statsTD + " TDs, " + pqb.statsInt + " Int, " + pqb.statsPassYards + " Yds\n");
-            } else if (p instanceof PlayerRB) {
-                PlayerRB prb = (PlayerRB) p;
-                sb.append(" RB " + prb.name + " [" + prb.getYrStr() + "]\n \t\t" +
-                        prb.statsTD + " TDs, " + prb.statsFumbles + " Fum, " + prb.statsRushYards + " Yds\n");
-            } else if (p instanceof PlayerWR) {
-                PlayerWR pwr = (PlayerWR) p;
-                sb.append(" WR " + pwr.name + " [" + pwr.getYrStr() + "]\n \t\t" +
-                        pwr.statsTD + " TDs, " + pwr.statsFumbles + " Fum, " + pwr.statsRecYards + " Yds\n");
-            } else if (p instanceof PlayerK) {
-                PlayerK pk = (PlayerK) p;
-                sb.append(" K " + pk.name + " [" + pk.getYrStr() + "]\n \t\t" +
-                        "FGs: " + pk.statsFGMade + "/" + pk.statsFGAtt + ", XPs: " + pk.statsXPMade + "/" + pk.statsXPAtt + "\n");
+            if ("QB".equals(p.position)) {
+                sb.append(" QB " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        p.seasonStats.passTd + " TDs, " + p.seasonStats.passInt + " Int, " + p.seasonStats.passYards + " Yds\n");
+            } else if ("RB".equals(p.position)) {
+                sb.append(" RB " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        p.seasonStats.rushTd + " TDs, " + p.seasonStats.fumbles + " Fum, " + p.seasonStats.rushYards + " Yds\n");
+            } else if ("WR".equals(p.position)) {
+                sb.append(" WR " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        p.seasonStats.recTd + " TDs, " + p.seasonStats.recFumbles + " Fum, " + p.seasonStats.recYards + " Yds\n");
+            } else if ("K".equals(p.position)) {
+                sb.append(" K " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
+                        "FGs: " + p.seasonStats.fgMade + "/" + p.seasonStats.fgAtt + ", XPs: " + p.seasonStats.xpMade + "/" + p.seasonStats.xpAtt + "\n");
             } else {
                 sb.append(" " + p.position + " " + p.name + " [" + p.getYrStr() + "]\n");
             }
@@ -2002,18 +1985,15 @@ public class League {
 
     /** Short stats line for POTY winner header (typed stats, not ceremony prose). */
     public String heismanWinnerStatsLine(Player p) {
-        if (p instanceof PlayerQB) {
-            PlayerQB q = (PlayerQB) p;
-            return q.statsTD + " TDs · " + q.statsInt + " Int · "
-                    + String.format("%,d", q.statsPassYards) + " Yds";
-        } else if (p instanceof PlayerRB) {
-            PlayerRB r = (PlayerRB) p;
-            return r.statsTD + " TDs · " + r.statsFumbles + " Fum · "
-                    + String.format("%,d", r.statsRushYards) + " Yds";
-        } else if (p instanceof PlayerWR) {
-            PlayerWR w = (PlayerWR) p;
-            return w.statsTD + " TDs · " + w.statsFumbles + " Fum · "
-                    + String.format("%,d", w.statsRecYards) + " Yds";
+        if ("QB".equals(p.position)) {
+            return p.seasonStats.passTd + " TDs · " + p.seasonStats.passInt + " Int · "
+                    + String.format("%,d", p.seasonStats.passYards) + " Yds";
+        } else if ("RB".equals(p.position)) {
+            return p.seasonStats.rushTd + " TDs · " + p.seasonStats.fumbles + " Fum · "
+                    + String.format("%,d", p.seasonStats.rushYards) + " Yds";
+        } else if ("WR".equals(p.position)) {
+            return p.seasonStats.recTd + " TDs · " + p.seasonStats.recFumbles + " Fum · "
+                    + String.format("%,d", p.seasonStats.recYards) + " Yds";
         }
         return "Ovr " + p.ratOvr;
     }
@@ -2029,18 +2009,15 @@ public class League {
         for (int i = 0; i < n; i++) {
             Player p = cands.get(i);
             String stats;
-            if (p instanceof PlayerQB) {
-                PlayerQB q = (PlayerQB) p;
-                stats = q.statsTD + " TDs, " + q.statsInt + " Int, "
-                        + String.format("%,d", q.statsPassYards) + " Yds";
-            } else if (p instanceof PlayerRB) {
-                PlayerRB r = (PlayerRB) p;
-                stats = r.statsTD + " TDs, " + r.statsFumbles + " Fum, "
-                        + String.format("%,d", r.statsRushYards) + " Yds";
-            } else if (p instanceof PlayerWR) {
-                PlayerWR w = (PlayerWR) p;
-                stats = w.statsTD + " TDs, " + w.statsFumbles + " Fum, "
-                        + String.format("%,d", w.statsRecYards) + " Yds";
+            if ("QB".equals(p.position)) {
+                stats = p.seasonStats.passTd + " TDs, " + p.seasonStats.passInt + " Int, "
+                        + String.format("%,d", p.seasonStats.passYards) + " Yds";
+            } else if ("RB".equals(p.position)) {
+                stats = p.seasonStats.rushTd + " TDs, " + p.seasonStats.fumbles + " Fum, "
+                        + String.format("%,d", p.seasonStats.rushYards) + " Yds";
+            } else if ("WR".equals(p.position)) {
+                stats = p.seasonStats.recTd + " TDs, " + p.seasonStats.recFumbles + " Fum, "
+                        + String.format("%,d", p.seasonStats.recYards) + " Yds";
             } else {
                 stats = "Ovr " + p.ratOvr;
             }

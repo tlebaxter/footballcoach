@@ -186,9 +186,20 @@ fun ScheduleScreen(
                         style = MaterialTheme.typography.titleSmall,
                         fontWeight = FontWeight.SemiBold,
                     )
-                    if (state.schedulingActive) {
-                        TextButton(onClick = viewModel::resuggestOocSchedule) {
-                            Text("Resuggest")
+                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+                        TextButton(onClick = viewModel::suggestFutureDeals) {
+                            Text("Suggest deals")
+                        }
+                        TextButton(
+                            onClick = viewModel::revertSuggestedDeals,
+                            enabled = state.canRevertSuggestedDeals,
+                        ) {
+                            Text("Revert suggestions")
+                        }
+                        if (state.schedulingActive) {
+                            TextButton(onClick = viewModel::resuggestOocSchedule) {
+                                Text("Resuggest")
+                            }
                         }
                     }
                 }
@@ -345,15 +356,36 @@ private fun ContractDeskCard(
             color = MaterialTheme.colorScheme.tertiary,
             modifier = Modifier.padding(top = 4.dp),
         )
-        if (card.games.any { it.canReschedule }) {
-            TextButton(onClick = {
-                card.games.firstOrNull { it.canReschedule }?.let { onChangeDate(it.year) }
-            }) {
-                Text("Change date")
+        val canReschedule = card.games.any { it.canReschedule }
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (canReschedule) {
+                OutlinedButton(
+                    onClick = {
+                        card.games.firstOrNull { it.canReschedule }?.let { onChangeDate(it.year) }
+                    },
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Change date")
+                }
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Cancel deal")
+                }
+            } else {
+                OutlinedButton(
+                    onClick = onCancel,
+                    modifier = Modifier.fillMaxWidth(),
+                ) {
+                    Text("Cancel deal")
+                }
             }
-        }
-        TextButton(onClick = onCancel) {
-            Text("Cancel deal")
         }
     }
 }

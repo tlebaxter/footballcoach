@@ -324,6 +324,76 @@ public class OocContractBookTest {
         assertFalse(league.oocContracts.canReschedule("CY", league.getYear()));
     }
 
+    @Test
+    public void autoSignFutureDealsNoopsWhenUserTeamUnset() throws Exception {
+        League league = createOpenOocLeague();
+        assertNull(league.userTeam);
+        int before = league.oocContracts.all().size();
+        league.oocContracts.autoSignFutureDeals(league.teamList);
+        assertEquals(before, league.oocContracts.all().size());
+    }
+
+    @Test
+    public void autoSignFutureDealsSkipsUserTeam() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("ALA");
+        assertNotNull(user);
+        league.userTeam = user;
+        user.userControlled = true;
+
+        int before = league.oocContracts.all().size();
+        league.oocContracts.autoSignFutureDeals(league.teamList);
+        assertTrue(league.oocContracts.all().size() > before);
+        for (OocContract c : league.oocContracts.all()) {
+            assertFalse("AI must not sign deals involving user", c.involves(user.abbr));
+        }
+    }
+
+    @Test
+    public void suggestAndRevertUserFutureDeals() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("ALA");
+        assertNotNull(user);
+        league.userTeam = user;
+        user.userControlled = true;
+        int moneyBefore = user.recruitMoney;
+
+        int signed = league.oocContracts.suggestUserFutureDeals(user, league.teamList);
+        assertTrue(signed > 0);
+        assertTrue(league.oocContracts.hasSuggestedUserDeals());
+        assertEquals(signed, league.oocContracts.forTeam(user.abbr).size());
+
+        int removed = league.oocContracts.revertSuggestedUserDeals();
+        assertEquals(signed, removed);
+        assertFalse(league.oocContracts.hasSuggestedUserDeals());
+        assertEquals(0, league.oocContracts.forTeam(user.abbr).size());
+        assertEquals(moneyBefore, user.recruitMoney);
+    }
+
+    @Test
+    public void suggestUserFutureDealsReplacesPriorBatch() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("OSU");
+        assertNotNull(user);
+        league.userTeam = user;
+        user.userControlled = true;
+
+        int first = league.oocContracts.suggestUserFutureDeals(user, league.teamList);
+        assertTrue(first > 0);
+        java.util.ArrayList<String> firstIds = new java.util.ArrayList<>();
+        for (OocContract c : league.oocContracts.forTeam(user.abbr)) {
+            firstIds.add(c.id);
+        }
+
+        int second = league.oocContracts.suggestUserFutureDeals(user, league.teamList);
+        assertTrue(second > 0);
+        for (String id : firstIds) {
+            assertNull(league.oocContracts.findById(id));
+        }
+        assertTrue(league.oocContracts.hasSuggestedUserDeals());
+        assertEquals(second, league.oocContracts.forTeam(user.abbr).size());
+    }
+
     private static League createOpenOocLeague() throws Exception {
         Path asset = Paths.get("src/main/assets/fbs_2026.csv");
         if (!Files.exists(asset)) {

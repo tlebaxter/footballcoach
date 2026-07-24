@@ -6,6 +6,7 @@ import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Random;
 import java.util.Set;
 
 /**
@@ -630,23 +631,9 @@ public class LeagueOffseason {
         int stars = 1 + (int) (Math.random() * 5);
         if (Math.random() < 0.15) stars = Math.min(5, stars + 1);
         String name = league.getRandName();
-        Player p;
-        switch (pos) {
-            case "QB": p = new PlayerQB(name, 1, stars, seedTeam); break;
-            case "RB": p = new PlayerRB(name, 1, stars, seedTeam); break;
-            case "FB": p = new PlayerFB(name, 1, stars, seedTeam); break;
-            case "WR": p = new PlayerWR(name, 1, stars, seedTeam); break;
-            case "TE": p = new PlayerTE(name, 1, stars, seedTeam); break;
-            case "OL": p = new PlayerOL(name, 1, stars, seedTeam); break;
-            case "K": p = new PlayerK(name, 1, stars, seedTeam); break;
-            case "P": p = new PlayerP(name, 1, stars, seedTeam); break;
-            case "S": p = new PlayerS(name, 1, stars, seedTeam); break;
-            case "CB": p = new PlayerCB(name, 1, stars, seedTeam); break;
-            case "EDGE": p = new PlayerEDGE(name, 1, stars, seedTeam); break;
-            case "DL": p = new PlayerDL(name, 1, stars, seedTeam); break;
-            case "LB": p = new PlayerLB(name, 1, stars, seedTeam); break;
-            default: return null;
-        }
+        PositionGroup g = PositionGroup.fromToken(pos);
+        if (g == null) return null;
+        Player p = PlayerFactory.fromStars(g, name, 1, stars, seedTeam, new Random());
         p.team = null;
         p.cost = NilMoney.marketValue(p);
         return p;

@@ -45,38 +45,42 @@ public class PlayerSeasonRecord {
         krTd = p.statsKrTd;
         fairCatches = p.statsFairCatches;
 
-        if (p instanceof PlayerQB) {
-            PlayerQB q = (PlayerQB) p;
-            passAtt = q.statsPassAtt;
-            passComp = q.statsPassComp;
-            passYards = q.statsPassYards;
-            passTd = q.statsTD;
-            passInt = q.statsInt;
-            sacked = q.statsSacked;
-        } else if (p instanceof PlayerRB) {
-            PlayerRB r = (PlayerRB) p;
-            rushAtt = r.statsRushAtt;
-            rushYards = r.statsRushYards;
-            rushTd = r.statsTD;
-            rushFumbles = r.statsFumbles;
-        } else if (p instanceof PlayerWR) {
-            PlayerWR w = (PlayerWR) p;
-            targets = w.statsTargets;
-            receptions = w.statsReceptions;
-            recYards = w.statsRecYards;
-            recTd = w.statsTD;
-            drops = w.statsDrops;
-            recFumbles = w.statsFumbles;
-        } else if (p instanceof PlayerK) {
-            PlayerK k = (PlayerK) p;
-            xpAtt = k.statsXPAtt;
-            xpMade = k.statsXPMade;
-            fgAtt = k.statsFGAtt;
-            fgMade = k.statsFGMade;
-        } else if (p instanceof PlayerP) {
-            PlayerP punter = (PlayerP) p;
-            puntAtt = punter.statsPuntAtt;
-            puntYards = punter.statsPuntYards;
+        PlayerSkillStats s = p.seasonStats;
+        PositionGroup g = PositionGroup.fromToken(p.position);
+        if (g == PositionGroup.QB) {
+            passAtt = s.passAtt;
+            passComp = s.passComp;
+            passYards = s.passYards;
+            passTd = s.passTd;
+            passInt = s.passInt;
+            sacked = s.sacked;
+            rushAtt = s.rushAtt;
+            rushYards = s.rushYards;
+            rushTd = s.rushTd;
+        } else if (g == PositionGroup.RB) {
+            rushAtt = s.rushAtt;
+            rushYards = s.rushYards;
+            rushTd = s.rushTd;
+            rushFumbles = s.fumbles;
+        } else if (g == PositionGroup.FB) {
+            rushAtt = s.rushAtt;
+            rushYards = s.rushYards;
+            rushTd = s.rushTd;
+        } else if (g == PositionGroup.WR || g == PositionGroup.TE) {
+            targets = s.targets;
+            receptions = s.receptions;
+            recYards = s.recYards;
+            recTd = s.recTd;
+            drops = s.drops;
+            recFumbles = s.recFumbles;
+        } else if (g == PositionGroup.K) {
+            xpAtt = s.xpAtt;
+            xpMade = s.xpMade;
+            fgAtt = s.fgAtt;
+            fgMade = s.fgMade;
+        } else if (g == PositionGroup.P) {
+            puntAtt = s.puntAtt;
+            puntYards = s.puntYards;
         }
     }
 
@@ -99,9 +103,9 @@ public class PlayerSeasonRecord {
                 .append(wins).append("-").append(Math.max(0, gamesPlayed - wins)).append(")");
         if ("QB".equals(position)) {
             sb.append("  ").append(passYards).append(" yds, ").append(passTd).append(" TD / ").append(passInt).append(" INT");
-        } else if ("RB".equals(position)) {
+        } else if ("RB".equals(position) || "FB".equals(position)) {
             sb.append("  ").append(rushYards).append(" yds, ").append(rushTd).append(" TD");
-        } else if ("WR".equals(position)) {
+        } else if ("WR".equals(position) || "TE".equals(position)) {
             sb.append("  ").append(receptions).append(" rec, ").append(recYards).append(" yds, ").append(recTd).append(" TD");
         } else if ("K".equals(position)) {
             sb.append("  FG ").append(fgMade).append("/").append(fgAtt)
@@ -109,6 +113,8 @@ public class PlayerSeasonRecord {
             if (puntAtt > 0) {
                 sb.append(", Punt ").append(puntAtt).append("/").append(puntYards);
             }
+        } else if ("P".equals(position) && puntAtt > 0) {
+            sb.append("  Punt ").append(puntAtt).append("/").append(puntYards);
         }
         if (prAtt > 0 || krAtt > 0) {
             if (prAtt > 0) sb.append("  PR ").append(prYards).append(" yds");

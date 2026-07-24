@@ -181,27 +181,11 @@ public final class PlayerFactory {
     }
 
     private static Player createShell(PositionGroup pos, String name, Team team, int year) {
-        Player p;
-        switch (pos) {
-            case QB: p = new PlayerQB(); break;
-            case RB: p = new PlayerRB(); break;
-            case FB: p = new PlayerFB(); break;
-            case WR: p = new PlayerWR(); break;
-            case TE: p = new PlayerTE(); break;
-            case OL: p = new PlayerOL(); break;
-            case EDGE: p = new PlayerEDGE(); break;
-            case DL: p = new PlayerDL(); break;
-            case LB: p = new PlayerLB(); break;
-            case CB: p = new PlayerCB(); break;
-            case S: p = new PlayerS(); break;
-            case K: p = new PlayerK(); break;
-            case P: p = new PlayerP(); break;
-            default: p = new PlayerLB(); break;
-        }
+        Player p = new Player();
         p.name = name;
         p.team = team;
         p.year = year;
-        p.position = pos.token;
+        p.position = pos != null ? pos.token : "LB";
         return p;
     }
 }

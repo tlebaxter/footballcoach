@@ -207,9 +207,10 @@ public final class OnFieldEleven {
                 new double[]{5, 4, 3, 2, 1, 0.5});
     }
 
-    public Player firstOf(Class<? extends Player> cls) {
+    public Player firstOf(PositionGroup group) {
+        if (group == null) return null;
         for (Player p : players) {
-            if (cls.isInstance(p)) return p;
+            if (p != null && PositionGroup.fromToken(p.position) == group) return p;
         }
         return null;
     }
@@ -221,10 +222,12 @@ public final class OnFieldEleven {
         return null;
     }
 
-    public List<PlayerWR> receivers() {
-        List<PlayerWR> out = new ArrayList<>();
+    public List<Player> receivers() {
+        List<Player> out = new ArrayList<>();
         for (Player p : players) {
-            if (p instanceof PlayerWR) out.add((PlayerWR) p);
+            if (p != null && PositionGroup.fromToken(p.position) == PositionGroup.WR) {
+                out.add(p);
+            }
         }
         return out;
     }

@@ -22,7 +22,7 @@ public class DepthChartTest {
     public void setDepthChartPreservesExactOrder() throws Exception {
         League league = createLeague();
         Team team = league.userTeam;
-        ArrayList<PlayerQB> qbs = new ArrayList<>(team.teamQBs);
+        ArrayList<Player> qbs = new ArrayList<>(team.teamQBs);
         assertTrue(qbs.size() >= 3);
 
         ArrayList<Player> reversed = new ArrayList<>();
@@ -42,14 +42,14 @@ public class DepthChartTest {
         Team team = league.userTeam;
         assertTrue(team.teamQBs.size() >= 3);
 
-        PlayerQB weakest = team.teamQBs.get(0);
-        for (PlayerQB qb : team.teamQBs) {
+        Player weakest = team.teamQBs.get(0);
+        for (Player qb : team.teamQBs) {
             if (qb.ratOvr < weakest.ratOvr) weakest = qb;
         }
         // Put weakest at QB1 and lock him; unlocked should fill around him by OVR
         ArrayList<Player> order = new ArrayList<>();
         order.add(weakest);
-        for (PlayerQB qb : team.teamQBs) {
+        for (Player qb : team.teamQBs) {
             if (qb != weakest) order.add(qb);
         }
         team.setDepthChart(order, 0);
@@ -70,7 +70,7 @@ public class DepthChartTest {
         Team team = league.userTeam;
         assertTrue(team.teamQBs.size() >= 2);
 
-        PlayerQB top = team.teamQBs.get(0);
+        Player top = team.teamQBs.get(0);
         top.depthLocked = true;
         top.isInjured = true;
 

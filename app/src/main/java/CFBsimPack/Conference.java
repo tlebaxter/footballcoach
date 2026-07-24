@@ -250,18 +250,18 @@ public class Conference {
      */
     public ArrayList<Player> getAllConfPlayers() {
         if (allConfPlayers.isEmpty()) {
-            ArrayList<PlayerQB> qbs = new ArrayList<>();
-            ArrayList<PlayerRB> rbs = new ArrayList<>();
-            ArrayList<PlayerFB> fbs = new ArrayList<>();
-            ArrayList<PlayerWR> wrs = new ArrayList<>();
-            ArrayList<PlayerTE> tes = new ArrayList<>();
-            ArrayList<PlayerOL> ols = new ArrayList<>();
-            ArrayList<PlayerK> ks = new ArrayList<>();
-            ArrayList<PlayerS> ss = new ArrayList<>();
-            ArrayList<PlayerCB> cbs = new ArrayList<>();
-            ArrayList<PlayerEDGE> edges = new ArrayList<>();
-            ArrayList<PlayerDL> dls = new ArrayList<>();
-            ArrayList<PlayerLB> lbs = new ArrayList<>();
+            ArrayList<Player> qbs = new ArrayList<>();
+            ArrayList<Player> rbs = new ArrayList<>();
+            ArrayList<Player> fbs = new ArrayList<>();
+            ArrayList<Player> wrs = new ArrayList<>();
+            ArrayList<Player> tes = new ArrayList<>();
+            ArrayList<Player> ols = new ArrayList<>();
+            ArrayList<Player> ks = new ArrayList<>();
+            ArrayList<Player> ss = new ArrayList<>();
+            ArrayList<Player> cbs = new ArrayList<>();
+            ArrayList<Player> edges = new ArrayList<>();
+            ArrayList<Player> dls = new ArrayList<>();
+            ArrayList<Player> lbs = new ArrayList<>();
 
             for (Team t : confTeams) {
                 qbs.addAll(t.teamQBs);

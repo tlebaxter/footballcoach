@@ -6,8 +6,8 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * Base player class that others extend. Ratings live in {@link PlayerRatings};
- * {@code ratOvr}/{@code ratPot}/{@code ratFootIQ}/{@code ratDur} stay synced aliases.
+ * Single player type (ZenGM-style). Position is {@link #position};
+ * ratings live in {@link PlayerRatings}; skill counters in {@link #seasonStats}/{@link #careerStats}.
  */
 public class Player {
     
@@ -34,6 +34,10 @@ public class Player {
     public int careerAllAmerican;
     public int careerAllConference;
     public int careerWins;
+
+    /** Flat skill counters for the current season / career totals. */
+    public final PlayerSkillStats seasonStats = new PlayerSkillStats();
+    public final PlayerSkillStats careerStats = new PlayerSkillStats();
 
     /** Special-teams return stats (any position can return). */
     public int statsPrAtt;
@@ -265,21 +269,15 @@ public class Player {
     }
     
     /**
-     * Apply full ratings bag, sync aliases + legacy skill fields, recompute primary OVR.
+     * Apply full ratings bag and recompute primary OVR.
      */
     public void applyRatings(PlayerRatings bag) {
         this.ratings = bag != null ? bag : new PlayerRatings();
         this.ratPot = ratings.pot;
         this.ratFootIQ = ratings.footIq;
         this.ratDur = ratings.dur;
-        syncLegacySkillsFromRatings();
         PositionGroup g = PositionOvr.primaryGroup(this);
         this.ratOvr = PositionOvr.ovr(ratings, g);
-    }
-
-    /** Subclasses map bag → legacy rat* fields used by older UI/sim paths. */
-    protected void syncLegacySkillsFromRatings() {
-        // no-op on base
     }
 
     public int ovrFor(PositionGroup pos) {
@@ -288,6 +286,11 @@ public class Player {
 
     public int potFor(PositionGroup pos) {
         return PositionOvr.pot(this, pos);
+    }
+
+    public PositionGroup positionGroup() {
+        PositionGroup g = PositionGroup.fromToken(position);
+        return g != null ? g : PositionGroup.LB;
     }
 
     public void recomputeCost(Random rng) {
@@ -299,11 +302,41 @@ public class Player {
     }
 
     protected double costDivisor() {
-        return 4.0;
+        switch (positionGroup()) {
+            case QB: return 1.5;
+            case RB: return 3.0;
+            case WR: return 3.5;
+            case TE: return 5.0;
+            case FB: return 6.0;
+            case OL: return 5.0;
+            case K: return 3.5;
+            case P: return 3.5;
+            case CB: return 4.5;
+            case S: return 4.5;
+            case DL: return 4.5;
+            case EDGE: return 4.5;
+            case LB: return 4.5;
+            default: return 4.0;
+        }
     }
 
     protected int costBase() {
-        return 80;
+        switch (positionGroup()) {
+            case QB: return 150;
+            case RB: return 100;
+            case WR: return 100;
+            case TE: return 50;
+            case FB: return 40;
+            case OL: return 50;
+            case K: return 100;
+            case P: return 80;
+            case CB: return 50;
+            case S: return 50;
+            case DL: return 70;
+            case EDGE: return 70;
+            case LB: return 70;
+            default: return 80;
+        }
     }
 
     public String ratingsSaveCsv() {
@@ -321,8 +354,10 @@ public class Player {
         bankPositionCareerStats();
     }
 
-    /** Subclasses bank season → career stats and zero season counters. */
+    /** Bank season skill stats into career and zero season counters / awards flags. */
     protected void bankPositionCareerStats() {
+        careerStats.addFrom(seasonStats);
+        seasonStats.clear();
         careerGamesPlayed += gamesPlayed;
         careerWins += statsWins;
         if (wonHeisman) careerHeismans++;
@@ -336,9 +371,35 @@ public class Player {
     }
     
     public int getHeismanScore() {
-        int adjGames = gamesPlayed;
-        if (adjGames > 10) adjGames = 10;
-        return ratOvr * adjGames;
+        PlayerSkillStats s = seasonStats;
+        switch (positionGroup()) {
+            case QB:
+                return s.passTd * 140 - s.passInt * 250 + s.passYards + s.rushYards + s.rushTd * 100;
+            case RB:
+                return s.rushTd * 120 + s.rushYards;
+            case WR:
+                return s.recTd * 120 + s.recYards;
+            case TE:
+                return s.recTd * 100 + s.recYards;
+            case K:
+                if (s.fgAtt <= 0) return ratOvr;
+                return (int) ((s.fgMade * 5 + s.xpMade) * ((double) s.fgMade / s.fgAtt)) + ratOvr;
+            case P:
+                return ratOvr + s.puntYards / 20;
+            case FB:
+            case OL:
+            case CB:
+            case S:
+            case DL:
+            case EDGE:
+            case LB:
+                return ratOvr * gamesPlayed;
+            default: {
+                int adjGames = gamesPlayed;
+                if (adjGames > 10) adjGames = 10;
+                return ratOvr * adjGames;
+            }
+        }
     }
 
     public String getInitialName() {
@@ -411,10 +472,108 @@ public class Player {
     }
 
     public ArrayList<String> getDetailStatsList(int games) {
-        return null;
-    }public ArrayList<String> getCareerStatsList() {
         ArrayList<String> pStats = new ArrayList<>();
-        pStats.add("Games: " + (gamesPlayed+careerGamesPlayed) + " (" + (statsWins+careerWins) + "-" + (gamesPlayed+careerGamesPlayed-(statsWins+careerWins)) + ")"
+        PlayerSkillStats s = seasonStats;
+        switch (positionGroup()) {
+            case QB:
+                pStats.add("TD/Int: " + s.passTd + "/" + s.passInt + ">Comp Percent: "
+                        + (100 * s.passComp / (s.passAtt + 1)) + "%");
+                pStats.add("Pass Yards: " + s.passYards + " yds>Yards/Att: "
+                        + ((double) (10 * s.passYards / (s.passAtt + 1)) / 10) + " yds");
+                pStats.add("Yds/Game: " + (s.passYards / getGamesPlayed()) + " yds/g>Sacks: " + s.sacked);
+                if (s.rushAtt > 0) {
+                    pStats.add("Rush: " + s.rushAtt + " for " + s.rushYards + ">Rush TD: " + s.rushTd);
+                }
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
+            case RB:
+                pStats.add("Rush Yards: " + s.rushYards + " yds>Yds/Att: "
+                        + ((double) (10 * s.rushYards / (s.rushAtt + 1)) / 10) + " yds");
+                pStats.add("TDs: " + s.rushTd + ">Fumbles: " + s.fumbles);
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
+            case WR:
+                pStats.add("Rec: " + s.receptions + "/" + s.targets + ">Yards: " + s.recYards);
+                pStats.add("TDs: " + s.recTd + ">Drops: " + s.drops);
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
+            case TE:
+                pStats.add("Rec: " + s.receptions + ">Yards: " + s.recYards);
+                pStats.add("TDs: " + s.recTd + ">Games: " + gamesPlayed);
+                break;
+            case FB:
+                pStats.add("Rush: " + s.rushAtt + " for " + s.rushYards + ">TDs: " + s.rushTd);
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
+            case K:
+                if (s.xpAtt > 0) {
+                    pStats.add("XP Made/Att: " + s.xpMade + "/" + s.xpAtt + ">XP Percent: "
+                            + (100 * s.xpMade / s.xpAtt) + "%");
+                } else {
+                    pStats.add("XP Made/Att: 0/0>XP Percent: 0%");
+                }
+                if (s.fgAtt > 0) {
+                    pStats.add("FG Made/Att: " + s.fgMade + "/" + s.fgAtt + ">FG Percent: "
+                            + (100 * s.fgMade / s.fgAtt) + "%");
+                } else {
+                    pStats.add("FG Made/Att: 0/0>FG Percent: 0%");
+                }
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
+            case P:
+                if (s.puntAtt > 0) {
+                    pStats.add("Punts: " + s.puntAtt + ">Avg: " + (s.puntYards / s.puntAtt) + " yds");
+                } else {
+                    pStats.add("Punts: 0>Avg: 0 yds");
+                }
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
+            default:
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
+        }
+        pStats.addAll(getRatingsDetailLines());
+        return pStats;
+    }
+
+    public ArrayList<String> getCareerStatsList() {
+        ArrayList<String> pStats = new ArrayList<>();
+        PlayerSkillStats s = seasonStats;
+        PlayerSkillStats c = careerStats;
+        switch (positionGroup()) {
+            case QB:
+                pStats.add("TD/Int: " + (s.passTd + c.passTd) + "/" + (s.passInt + c.passInt) + ">Comp Percent: "
+                        + (100 * (s.passComp + c.passComp) / (s.passAtt + c.passAtt + 1)) + "%");
+                pStats.add("Pass Yards: " + (s.passYards + c.passYards) + " yds>Yards/Att: "
+                        + ((double) (10 * (s.passYards + c.passYards) / (s.passAtt + c.passAtt + 1)) / 10)
+                        + " yds");
+                pStats.add("Yds/Game: " + ((s.passYards + c.passYards) / (getGamesPlayed() + careerGamesPlayed))
+                        + " yds/g>Sacks: " + (s.sacked + c.sacked));
+                break;
+            case K: {
+                int xpa = s.xpAtt + c.xpAtt;
+                int xpm = s.xpMade + c.xpMade;
+                int fga = s.fgAtt + c.fgAtt;
+                int fgm = s.fgMade + c.fgMade;
+                pStats.add(xpa > 0
+                        ? "XP Made/Att: " + xpm + "/" + xpa + ">XP Percentage: " + (100 * xpm / xpa) + "%"
+                        : "XP Made/Att: 0/0>XP Percentage: 0%");
+                pStats.add(fga > 0
+                        ? "FG Made/Att: " + fgm + "/" + fga + ">FG Percentage: " + (100 * fgm / fga) + "%"
+                        : "FG Made/Att: 0/0>FG Percentage: 0%");
+                break;
+            }
+            case P: {
+                int att = s.puntAtt + c.puntAtt;
+                int yds = s.puntYards + c.puntYards;
+                pStats.add(att > 0 ? "Punts: " + att + ">Avg: " + (yds / att) + " yds" : "Punts: 0>Avg: 0 yds");
+                break;
+            }
+            default:
+                break;
+        }
+        pStats.add("Games: " + (gamesPlayed + careerGamesPlayed) + " (" + (statsWins + careerWins) + "-"
+                + (gamesPlayed + careerGamesPlayed - (statsWins + careerWins)) + ")"
                 + ">Yrs: " + getYearsPlayed());
         pStats.add("Awards: " + getAwards() + ">Status: " + rosterStatus.displayName());
         pStats.add("Schools: " + schoolsAttendedSummary() + "> ");

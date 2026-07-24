@@ -17,6 +17,8 @@ public final class OocContractBook {
     private int nextId = 1;
     /** Last breach summaries for UI (cleared when read). */
     private final ArrayList<String> recentBreachNotices = new ArrayList<>();
+    /** In-memory IDs from the latest user Suggest deals batch (not persisted). */
+    private final ArrayList<String> suggestedDealIds = new ArrayList<>();
 
     public OocContractBook(League league) {
         this.league = league;
@@ -675,9 +677,14 @@ public final class OocContractBook {
     }
 
     /**
-     * AI: create short buy games / H&H for unmatched program tiers after user scheduling.
+     * AI: create short buy games / H&H for CPU teams only after user scheduling.
+     * Deferred until {@link League#userTeam} is set so a yet-to-be-picked team is not pre-loaded.
+     * Never signs deals involving the user / user-controlled team.
      */
     public void autoSignFutureDeals(List<Team> teams) {
+        if (league.userTeam == null || teams == null) {
+            return;
+        }
         int year = league.getYear();
         ArrayList<Team> sorted = new ArrayList<>(teams);
         Collections.sort(sorted, (a, b) -> Integer.compare(
@@ -685,12 +692,12 @@ public final class OocContractBook {
         int signed = 0;
         for (int i = 0; i < sorted.size() && signed < 25; i++) {
             Team power = sorted.get(i);
-            if (countOpenOoc(power) < 1) {
+            if (isUserSide(power) || countOpenOoc(power) < 1) {
                 continue;
             }
             for (int j = sorted.size() - 1; j > i && signed < 25; j--) {
                 Team soft = sorted.get(j);
-                if (power.conference.equals(soft.conference)) {
+                if (isUserSide(soft) || power.conference.equals(soft.conference)) {
                     continue;
                 }
                 if (power.programProfile.scheduleTier - soft.programProfile.scheduleTier < 12) {
@@ -712,6 +719,9 @@ public final class OocContractBook {
         for (int i = 0; i < sorted.size() - 1 && signed < 40; i++) {
             Team a = sorted.get(i);
             Team b = sorted.get(i + 1);
+            if (isUserSide(a) || isUserSide(b)) {
+                continue;
+            }
             if (a.conference.equals(b.conference)) {
                 continue;
             }
@@ -725,6 +735,114 @@ public final class OocContractBook {
                 signed++;
             }
         }
+    }
+
+    /**
+     * Proposes a small future-contract slate for the user (buy games / peer H&H for year+1).
+     * Replaces any prior suggestion batch first (Resuggest-style).
+     *
+     * @return number of contracts signed
+     */
+    public int suggestUserFutureDeals(Team user, List<Team> teams) {
+        if (user == null || teams == null) {
+            return 0;
+        }
+        revertSuggestedUserDeals();
+        int year = league.getYear();
+        ArrayList<Team> sorted = new ArrayList<>(teams);
+        Collections.sort(sorted, (a, b) -> Integer.compare(
+                b.programProfile.scheduleTier, a.programProfile.scheduleTier));
+        int signed = 0;
+        final int maxDeals = 3;
+
+        // Buy games: user as power paying soft, or soft receiving from power
+        for (Team other : sorted) {
+            if (signed >= maxDeals || other == user || isUserSide(other)) {
+                continue;
+            }
+            if (user.conference.equals(other.conference)) {
+                continue;
+            }
+            int tierGap = user.programProfile.scheduleTier - other.programProfile.scheduleTier;
+            if (Math.abs(tierGap) < 12) {
+                continue;
+            }
+            if (alreadyContracted(user, other, year + 1)) {
+                continue;
+            }
+            Team power = tierGap > 0 ? user : other;
+            Team soft = tierGap > 0 ? other : user;
+            if (power.recruitMoney < NilMoney.buyGameGuarantee(
+                    power.programProfile, soft.programProfile)) {
+                continue;
+            }
+            OocContract buy = signBuyGame(power, soft, year + 1, 1);
+            if (buy != null) {
+                suggestedDealIds.add(buy.id);
+                signed++;
+            }
+        }
+
+        // Peer H&H for remaining slots
+        for (Team other : sorted) {
+            if (signed >= maxDeals || other == user || isUserSide(other)) {
+                continue;
+            }
+            if (user.conference.equals(other.conference)) {
+                continue;
+            }
+            if (Math.abs(user.programProfile.scheduleTier - other.programProfile.scheduleTier) > 8) {
+                continue;
+            }
+            if (alreadyContracted(user, other, year + 1) || alreadyContracted(user, other, year + 2)) {
+                continue;
+            }
+            OocContract hh = signHomeAndHome(user, other, year + 1, true);
+            if (hh != null) {
+                suggestedDealIds.add(hh.id);
+                signed++;
+            }
+        }
+        return signed;
+    }
+
+    /**
+     * Voids the current suggestion batch with no buyout.
+     *
+     * @return number of contracts removed
+     */
+    public int revertSuggestedUserDeals() {
+        int removed = 0;
+        for (String id : new ArrayList<>(suggestedDealIds)) {
+            if (cancel(id, null)) {
+                removed++;
+            }
+        }
+        suggestedDealIds.clear();
+        return removed;
+    }
+
+    public boolean hasSuggestedUserDeals() {
+        if (suggestedDealIds.isEmpty()) {
+            return false;
+        }
+        for (String id : suggestedDealIds) {
+            if (findById(id) != null) {
+                return true;
+            }
+        }
+        suggestedDealIds.clear();
+        return false;
+    }
+
+    private boolean isUserSide(Team team) {
+        if (team == null) {
+            return false;
+        }
+        if (team.userControlled) {
+            return true;
+        }
+        return league.userTeam != null && league.userTeam == team;
     }
 
     private static int countOpenOoc(Team team) {

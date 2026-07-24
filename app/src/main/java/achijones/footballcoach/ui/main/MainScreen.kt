@@ -16,7 +16,6 @@ import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -1693,7 +1692,11 @@ private fun BowlCard(bowl: BowlRowUi) {
 }
 
 @Composable
-private fun TeamPickerStatChip(label: String, value: String) {
+private fun TeamPickerStatChip(
+    label: String,
+    value: String,
+    onClick: (() -> Unit)? = null,
+) {
     val shape = RoundedCornerShape(16.dp)
     Column(
         modifier = Modifier
@@ -1708,6 +1711,13 @@ private fun TeamPickerStatChip(label: String, value: String) {
                 ),
             )
             .border(1.dp, Color.White.copy(alpha = 0.35f), shape)
+            .then(
+                if (onClick != null) {
+                    Modifier.clickable(onClick = onClick)
+                } else {
+                    Modifier
+                },
+            )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1730,6 +1740,72 @@ private fun TeamPickerStatChip(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TeamPickerProgramSheet(
+    team: TeamPickerTeamUi,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val rows = listOf(
+        "Program Power" to team.programPower.toString(),
+        "Tradition" to team.tradition.toString(),
+        "Fans" to team.fanbase.toString(),
+        "Donors" to team.donors.toString(),
+        "Footprint" to team.footprint.toString(),
+        "NFL Pipeline" to team.pipeline.toString(),
+        "Momentum" to team.momentum.toString(),
+        "Rev Share" to team.revShare,
+        "Collective" to team.collective,
+    )
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 28.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Text(
+                text = team.name,
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                text = "Program attributes",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(bottom = 8.dp),
+            )
+            rows.forEach { (label, value) ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(vertical = 8.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Text(
+                        text = value,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun TeamPickerScreen(
     conferences: List<TeamPickerConfUi>,
@@ -1744,6 +1820,7 @@ private fun TeamPickerScreen(
     var selectedConfIndex by remember { mutableIntStateOf(0) }
     var teamIndex by remember { mutableIntStateOf(0) }
     var slideForward by remember { mutableStateOf(true) }
+    var showProgramSheet by remember { mutableStateOf(false) }
     val confIndex = selectedConfIndex.coerceIn(conferences.indices)
     val selectedConf = conferences[confIndex]
     val currentTeam = selectedConf.teams.getOrNull(teamIndex.coerceIn(0, (selectedConf.teams.size - 1).coerceAtLeast(0)))
@@ -1946,21 +2023,15 @@ private fun TeamPickerScreen(
                             contentAlignment = Alignment.Center,
                         ) {
                             Row(
-                                modifier = Modifier
-                                    .horizontalScroll(rememberScrollState())
-                                    .padding(horizontal = 4.dp),
+                                modifier = Modifier.padding(horizontal = 4.dp),
                                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
-                                TeamPickerStatChip(label = "POWER", value = team.programPower.toString())
-                                TeamPickerStatChip(label = "TRADITION", value = team.tradition.toString())
-                                TeamPickerStatChip(label = "FANS", value = team.fanbase.toString())
-                                TeamPickerStatChip(label = "DONORS", value = team.donors.toString())
-                                TeamPickerStatChip(label = "FOOTPRINT", value = team.footprint.toString())
-                                TeamPickerStatChip(label = "NFL PIPE", value = team.pipeline.toString())
-                                TeamPickerStatChip(label = "MOMENTUM", value = team.momentum.toString())
-                                TeamPickerStatChip(label = "REV SHARE", value = team.revShare)
-                                TeamPickerStatChip(label = "COLLECTIVE", value = team.collective)
+                                TeamPickerStatChip(
+                                    label = "POWER",
+                                    value = team.programPower.toString(),
+                                    onClick = { showProgramSheet = true },
+                                )
                                 TeamPickerStatChip(label = "OFF", value = team.offTalent.toString())
                                 TeamPickerStatChip(label = "DEF", value = team.defTalent.toString())
                                 TeamPickerStatChip(label = "ST", value = team.stTalent.toString())
@@ -2081,6 +2152,13 @@ private fun TeamPickerScreen(
             }
         }
 
+    }
+
+    if (showProgramSheet && currentTeam != null) {
+        TeamPickerProgramSheet(
+            team = currentTeam,
+            onDismiss = { showProgramSheet = false },
+        )
     }
 }
 

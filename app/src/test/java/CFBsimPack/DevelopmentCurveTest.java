@@ -11,9 +11,9 @@ public class DevelopmentCurveTest {
     @Test
     public void freshmanGrowsFasterThanSeniorPlateau() {
         Random rng = new Random(11L);
-        PlayerQB fr = new PlayerQB("Fr QB", null, 1,
+        Player fr = PlayerFactory.fromRatings(PositionGroup.QB, "Fr QB", null, 1,
                 PlayerFactory.rollRatings(PositionGroup.QB, 1, 3, rng), false);
-        PlayerQB sr = new PlayerQB("Sr QB", null, 3,
+        Player sr = PlayerFactory.fromRatings(PositionGroup.QB, "Sr QB", null, 3,
                 PlayerFactory.rollRatings(PositionGroup.QB, 3, 3, new Random(12L)), false);
         int frBefore = fr.ratOvr;
         int srBefore = sr.ratOvr;
@@ -35,7 +35,7 @@ public class DevelopmentCurveTest {
     @Test
     public void potStaysAtLeastOvrAndNoDeclineFromAdvance() {
         Random rng = new Random(33L);
-        PlayerRB rb = new PlayerRB("RB", null, 2,
+        Player rb = PlayerFactory.fromRatings(PositionGroup.RB, "RB", null, 2,
                 PlayerFactory.rollRatings(PositionGroup.RB, 2, 4, rng), false);
         int before = rb.ratOvr;
         rb.ratings.pot = before + 8;

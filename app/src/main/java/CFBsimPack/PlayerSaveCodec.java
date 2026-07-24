@@ -40,37 +40,32 @@ public final class PlayerSaveCodec {
     private static String careerCsv(Player p) {
         StringBuilder sb = new StringBuilder();
         sb.append(p.careerGamesPlayed);
-        if (p instanceof PlayerQB) {
-            PlayerQB q = (PlayerQB) p;
-            sb.append(',').append(q.careerPassAtt).append(',').append(q.careerPassComp)
-                    .append(',').append(q.careerTDs).append(',').append(q.careerInt)
-                    .append(',').append(q.careerPassYards).append(',').append(q.careerSacked)
-                    .append(',').append(q.careerRushAtt).append(',').append(q.careerRushYards)
-                    .append(',').append(q.careerRushTD);
-        } else if (p instanceof PlayerRB) {
-            PlayerRB r = (PlayerRB) p;
-            sb.append(',').append(r.careerRushAtt).append(',').append(r.careerRushYards)
-                    .append(',').append(r.careerTDs).append(',').append(r.careerFumbles);
-        } else if (p instanceof PlayerWR) {
-            PlayerWR w = (PlayerWR) p;
-            sb.append(',').append(w.careerTargets).append(',').append(w.careerReceptions)
-                    .append(',').append(w.careerRecYards).append(',').append(w.careerTDs)
-                    .append(',').append(w.careerDrops).append(',').append(w.careerFumbles);
-        } else if (p instanceof PlayerTE) {
-            PlayerTE t = (PlayerTE) p;
-            sb.append(',').append(t.careerTargets).append(',').append(t.careerReceptions)
-                    .append(',').append(t.careerRecYards).append(',').append(t.careerTDs);
-        } else if (p instanceof PlayerFB) {
-            PlayerFB fb = (PlayerFB) p;
-            sb.append(',').append(fb.careerRushAtt).append(',').append(fb.careerRushYards)
-                    .append(',').append(fb.careerTDs);
-        } else if (p instanceof PlayerK) {
-            PlayerK k = (PlayerK) p;
-            sb.append(',').append(k.careerXPAtt).append(',').append(k.careerXPMade)
-                    .append(',').append(k.careerFGAtt).append(',').append(k.careerFGMade);
-        } else if (p instanceof PlayerP) {
-            PlayerP punter = (PlayerP) p;
-            sb.append(',').append(punter.careerPuntAtt).append(',').append(punter.careerPuntYards);
+        PlayerSkillStats c = p.careerStats;
+        PositionGroup g = PositionGroup.fromToken(p.position);
+        if (g == PositionGroup.QB) {
+            sb.append(',').append(c.passAtt).append(',').append(c.passComp)
+                    .append(',').append(c.passTd).append(',').append(c.passInt)
+                    .append(',').append(c.passYards).append(',').append(c.sacked)
+                    .append(',').append(c.rushAtt).append(',').append(c.rushYards)
+                    .append(',').append(c.rushTd);
+        } else if (g == PositionGroup.RB) {
+            sb.append(',').append(c.rushAtt).append(',').append(c.rushYards)
+                    .append(',').append(c.rushTd).append(',').append(c.fumbles);
+        } else if (g == PositionGroup.WR) {
+            sb.append(',').append(c.targets).append(',').append(c.receptions)
+                    .append(',').append(c.recYards).append(',').append(c.recTd)
+                    .append(',').append(c.drops).append(',').append(c.recFumbles);
+        } else if (g == PositionGroup.TE) {
+            sb.append(',').append(c.targets).append(',').append(c.receptions)
+                    .append(',').append(c.recYards).append(',').append(c.recTd);
+        } else if (g == PositionGroup.FB) {
+            sb.append(',').append(c.rushAtt).append(',').append(c.rushYards)
+                    .append(',').append(c.rushTd);
+        } else if (g == PositionGroup.K) {
+            sb.append(',').append(c.xpAtt).append(',').append(c.xpMade)
+                    .append(',').append(c.fgAtt).append(',').append(c.fgMade);
+        } else if (g == PositionGroup.P) {
+            sb.append(',').append(c.puntAtt).append(',').append(c.puntYards);
         }
         sb.append(',').append(p.careerHeismans).append(',').append(p.careerAllAmerican)
                 .append(',').append(p.careerAllConference).append(',').append(p.careerWins);
@@ -79,52 +74,47 @@ public final class PlayerSaveCodec {
 
     private static void loadCareer(Player p, String[] f, int idx) {
         p.careerGamesPlayed = parse(f, idx++, 0);
-        if (p instanceof PlayerQB) {
-            PlayerQB q = (PlayerQB) p;
-            q.careerPassAtt = parse(f, idx++, 0);
-            q.careerPassComp = parse(f, idx++, 0);
-            q.careerTDs = parse(f, idx++, 0);
-            q.careerInt = parse(f, idx++, 0);
-            q.careerPassYards = parse(f, idx++, 0);
-            q.careerSacked = parse(f, idx++, 0);
-            q.careerRushAtt = parse(f, idx++, 0);
-            q.careerRushYards = parse(f, idx++, 0);
-            q.careerRushTD = parse(f, idx++, 0);
-        } else if (p instanceof PlayerRB) {
-            PlayerRB r = (PlayerRB) p;
-            r.careerRushAtt = parse(f, idx++, 0);
-            r.careerRushYards = parse(f, idx++, 0);
-            r.careerTDs = parse(f, idx++, 0);
-            r.careerFumbles = parse(f, idx++, 0);
-        } else if (p instanceof PlayerWR) {
-            PlayerWR w = (PlayerWR) p;
-            w.careerTargets = parse(f, idx++, 0);
-            w.careerReceptions = parse(f, idx++, 0);
-            w.careerRecYards = parse(f, idx++, 0);
-            w.careerTDs = parse(f, idx++, 0);
-            w.careerDrops = parse(f, idx++, 0);
-            w.careerFumbles = parse(f, idx++, 0);
-        } else if (p instanceof PlayerTE) {
-            PlayerTE t = (PlayerTE) p;
-            t.careerTargets = parse(f, idx++, 0);
-            t.careerReceptions = parse(f, idx++, 0);
-            t.careerRecYards = parse(f, idx++, 0);
-            t.careerTDs = parse(f, idx++, 0);
-        } else if (p instanceof PlayerFB) {
-            PlayerFB fb = (PlayerFB) p;
-            fb.careerRushAtt = parse(f, idx++, 0);
-            fb.careerRushYards = parse(f, idx++, 0);
-            fb.careerTDs = parse(f, idx++, 0);
-        } else if (p instanceof PlayerK) {
-            PlayerK k = (PlayerK) p;
-            k.careerXPAtt = parse(f, idx++, 0);
-            k.careerXPMade = parse(f, idx++, 0);
-            k.careerFGAtt = parse(f, idx++, 0);
-            k.careerFGMade = parse(f, idx++, 0);
-        } else if (p instanceof PlayerP) {
-            PlayerP punter = (PlayerP) p;
-            punter.careerPuntAtt = parse(f, idx++, 0);
-            punter.careerPuntYards = parse(f, idx++, 0);
+        PlayerSkillStats c = p.careerStats;
+        PositionGroup g = PositionGroup.fromToken(p.position);
+        if (g == PositionGroup.QB) {
+            c.passAtt = parse(f, idx++, 0);
+            c.passComp = parse(f, idx++, 0);
+            c.passTd = parse(f, idx++, 0);
+            c.passInt = parse(f, idx++, 0);
+            c.passYards = parse(f, idx++, 0);
+            c.sacked = parse(f, idx++, 0);
+            c.rushAtt = parse(f, idx++, 0);
+            c.rushYards = parse(f, idx++, 0);
+            c.rushTd = parse(f, idx++, 0);
+        } else if (g == PositionGroup.RB) {
+            c.rushAtt = parse(f, idx++, 0);
+            c.rushYards = parse(f, idx++, 0);
+            c.rushTd = parse(f, idx++, 0);
+            c.fumbles = parse(f, idx++, 0);
+        } else if (g == PositionGroup.WR) {
+            c.targets = parse(f, idx++, 0);
+            c.receptions = parse(f, idx++, 0);
+            c.recYards = parse(f, idx++, 0);
+            c.recTd = parse(f, idx++, 0);
+            c.drops = parse(f, idx++, 0);
+            c.recFumbles = parse(f, idx++, 0);
+        } else if (g == PositionGroup.TE) {
+            c.targets = parse(f, idx++, 0);
+            c.receptions = parse(f, idx++, 0);
+            c.recYards = parse(f, idx++, 0);
+            c.recTd = parse(f, idx++, 0);
+        } else if (g == PositionGroup.FB) {
+            c.rushAtt = parse(f, idx++, 0);
+            c.rushYards = parse(f, idx++, 0);
+            c.rushTd = parse(f, idx++, 0);
+        } else if (g == PositionGroup.K) {
+            c.xpAtt = parse(f, idx++, 0);
+            c.xpMade = parse(f, idx++, 0);
+            c.fgAtt = parse(f, idx++, 0);
+            c.fgMade = parse(f, idx++, 0);
+        } else if (g == PositionGroup.P) {
+            c.puntAtt = parse(f, idx++, 0);
+            c.puntYards = parse(f, idx++, 0);
         }
         p.careerHeismans = parse(f, idx++, 0);
         p.careerAllAmerican = parse(f, idx++, 0);

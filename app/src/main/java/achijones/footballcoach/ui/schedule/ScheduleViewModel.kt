@@ -100,6 +100,7 @@ data class ScheduleUiState(
     val rescheduleFulfillByYear: Int? = null,
     val rescheduleOpponentLabel: String = "",
     val primaryLabel: String? = null,
+    val canRevertSuggestedDeals: Boolean = false,
     val message: String? = null,
     val navigateToMain: Boolean = false,
 )
@@ -526,6 +527,39 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         reload()
     }
 
+    fun suggestFutureDeals() {
+        val u = user ?: return
+        val l = league ?: return
+        val book = l.oocContracts ?: return
+        val signed = book.suggestUserFutureDeals(u, l.teamList)
+        reload()
+        _uiState.update {
+            it.copy(
+                message = if (signed > 0) {
+                    "Suggested $signed future deal${if (signed == 1) "" else "s"}."
+                } else {
+                    "No future deals available to suggest."
+                },
+            )
+        }
+    }
+
+    fun revertSuggestedDeals() {
+        val l = league ?: return
+        val book = l.oocContracts ?: return
+        val removed = book.revertSuggestedUserDeals()
+        reload()
+        _uiState.update {
+            it.copy(
+                message = if (removed > 0) {
+                    "Reverted $removed suggested deal${if (removed == 1) "" else "s"}."
+                } else {
+                    "No suggested deals to revert."
+                },
+            )
+        }
+    }
+
     private fun placeIfCurrentWeek(contractId: String, home: Team, away: Team, year: Int) {
         val l = league ?: return
         val week = _uiState.value.opponentPickerWeek
@@ -578,6 +612,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 contractCards = cards,
                 scheduleWeeks = weeks,
                 primaryLabel = primary,
+                canRevertSuggestedDeals = l.oocContracts?.hasSuggestedUserDeals() == true,
                 message = breachMsg ?: it.message,
             )
         }

@@ -909,14 +909,15 @@ public class Game implements Serializable {
 
     private void kickXp() {
         Team offense = state.possessionHome ? homeTeam : awayTeam;
-        PlayerK k = offense.getK(0);
-        k.statsXPAtt++;
+        Player k = offense.getK(0);
+        k.seasonStats.xpAtt++;
         if (playerGameStats != null) {
             playerGameStats.line(k).xpAtt++;
         }
-        if (rng.nextDouble() * 100 < 92 + (k.ratKickAcc - 70) / 5.0) {
+        int kac = k.ratings != null ? k.ratings.kac : 70;
+        if (rng.nextDouble() * 100 < 92 + (kac - 70) / 5.0) {
             addScore(1);
-            k.statsXPMade++;
+            k.seasonStats.xpMade++;
             if (playerGameStats != null) {
                 playerGameStats.line(k).xpMade++;
             }
