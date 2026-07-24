@@ -79,6 +79,19 @@ public final class GameState {
     /** Rivalry strength used to amplify crowd spikes (0–100). */
     public int crowdRivalry;
 
+    /** Scrimmage / ST snaps recorded on the current drive. */
+    public int drivePlayCount;
+    /** Net offense yards on the current drive. */
+    public int driveNetYards;
+    /** Game-clock seconds burned while this drive has had the ball. */
+    public int driveTimeOfPossessionSec;
+
+    public void resetDriveStats() {
+        drivePlayCount = 0;
+        driveNetYards = 0;
+        driveTimeOfPossessionSec = 0;
+    }
+
     public boolean isSpecialTeamsDown() {
         return pendingKickoff || (down >= 4 && !pendingTry);
     }

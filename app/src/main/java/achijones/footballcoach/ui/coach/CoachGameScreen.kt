@@ -13,10 +13,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -48,6 +45,7 @@ import CFBsimPack.engine.OffenseConcept
 import CFBsimPack.engine.Playbook
 import CFBsimPack.engine.TempoCall
 import achijones.footballcoach.ui.components.SegmentedControl
+
 private val ScoreboardBg = Color(0xFF0D1117)
 private val PanelBg = Color(0xFF121A14)
 private val GhostBorder = Color(0xFF3A4A3C)
@@ -113,15 +111,18 @@ fun CoachGameScreen(
             ),
     ) {
         if (sit != null) {
-            ScoreboardHeader(sit)
+            CoachSituationModule(
+                sit = sit,
+                selectedTempo = state.selectedTempo,
+                showField = true,
+            )
             CoachTabBar(state.tab, viewModel::selectTab)
 
             when (state.tab) {
                 CoachTab.CALL_PLAYS -> CallPlaysTab(
-                    sit,
-                    state,
-                    viewModel,
-                    Modifier.weight(1f),
+                    state = state,
+                    viewModel = viewModel,
+                    modifier = Modifier.weight(1f),
                 )
                 CoachTab.LOG -> Box(Modifier.weight(1f)) { CoachLogTab(sit) }
                 CoachTab.BOX_SCORE -> Box(Modifier.weight(1f)) { CoachBoxScoreTab(sit) }
@@ -241,32 +242,16 @@ private fun CoachTabBar(selected: CoachTab, onSelect: (CoachTab) -> Unit) {
 
 @Composable
 private fun CallPlaysTab(
-    sit: GameSituation,
     state: CoachUiState,
     viewModel: CoachGameViewModel,
     modifier: Modifier = Modifier,
 ) {
+    val sit = state.situation ?: return
     Column(
         modifier
             .verticalScroll(rememberScrollState())
             .padding(horizontal = 12.dp),
     ) {
-        Spacer(Modifier.height(8.dp))
-        SituationStrip(sit)
-        Spacer(Modifier.height(8.dp))
-        CoachField(
-            yardLine = sit.yardLine,
-            distance = sit.distance,
-            down = sit.down,
-            drivePath = sit.drivePath,
-            possessionHome = sit.possessionHome,
-            homeDefendsLeft = sit.homeDefendsLeft,
-            homeName = sit.homeName,
-            awayName = sit.awayName,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(140.dp),
-        )
         Spacer(Modifier.height(8.dp))
         LastPlayBanner(sit)
         Spacer(Modifier.height(10.dp))
@@ -283,177 +268,6 @@ private fun CallPlaysTab(
         Spacer(Modifier.height(8.dp))
         OpponentTeaser(sit, state.selectedDefense)
         Spacer(Modifier.height(8.dp))
-    }
-}
-
-@Composable
-private fun ScoreboardHeader(sit: GameSituation) {
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(ScoreboardBg)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-    ) {
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TeamScoreBlock(
-                rank = sit.awayRank,
-                abbr = sit.awayAbbr,
-                score = sit.awayScore,
-                hasBall = !sit.possessionHome,
-                modifier = Modifier.weight(1f),
-                alignEnd = false,
-            )
-            Column(
-                horizontalAlignment = Alignment.CenterHorizontally,
-                modifier = Modifier.padding(horizontal = 6.dp),
-            ) {
-                Text(
-                    if (sit.playingOT) "OT" else "Q${sit.quarter}",
-                    color = MaterialTheme.colorScheme.primary,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    letterSpacing = 1.sp,
-                )
-                Text(
-                    sit.clock,
-                    color = Color.White,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
-                )
-            }
-            TeamScoreBlock(
-                rank = sit.homeRank,
-                abbr = sit.homeAbbr,
-                score = sit.homeScore,
-                hasBall = sit.possessionHome,
-                modifier = Modifier.weight(1f),
-                alignEnd = true,
-            )
-        }
-        Spacer(Modifier.height(8.dp))
-        Text(
-            sit.downDistanceLabel,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            style = MaterialTheme.typography.titleSmall,
-            modifier = Modifier.align(Alignment.CenterHorizontally),
-        )
-        Spacer(Modifier.height(8.dp))
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TimeoutPips(count = sit.awayTimeouts, label = sit.awayAbbr)
-            Text("TIMEOUTS", color = Color(0xFF6B7280), style = MaterialTheme.typography.labelSmall)
-            TimeoutPips(count = sit.homeTimeouts, label = sit.homeAbbr)
-        }
-    }
-}
-
-@Composable
-private fun TeamScoreBlock(
-    rank: Int,
-    abbr: String,
-    score: Int,
-    hasBall: Boolean,
-    alignEnd: Boolean,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier,
-        horizontalAlignment = if (alignEnd) Alignment.End else Alignment.Start,
-    ) {
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = if (alignEnd) Arrangement.End else Arrangement.Start,
-        ) {
-            if (hasBall && !alignEnd) {
-                PossessionDot()
-                Spacer(Modifier.width(6.dp))
-            }
-            Text(
-                if (rank in 1..25) "#$rank $abbr" else abbr,
-                color = if (hasBall) Color.White else MutedText,
-                fontWeight = FontWeight.Bold,
-                style = MaterialTheme.typography.titleSmall,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (hasBall && alignEnd) {
-                Spacer(Modifier.width(6.dp))
-                PossessionDot()
-            }
-        }
-        Text(
-            "$score",
-            color = Color.White,
-            style = MaterialTheme.typography.displaySmall,
-            fontWeight = FontWeight.Bold,
-        )
-    }
-}
-
-@Composable
-private fun PossessionDot() {
-    Box(
-        Modifier
-            .size(8.dp)
-            .clip(CircleShape)
-            .background(BallOrange),
-    )
-}
-
-@Composable
-private fun TimeoutPips(count: Int, label: String) {
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(label, color = MutedText, style = MaterialTheme.typography.labelSmall)
-        repeat(3) { i ->
-            Box(
-                Modifier
-                    .size(width = 14.dp, height = 6.dp)
-                    .clip(RoundedCornerShape(2.dp))
-                    .background(if (i < count) MaterialTheme.colorScheme.primary else Color(0xFF374151)),
-            )
-        }
-    }
-}
-
-@Composable
-private fun SituationStrip(sit: GameSituation) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(10.dp))
-            .background(Color(0xFF152018))
-            .border(1.dp, GhostBorder.copy(alpha = 0.55f), RoundedCornerShape(10.dp))
-            .padding(horizontal = 14.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            sit.downDistanceLabel,
-            color = Color.White,
-            fontWeight = FontWeight.SemiBold,
-            style = MaterialTheme.typography.titleMedium,
-        )
-        Text(
-            sit.crowdBand.uppercase(),
-            color = Color(0xFFCBD5E1),
-            fontWeight = FontWeight.SemiBold,
-            style = MaterialTheme.typography.labelMedium,
-            letterSpacing = 0.6.sp,
-        )
-        Text(
-            if (sit.userOnOffense) "YOUR BALL" else "DEFENDING",
-            color = if (sit.userOnOffense) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
-            fontWeight = FontWeight.Bold,
-            style = MaterialTheme.typography.labelMedium,
-            letterSpacing = 0.8.sp,
-        )
     }
 }
 
@@ -531,20 +345,12 @@ private fun ControlCard(
                 selected = tempos.indexOf(state.selectedTempo).coerceAtLeast(0),
                 onSelect = { viewModel.selectTempo(tempos[it]) },
             )
-            if (sit.clockRunning) {
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    "Clock running · −${state.selectedTempo.runoffSeconds()}s on snap",
-                    color = BallOrange,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
             if (sit.userOnOffense
                 && (state.selectedTempo == TempoCall.CHEW_CLOCK || state.selectedTempo == TempoCall.NORMAL)
                 && !sit.pendingKickoff
                 && !sit.playingOT
             ) {
-                Spacer(Modifier.height(2.dp))
+                Spacer(Modifier.height(4.dp))
                 Text(
                     if (state.selectedTempo == TempoCall.CHEW_CLOCK) {
                         "DOG risk on snap (chew)"

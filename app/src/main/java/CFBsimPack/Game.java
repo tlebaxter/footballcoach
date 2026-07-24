@@ -206,6 +206,7 @@ public class Game implements Serializable {
 
         if (runoff > 0) {
             state.gameTime = Math.max(0, state.gameTime - runoff);
+            state.driveTimeOfPossessionSec += runoff;
         }
         if (state.gameTime <= 0) {
             if (state.homeScore == state.awayScore) {
@@ -362,19 +363,54 @@ public class Game implements Serializable {
         if (state == null) startGame();
         Team user = homeTeam.userControlled ? homeTeam : (awayTeam.userControlled ? awayTeam : null);
         boolean userOff = user != null && ((state.possessionHome && user == homeTeam) || (!state.possessionHome && user == awayTeam));
-        String dd;
+        String possessionAbbr = state.possessionHome ? homeTeam.abbr : awayTeam.abbr;
+        String downLabel;
+        String ballOnLabel;
+        int firstDownYard;
+        String downDistanceLabel;
+        boolean specialPhase = state.awaitingCoinToss
+                || state.pendingKickoff
+                || (state.pendingTry && (state.tryAwaitingChoice || state.tryIsTwoPoint));
         if (state.awaitingCoinToss) {
-            dd = "Coin toss";
+            downLabel = "Coin toss";
+            ballOnLabel = "—";
+            firstDownYard = -1;
+            downDistanceLabel = downLabel;
         } else if (state.pendingTry && state.tryAwaitingChoice) {
-            dd = "PAT / 2-Point";
+            downLabel = "PAT / 2-Point";
+            ballOnLabel = ballOnLabelForYard(state.yardLine);
+            firstDownYard = -1;
+            downDistanceLabel = downLabel;
         } else if (state.pendingTry && state.tryIsTwoPoint) {
-            dd = "2-Point Try · OPP 3";
+            downLabel = "2-Point Try";
+            ballOnLabel = ballOnLabelForYard(state.yardLine);
+            firstDownYard = -1;
+            downDistanceLabel = downLabel + " · " + ballOnLabel;
         } else if (state.pendingKickoff) {
-            dd = (state.freeKick ? "Free kick" : "Kickoff") + " pending";
+            downLabel = state.freeKick ? "Free kick" : "Kickoff";
+            ballOnLabel = ballOnLabelForYard(state.yardLine);
+            firstDownYard = -1;
+            downDistanceLabel = downLabel + " pending";
         } else {
-            dd = ordinal(state.down) + " & " + state.yardsNeed + " · "
-                    + (state.yardLine <= 50 ? "OWN " + state.yardLine : "OPP " + (100 - state.yardLine));
+            boolean goalToGo = state.yardLine + state.yardsNeed >= 100;
+            downLabel = ordinal(state.down) + " & " + (goalToGo ? "Goal" : state.yardsNeed);
+            ballOnLabel = ballOnLabelForYard(state.yardLine);
+            firstDownYard = Math.min(100, state.yardLine + state.yardsNeed);
+            downDistanceLabel = downLabel + " · " + ballOnLabel;
         }
+        String clockStatusLabel;
+        if (state.pendingTenSecondRunoff) {
+            clockStatusLabel = "10S RUNOFF";
+        } else if (state.clockRunning) {
+            clockStatusLabel = "RUNNING";
+        } else {
+            clockStatusLabel = "STOPPED";
+        }
+        int timeoutsMax = state.playingOT ? GameState.TIMEOUTS_PER_OT : GameState.TIMEOUTS_PER_HALF;
+        String driveSummary = specialPhase && state.drivePlayCount == 0
+                ? "—"
+                : formatDriveSummary(
+                        state.drivePlayCount, state.driveNetYards, state.driveTimeOfPossessionSec);
         String prName = null;
         String krName = null;
         if (user != null) {
@@ -391,9 +427,12 @@ public class Game implements Serializable {
                 homeTeam.rankTeamPollScore, awayTeam.rankTeamPollScore,
                 state.quarter(), state.clockDisplay(), state.gameTime, state.clockInQuarter(),
                 state.down, state.yardsNeed, state.yardLine,
-                state.possessionHome, state.homeTimeouts, state.awayTimeouts,
+                state.possessionHome, state.homeTimeouts, state.awayTimeouts, timeoutsMax,
                 state.playingOT, state.gameOver || hasPlayed, userOff,
-                state.lastPlayLog, dd,
+                state.lastPlayLog, downDistanceLabel,
+                downLabel, ballOnLabel, possessionAbbr,
+                firstDownYard, clockStatusLabel,
+                state.drivePlayCount, state.driveNetYards, state.driveTimeOfPossessionSec, driveSummary,
                 state.homeYards, state.awayYards, state.homeTOs, state.awayTOs,
                 state.homeQScore, state.awayQScore,
                 drivePath, playLog, buildBoxScore(),
@@ -406,6 +445,25 @@ public class Game implements Serializable {
                 canCallTimeout, state.clockRunning, state.pendingTenSecondRunoff,
                 state.crowdEnergy, AtmosphereEngine.band(state)
         );
+    }
+
+    /** ESPN-style ball-on: team whose territory + yard line, or {@code 50}. */
+    private String ballOnLabelForYard(int yardLine) {
+        int y = Math.max(0, Math.min(100, yardLine));
+        if (y == 50) return "50";
+        Team offense = state.possessionHome ? homeTeam : awayTeam;
+        Team defense = state.possessionHome ? awayTeam : homeTeam;
+        if (y < 50) {
+            return offense.abbr + " " + y;
+        }
+        return defense.abbr + " " + (100 - y);
+    }
+
+    private static String formatDriveSummary(int plays, int netYards, int topSec) {
+        int top = Math.max(0, topSec);
+        return plays + (plays == 1 ? " play, " : " plays, ")
+                + netYards + " yds, "
+                + (top / 60) + ":" + String.format("%02d", top % 60);
     }
 
     /**
@@ -694,6 +752,12 @@ public class Game implements Serializable {
         if (result != null && !result.possessionChanged && !result.touchdown && !result.scoreFg && !result.safety) {
             drivePath.add(Math.max(0, Math.min(100, endYard)));
         }
+        if (state != null) {
+            state.drivePlayCount++;
+            if (result != null) {
+                state.driveNetYards += result.yardsGained;
+            }
+        }
         playLog.add(new PlayLogEntry(
                 clockBefore,
                 quarter,
@@ -713,6 +777,9 @@ public class Game implements Serializable {
     private void resetDrive(int startYard) {
         drivePath = new ArrayList<>();
         drivePath.add(Math.max(0, Math.min(100, startYard)));
+        if (state != null) {
+            state.resetDriveStats();
+        }
     }
 
     private List<BoxScoreLine> buildBoxScore() {
@@ -932,6 +999,7 @@ public class Game implements Serializable {
         if (!state.playingOT) {
             state.gameTime -= burn;
             if (state.gameTime < 0) state.gameTime = 0;
+            state.driveTimeOfPossessionSec += burn;
         }
 
         if (state.pendingTry && state.tryIsTwoPoint) {

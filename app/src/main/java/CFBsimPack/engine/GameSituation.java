@@ -28,11 +28,32 @@ public final class GameSituation {
     public final boolean possessionHome;
     public final int homeTimeouts;
     public final int awayTimeouts;
+    /** Max timeout pips for this period (3 half / 1 OT). */
+    public final int timeoutsMax;
     public final boolean playingOT;
     public final boolean gameOver;
     public final boolean userOnOffense;
     public final String lastPlay;
+    /** Composite label for legacy callers (down · ball-on or phase string). */
     public final String downDistanceLabel;
+    /** Short down cell: {@code 3rd & 10}, {@code 1st & Goal}, or phase. */
+    public final String downLabel;
+    /** ESPN-style spot: {@code LAN 13}, {@code 50}, or phase placeholder. */
+    public final String ballOnLabel;
+    /** Abbr of the team with the ball. */
+    public final String possessionAbbr;
+    /**
+     * Offense-perspective yard of the first-down marker (0–100), or -1 when not a
+     * normal scrimmage situation.
+     */
+    public final int firstDownYard;
+    /** {@code RUNNING}, {@code STOPPED}, or {@code 10S RUNOFF}. */
+    public final String clockStatusLabel;
+    public final int drivePlayCount;
+    public final int driveNetYards;
+    public final int driveTimeOfPossessionSec;
+    /** {@code 4 plays, 32 yds, 1:45} or {@code —}. */
+    public final String driveSummary;
     public final int homeYards;
     public final int awayYards;
     public final int homeTOs;
@@ -78,9 +99,12 @@ public final class GameSituation {
             int homeRank, int awayRank,
             int quarter, String clock, int gameTime, int clockInQuarter,
             int down, int distance, int yardLine,
-            boolean possessionHome, int homeTimeouts, int awayTimeouts,
+            boolean possessionHome, int homeTimeouts, int awayTimeouts, int timeoutsMax,
             boolean playingOT, boolean gameOver, boolean userOnOffense,
             String lastPlay, String downDistanceLabel,
+            String downLabel, String ballOnLabel, String possessionAbbr,
+            int firstDownYard, String clockStatusLabel,
+            int drivePlayCount, int driveNetYards, int driveTimeOfPossessionSec, String driveSummary,
             int homeYards, int awayYards, int homeTOs, int awayTOs,
             int[] homeQScore, int[] awayQScore,
             List<Integer> drivePath, List<PlayLogEntry> playLog, List<BoxScoreLine> boxScore,
@@ -111,11 +135,21 @@ public final class GameSituation {
         this.possessionHome = possessionHome;
         this.homeTimeouts = homeTimeouts;
         this.awayTimeouts = awayTimeouts;
+        this.timeoutsMax = timeoutsMax;
         this.playingOT = playingOT;
         this.gameOver = gameOver;
         this.userOnOffense = userOnOffense;
         this.lastPlay = lastPlay;
         this.downDistanceLabel = downDistanceLabel;
+        this.downLabel = downLabel != null ? downLabel : "";
+        this.ballOnLabel = ballOnLabel != null ? ballOnLabel : "";
+        this.possessionAbbr = possessionAbbr != null ? possessionAbbr : "";
+        this.firstDownYard = firstDownYard;
+        this.clockStatusLabel = clockStatusLabel != null ? clockStatusLabel : "STOPPED";
+        this.drivePlayCount = drivePlayCount;
+        this.driveNetYards = driveNetYards;
+        this.driveTimeOfPossessionSec = driveTimeOfPossessionSec;
+        this.driveSummary = driveSummary != null ? driveSummary : "—";
         this.homeYards = homeYards;
         this.awayYards = awayYards;
         this.homeTOs = homeTOs;

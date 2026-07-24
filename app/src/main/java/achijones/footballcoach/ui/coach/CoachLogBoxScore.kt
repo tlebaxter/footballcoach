@@ -57,8 +57,9 @@ private fun PlayLogRow(entry: PlayLogEntry) {
             .border(1.dp, Color(0xFF3A4A3C), CardShape)
             .padding(12.dp),
     ) {
+        val distanceLabel = if (entry.yardLineBefore + entry.distance >= 100) "Goal" else "${entry.distance}"
         Text(
-            "Q${entry.quarter} ${entry.clockLabel} · ${ordinal(entry.down)} & ${entry.distance}",
+            "Q${entry.quarter} ${entry.clockLabel} · ${ordinal(entry.down)} & $distanceLabel",
             color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
