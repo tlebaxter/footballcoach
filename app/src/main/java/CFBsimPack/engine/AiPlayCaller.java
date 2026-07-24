@@ -5,6 +5,7 @@ import CFBsimPack.OffensivePhilosophy;
 import CFBsimPack.Team;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.Random;
 
@@ -195,7 +196,7 @@ public final class AiPlayCaller {
 
     private OffenseConcept weightedPick(List<Scored> scored, OffenseConcept fallback) {
         if (scored == null || scored.isEmpty()) return fallback;
-        scored.sort((a, b) -> Double.compare(b.score, a.score));
+        Collections.sort(scored, (a, b) -> Double.compare(b.score, a.score));
         int n = Math.min(6, scored.size());
         double sum = 0;
         for (int i = 0; i < n; i++) sum += scored.get(i).score;

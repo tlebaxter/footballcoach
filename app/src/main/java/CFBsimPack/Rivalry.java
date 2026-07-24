@@ -11,7 +11,7 @@ import java.util.List;
 public final class Rivalry {
     public static final int MAX_RIVALRIES = 5;
     public static final int SEAT_THRESHOLD = 50;
-    public static final int PRESTIGE_THRESHOLD = 40;
+    public static final int MOMENTUM_THRESHOLD = 40;
     public static final int HOT_THRESHOLD = 70;
     public static final int WARM_THRESHOLD = 40;
 

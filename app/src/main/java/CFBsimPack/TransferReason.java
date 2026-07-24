@@ -10,7 +10,7 @@ public enum TransferReason {
     COACHING_CHANGE("Coaching change"),
     SCHEME_FIT("Seeking better scheme fit"),
     WINNING("Seeking a winning program"),
-    PRESTIGE_FREEFALL("Leaving a declining program"),
+    PROGRAM_FREEFALL("Leaving a declining program"),
     TITLE_CHASE("Chasing a championship"),
     INJURY_COMEBACK("Fresh start after injury"),
     BETTER_FIT("Seeking a better fit");

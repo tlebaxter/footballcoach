@@ -97,7 +97,7 @@ public class RivalryDynamicsTest {
     }
 
     @Test
-    public void advanceSeasonHasNoPrestigeFloorOnRival() throws Exception {
+    public void advanceSeasonDoesNotPullRivalProgramPowerUp() throws Exception {
         League league = createOpenOocLeague();
         Team user = league.findTeamAbbr("ALA");
         Team rival = league.findTeamAbbr("AUB");
@@ -105,15 +105,14 @@ public class RivalryDynamicsTest {
         assertNotNull(rival);
         user.userControlled = true;
         league.userTeam = user;
-        user.teamPrestige = 90;
-        rival.teamPrestige = 50;
+        user.programProfile = new ProgramProfile(90, 90, 90, 90, 90, 90, 95);
+        rival.programProfile = new ProgramProfile(50, 50, 50, 50, 50, 50, 95);
+        int rivalPower = rival.programProfile.programPower;
         user.rankTeamPollScore = 10;
         rival.rankTeamPollScore = 80;
         user.advanceSeason();
-        // Floor removed: rival can stay far below user
-        assertTrue(rival.teamPrestige <= 50 || rival.teamPrestige >= 45);
-        assertTrue(user.teamPrestige - rival.teamPrestige >= 10
-                || rival.teamPrestige == 45);
+        assertEquals(rivalPower, rival.programProfile.programPower);
+        assertTrue(user.programProfile.programPower - rival.programProfile.programPower >= 10);
     }
 
     @Test

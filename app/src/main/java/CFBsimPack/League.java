@@ -295,7 +295,7 @@ public class League {
                 throw new IOException("Save from older version — start a new career.");
             }
             int saveVersion = Integer.parseInt(line.substring("SAVE_VERSION,".length()).trim());
-            if (saveVersion < 2) {
+            if (saveVersion != 5) {
                 throw new IOException("Save from older version — start a new career.");
             }
             line = bufferedReader.readLine();
@@ -895,9 +895,9 @@ public class League {
             teamList.get(t).rankTeamDefTalent = t+1;
         }
 
-        Collections.sort( teamList, new TeamCompPrestige() );
+        Collections.sort( teamList, new TeamCompProgramPower() );
         for (int t = 0; t < teamList.size(); ++t) {
-            teamList.get(t).rankTeamPrestige = t+1;
+            teamList.get(t).rankTeamProgramPower = t+1;
         }
 
         if (currentWeek == 0) {
@@ -1273,7 +1273,7 @@ public class League {
         11 = TO diff
         12 = off talent
         13 = def talent
-        14 = prestige
+        14 = program power
          */
         ArrayList<Team> teams = teamList; //(ArrayList<Team>) teamList.clone();
         ArrayList<String> rankings = new ArrayList<String>();
@@ -1359,16 +1359,18 @@ public class League {
                     rankings.add(t.getRankStrStarUser(i+1) + "," + t.strRepWithBowlResults() + "," + t.teamDefTalent);
                 }
                 break;
-            case 14: Collections.sort( teams, new TeamCompPrestige() );
+            case 14: Collections.sort( teams, new TeamCompProgramPower() );
                 for (int i = 0; i < teams.size(); ++i) {
                     t = teams.get(i);
-                    rankings.add(t.getRankStrStarUser(i + 1) + "," + t.strRepWithBowlResults() + "," + t.teamPrestige);
+                    rankings.add(t.getRankStrStarUser(i + 1) + ","
+                            + t.strRepWithBowlResults() + "," + t.programProfile.programPower);
                 }
                 break;
             case 15: Collections.sort( teams, new TeamCompRecruitClass() );
                 for (int i = 0; i < teams.size(); ++i) {
                     t = teams.get(i);
-                    rankings.add(t.getRankStrStarUser(i + 1) + "," + t.strRepWithPrestige() + "," + t.getRecruitingClassRat());
+                    rankings.add(t.getRankStrStarUser(i + 1) + ","
+                            + t.strRepWithProgramPower() + "," + t.getRecruitingClassRat());
                 }
                 break;
             default: Collections.sort( teams, new TeamCompPoll() );
@@ -1419,14 +1421,15 @@ public class League {
     }
 
     /**
-     * Get list of teams and their prestige, used for selecting when a new game is started
+     * Get list of teams and their program power, used for selecting a new career.
      * @return array of all the teams
      */
     public String[] getTeamListStr() {
         String[] teams = new String[teamList.size()];
         for (int i = 0; i < teamList.size(); ++i){
             teams[i] = teamList.get(i).conference + ": " +
-                    teamList.get(i).name + ", Pres: " + teamList.get(i).teamPrestige;
+                    teamList.get(i).name + ", Power: "
+                    + teamList.get(i).programProfile.programPower;
         }
         return teams;
     }
@@ -1714,19 +1717,32 @@ public class League {
             sb.append(heismanHistory.get(i) + "\n");
         }
             sb.append("END_HEISMAN_HIST\n");
-        sb.append("SAVE_VERSION,4\n");
+        sb.append("SAVE_VERSION,5\n");
         sb.append("TEAM_COUNT," + teamList.size() + "\n");
 
         // Save information about each team like W-L records, as well as all the players
         for (Team t : teamList) {
             int offPhil = t.offPhilosophy != null ? t.offPhilosophy.ordinal() : OffensivePhilosophy.MULTIPLE.ordinal();
             int defSys = t.defSystem != null ? t.defSystem.ordinal() : DefensiveSystem.BASE_4_3.ordinal();
-            sb.append(t.conference + "," + t.name + "," + t.abbr + "," + t.teamPrestige + "," +
-                    (t.totalWins - t.wins) + "," + (t.totalLosses - t.losses) + "," + t.totalCCs + "," + t.totalNCs + "," + t.encodeRivalries() + "," +
-                    t.totalNCLosses + "," + t.totalCCLosses + "," + t.totalBowls + "," + t.totalBowlLosses + "," +
-                    "1,1," + (t.showPopups ? 1 : 0) + "," +
-                    t.yearStartWinStreak.getStreakCSV() + "," +  t.teamTVDeal + "," + t.confTVDeal + "," +
-                    offPhil + "," + defSys + "%" + t.evenYearHomeOpp + "%\n");
+            ProgramProfile profile = t.programProfile;
+            sb.append(t.conference).append(",").append(t.name).append(",").append(t.abbr).append(",")
+                    .append(profile.tradition).append(",").append(profile.fanbase).append(",")
+                    .append(profile.donors).append(",").append(profile.footprint).append(",")
+                    .append(profile.pipeline).append(",").append(profile.momentum).append(",")
+                    .append(t.totalWins - t.wins).append(",").append(t.totalLosses - t.losses).append(",")
+                    .append(t.totalCCs).append(",").append(t.totalNCs).append(",")
+                    .append(t.encodeRivalries()).append(",")
+                    .append(t.totalNCLosses).append(",").append(t.totalCCLosses).append(",")
+                    .append(t.totalBowls).append(",").append(t.totalBowlLosses).append(",")
+                    .append(t.showPopups ? 1 : 0).append(",")
+                    .append(t.yearStartWinStreak.getStreakCSV()).append(",")
+                    .append(t.teamTVDeal).append(",").append(t.confTVDeal).append(",")
+                    .append(offPhil).append(",").append(defSys).append(",")
+                    .append(profile.finishHistoryCsv()).append(",")
+                    .append(profile.draftHistoryCsv()).append(",")
+                    .append(t.programProfileUpdatedThisOffseason).append(",")
+                    .append(profile.annualDeltaCsv()).append("%")
+                    .append(t.evenYearHomeOpp).append("%\n");
             sb.append(t.getPlayerInfoSaveFile());
             sb.append("END_PLAYERS\n");
             sb.append(t.specialTeamsDepthSaveLine() + "\n");
@@ -2134,10 +2150,10 @@ class TeamCompDefTalent implements Comparator<Team> {
     }
 }
 
-class TeamCompPrestige implements Comparator<Team> {
+class TeamCompProgramPower implements Comparator<Team> {
     @Override
     public int compare( Team a, Team b ) {
-        return a.teamPrestige > b.teamPrestige ? -1 : a.teamPrestige == b.teamPrestige ? 0 : 1;
+        return Integer.compare(b.programProfile.programPower, a.programProfile.programPower);
     }
 }
 

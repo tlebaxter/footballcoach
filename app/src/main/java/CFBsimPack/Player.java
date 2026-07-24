@@ -135,8 +135,8 @@ public class Player {
         return contractYearsRemaining <= 0;
     }
 
-    public int annualDealCash(int prestige) {
-        return NilMoney.offerCashCost(rosterStatus, nilDealAmount, prestige);
+    public int annualDealCash(ProgramProfile profile) {
+        return NilMoney.offerCashCost(rosterStatus, nilDealAmount, profile);
     }
 
     /** Future-year encumbrance from the recruiting purse (NIL only — COA is year-1). */

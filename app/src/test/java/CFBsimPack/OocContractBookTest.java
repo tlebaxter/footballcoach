@@ -12,6 +12,7 @@ import java.nio.file.Paths;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 
 public class OocContractBookTest {
@@ -228,6 +229,99 @@ public class OocContractBookTest {
         assertEquals(90, Rivalry.parseEncoded("AUB:P").get(0).strength);
         assertEquals(60, Rivalry.parseEncoded("LSU:S").get(0).strength);
         assertEquals(35, Rivalry.parseEncoded("GAT:T").get(0).strength);
+    }
+
+    @Test
+    public void preferredWeekEncodesAndParses() {
+        OocContractGame g = new OocContractGame(2026, "ALA", "UMA", 1000, 100, 3);
+        String encoded = g.encode();
+        assertTrue(encoded.endsWith(":3"));
+        OocContractGame loaded = OocContractGame.parse(encoded);
+        assertEquals(3, loaded.preferredWeek);
+        assertEquals(-1, OocContractGame.parse("2026:ALA:UMA:1000:100:0").preferredWeek);
+    }
+
+    @Test
+    public void rescheduleYearWithinFulfillBy() throws Exception {
+        League league = createOpenOocLeague();
+        Team home = league.findTeamAbbr("ALA");
+        Team away = league.findTeamAbbr("UMA");
+        assertNotNull(home);
+        assertNotNull(away);
+        int year = league.getYear();
+        OocContract contract = league.oocContracts.signHomeAndHome(home, away, year, year + 3, true);
+        assertNotNull(contract);
+        assertTrue(league.oocContracts.canReschedule(contract.id, year));
+        assertTrue(league.oocContracts.rescheduleYear(contract.id, year, year + 1));
+        assertNull(contract.gameForYear(year));
+        assertNotNull(contract.gameForYear(year + 1));
+        assertEquals(home.abbr, contract.gameForYear(year + 1).homeAbbr);
+        assertFalse(league.oocContracts.rescheduleYear(contract.id, year + 1, year + 4));
+        assertFalse(league.oocContracts.rescheduleYear(contract.id, year + 1, year + 3));
+    }
+
+    @Test
+    public void rescheduleWeekMovesCurrentYearPlacement() throws Exception {
+        League league = createOpenOocLeague();
+        Team home = league.findTeamAbbr("OSU");
+        Team away = league.findTeamAbbr("HAW");
+        assertNotNull(home);
+        assertNotNull(away);
+        OocContract contract = league.oocContracts.signBuyGame(home, away, league.getYear(), 1);
+        assertNotNull(contract);
+        league.prepareSeasonSchedule();
+
+        int placedWeek = -1;
+        for (int w = 0; w < League.REGULAR_SEASON_WEEKS; w++) {
+            Game g = home.gameSchedule.get(w);
+            if (g != null && contract.id.equals(g.contractId)) {
+                placedWeek = w;
+                break;
+            }
+        }
+        assertTrue(placedWeek >= 0);
+
+        int targetWeek = -1;
+        for (int w = 0; w < League.REGULAR_SEASON_WEEKS; w++) {
+            if (w == placedWeek) {
+                continue;
+            }
+            if (home.isOpenOocWeek(w) && away.isOpenOocWeek(w)) {
+                targetWeek = w;
+                break;
+            }
+        }
+        assertTrue("Need a second shared open week", targetWeek >= 0);
+        assertTrue(league.oocContracts.rescheduleWeek(contract.id, league.getYear(), targetWeek));
+        assertEquals(targetWeek, contract.games.get(0).preferredWeek);
+        Game moved = home.gameSchedule.get(targetWeek);
+        assertNotNull(moved);
+        assertEquals(contract.id, moved.contractId);
+        assertNull(home.gameSchedule.get(placedWeek));
+    }
+
+    @Test
+    public void cannotRescheduleSettledOrPastFulfillBy() throws Exception {
+        League league = createOpenOocLeague();
+        Team home = league.findTeamAbbr("TEX");
+        Team away = league.findTeamAbbr("RIC");
+        assertNotNull(home);
+        assertNotNull(away);
+        OocContract contract = league.oocContracts.signSingleGame(home, away, league.getYear(), false);
+        assertNotNull(contract);
+        contract.games.get(0).settled = true;
+        assertFalse(league.oocContracts.canReschedule(contract.id, league.getYear()));
+
+        String pastLine = "CY,TEX,RIC," + (league.getYear() - 2) + ",1,S,"
+                + (league.getYear() - 1) + ",0,"
+                + league.getYear() + ":TEX:RIC:0:0:0";
+        OocContract past = OocContract.parse(pastLine);
+        StringBuilder sb = new StringBuilder();
+        sb.append("OOC_CONTRACTS\nNEXT_ID,99\n").append(past.encode()).append("\nEND_OOC_CONTRACTS\n");
+        BufferedReader reader = new BufferedReader(new StringReader(sb.toString()));
+        assertEquals("OOC_CONTRACTS", reader.readLine());
+        league.oocContracts.restore(reader);
+        assertFalse(league.oocContracts.canReschedule("CY", league.getYear()));
     }
 
     private static League createOpenOocLeague() throws Exception {

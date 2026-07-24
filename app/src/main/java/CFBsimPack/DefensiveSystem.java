@@ -72,12 +72,12 @@ public enum DefensiveSystem {
         return v[i];
     }
 
-    public static DefensiveSystem assignForPrestige(int prestige, java.util.Random rng) {
-        if (prestige >= 85) {
+    public static DefensiveSystem assignForProgramStrength(int programStrength, java.util.Random rng) {
+        if (programStrength >= 85) {
             DefensiveSystem[] elite = {FOUR_TWO_FIVE, NICKEL, BASE_3_4, THREE_THREE_FIVE, DIME};
             return elite[rng.nextInt(elite.length)];
         }
-        if (prestige >= 70) {
+        if (programStrength >= 70) {
             DefensiveSystem[] mid = {BASE_4_3, FOUR_TWO_FIVE, NICKEL, BASE_3_4, TWO_FOUR_FIVE};
             return mid[rng.nextInt(mid.length)];
         }

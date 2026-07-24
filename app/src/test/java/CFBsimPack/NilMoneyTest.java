@@ -18,7 +18,7 @@ public class NilMoneyTest {
     }
 
     @Test
-    public void yearlyBudgetClampsPrestigeAndScalesUp() {
+    public void yearlyBudgetClampsCapitalScoreAndScalesUp() {
         int low = NilMoney.yearlyBudget(10);
         int mid = NilMoney.yearlyBudget(75);
         int high = NilMoney.yearlyBudget(99);
@@ -32,8 +32,8 @@ public class NilMoneyTest {
 
     @Test
     public void positionPremiumsMatchKnownRoles() {
-        assertEquals(1.55, NilMoney.positionPremium("QB"), 0.001);
-        assertEquals(0.70, NilMoney.positionPremium("K"), 0.001);
+        assertEquals(1.50, NilMoney.positionPremium("QB"), 0.001);
+        assertEquals(0.50, NilMoney.positionPremium("K"), 0.001);
         assertEquals(1.0, NilMoney.positionPremium(null), 0.001);
         assertEquals(1.0, NilMoney.positionPremium("XX"), 0.001);
     }
@@ -54,6 +54,36 @@ public class NilMoneyTest {
         assertTrue(NilMoney.marketValue(base) >= 25000);
         assertTrue(NilMoney.marketValue(heisman) > NilMoney.marketValue(base));
         assertEquals(25000, NilMoney.marketValue(null));
+    }
+
+    @Test
+    public void purseSeparatesRevenueShareAndCollectiveUpside() {
+        ProgramProfile floor = new ProgramProfile(40, 40, 40, 50, 45, 45, 47);
+        ProgramProfile elite = new ProgramProfile(95, 95, 95, 90, 95, 95, 95);
+
+        assertTrue(NilMoney.yearlyRevShare(elite) > NilMoney.yearlyRevShare(floor));
+        assertTrue(NilMoney.yearlyCollective(elite) > NilMoney.yearlyCollective(floor));
+        assertTrue(NilMoney.yearlyBudget(floor) >= 3_000_000);
+        assertTrue(NilMoney.yearlyBudget(elite) >= 30_000_000);
+        assertTrue(NilMoney.yearlyBudget(elite) <= 47_000_000);
+    }
+
+    @Test
+    public void portalStarHasPremiumOverEquivalentRosterPlayer() {
+        Player rosterPlayer = player(3, 84, 88, "EDGE");
+        Player portalPlayer = player(3, 84, 88, "EDGE");
+        portalPlayer.transferReason = TransferReason.MOVE_UP;
+
+        assertTrue(NilMoney.marketValue(portalPlayer) > NilMoney.marketValue(rosterPlayer));
+    }
+
+    @Test
+    public void eliteQuarterbackMarketIsTopHeavy() {
+        Player starter = player(3, 80, 84, "QB");
+        Player star = player(3, 95, 97, "QB");
+
+        assertTrue(NilMoney.marketValue(star) > NilMoney.marketValue(starter) * 2);
+        assertTrue(NilMoney.marketValue(star) <= 7_000_000);
     }
 
     @Test

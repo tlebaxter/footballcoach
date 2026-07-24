@@ -38,22 +38,21 @@ public final class LeagueDataLoader {
             }
 
             String[] values = line.split(",", -1);
-            if (values.length != 5) {
+            if (values.length != 10) {
                 throw new IllegalArgumentException(
-                        "Invalid FBS team data on line " + (lineNumber + 1) + ": expected 5 columns.");
+                        "Invalid FBS team data on line " + (lineNumber + 1) + ": expected 10 columns.");
             }
 
             String conference = values[0].trim();
             String name = values[1].trim();
             String abbreviation = values[2].trim();
-            int prestige;
-            try {
-                prestige = Integer.parseInt(values[3].trim());
-            } catch (NumberFormatException exception) {
-                throw new IllegalArgumentException(
-                        "Invalid prestige on line " + (lineNumber + 1) + ".", exception);
-            }
-            String rivalsEncoded = values[4].trim();
+            int tradition = parseFactor(values[3], "tradition", lineNumber);
+            int fanbase = parseFactor(values[4], "fanbase", lineNumber);
+            int donors = parseFactor(values[5], "donors", lineNumber);
+            int footprint = parseFactor(values[6], "footprint", lineNumber);
+            int pipeline = parseFactor(values[7], "pipeline", lineNumber);
+            int momentum = parseFactor(values[8], "momentum", lineNumber);
+            String rivalsEncoded = values[9].trim();
 
             if (conference.isEmpty() || name.isEmpty() || rivalsEncoded.isEmpty()) {
                 throw new IllegalArgumentException(
@@ -62,10 +61,6 @@ public final class LeagueDataLoader {
             if (abbreviation.length() != 3) {
                 throw new IllegalArgumentException(
                         "Team abbreviation must contain 3 characters on line " + (lineNumber + 1) + ".");
-            }
-            if (prestige < 0 || prestige > 100) {
-                throw new IllegalArgumentException(
-                        "Prestige must be between 0 and 100 on line " + (lineNumber + 1) + ".");
             }
             if (!abbreviations.add(abbreviation)) {
                 throw new IllegalArgumentException("Duplicate team abbreviation: " + abbreviation);
@@ -91,7 +86,17 @@ public final class LeagueDataLoader {
                 conf = new Conference(conference, league, !"Independents".equals(conference));
                 conferencesByName.put(conference, conf);
             }
-            seeds.add(new TeamSeed(conf, name, abbreviation, prestige, Rivalry.encode(rivalries)));
+            seeds.add(new TeamSeed(
+                    conf,
+                    name,
+                    abbreviation,
+                    tradition,
+                    fanbase,
+                    donors,
+                    footprint,
+                    pipeline,
+                    momentum,
+                    Rivalry.encode(rivalries)));
         }
 
         if (seeds.size() != EXPECTED_TEAM_COUNT) {
@@ -119,7 +124,12 @@ public final class LeagueDataLoader {
                     seed.abbreviation,
                     seed.conference.confName,
                     league,
-                    seed.prestige,
+                    seed.tradition,
+                    seed.fanbase,
+                    seed.donors,
+                    seed.footprint,
+                    seed.pipeline,
+                    seed.momentum,
                     seed.rivalsEncoded);
             seed.conference.confTeams.add(team);
             league.teamList.add(team);
@@ -130,20 +140,52 @@ public final class LeagueDataLoader {
         private final Conference conference;
         private final String name;
         private final String abbreviation;
-        private final int prestige;
+        private final int tradition;
+        private final int fanbase;
+        private final int donors;
+        private final int footprint;
+        private final int pipeline;
+        private final int momentum;
         private final String rivalsEncoded;
 
         private TeamSeed(
                 Conference conference,
                 String name,
                 String abbreviation,
-                int prestige,
+                int tradition,
+                int fanbase,
+                int donors,
+                int footprint,
+                int pipeline,
+                int momentum,
                 String rivalsEncoded) {
             this.conference = conference;
             this.name = name;
             this.abbreviation = abbreviation;
-            this.prestige = prestige;
+            this.tradition = tradition;
+            this.fanbase = fanbase;
+            this.donors = donors;
+            this.footprint = footprint;
+            this.pipeline = pipeline;
+            this.momentum = momentum;
             this.rivalsEncoded = rivalsEncoded;
         }
+    }
+
+    private static int parseFactor(String raw, String factor, int zeroBasedLineNumber) {
+        final int value;
+        try {
+            value = Integer.parseInt(raw.trim());
+        } catch (NumberFormatException exception) {
+            throw new IllegalArgumentException(
+                    "Invalid " + factor + " on line " + (zeroBasedLineNumber + 1) + ".",
+                    exception);
+        }
+        if (value < 0 || value > 100) {
+            throw new IllegalArgumentException(
+                    factor + " must be between 0 and 100 on line "
+                            + (zeroBasedLineNumber + 1) + ".");
+        }
+        return value;
     }
 }

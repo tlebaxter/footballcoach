@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
-    <style name="AppTheme" parent="Theme.Material3.Dark.NoActionBar">
+    <style name="Base.AppTheme" parent="Theme.Material3.Dark.NoActionBar">
         <item name="colorPrimary">@color/colorPrimary</item>
         <item name="colorPrimaryDark">@color/colorPrimaryDark</item>
         <item name="colorOnPrimary">@color/colorOnPrimary</item>
@@ -16,9 +16,10 @@
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
         <item name="android:windowLightStatusBar">false</item>
-        <item name="android:windowLightNavigationBar">false</item>
         <item name="materialAlertDialogTheme">@style/ThemeOverlay.FC.MaterialAlertDialog</item>
     </style>
+
+    <style name="AppTheme" parent="Base.AppTheme" />
 
     <style name="AppTheme.NoActionBar">
         <item name="windowActionBar">false</item>

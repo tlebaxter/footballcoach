@@ -15,7 +15,7 @@ import java.lang.StringBuilder;
 public class Conference {
 
     public String confName;
-    public int confPrestige;
+    public int mediaShare;
 
     public ArrayList<Team> confTeams;
     public boolean evenYear;
@@ -42,13 +42,31 @@ public class Conference {
 
     public Conference(String name, League league, boolean hasChampionship) {
         confName = name;
-        confPrestige = 75;
+        mediaShare = mediaShareFor(name);
         confTeams = new ArrayList<Team>();
         this.league = league;
         this.hasChampionship = hasChampionship;
         week = 0;
         robinWeek = 0;
         allConfPlayers = new ArrayList<Player>();
+    }
+
+    public static int mediaShareFor(String conferenceName) {
+        if (conferenceName == null) return 50;
+        switch (conferenceName) {
+            case "SEC": return 95;
+            case "Big Ten": return 94;
+            case "ACC": return 83;
+            case "Big 12": return 82;
+            case "Pac-12": return 68;
+            case "American": return 60;
+            case "Mountain West": return 55;
+            case "Sun Belt": return 53;
+            case "MAC": return 49;
+            case "Conference USA": return 47;
+            case "Independents": return 65;
+            default: return 50;
+        }
     }
 
     /**

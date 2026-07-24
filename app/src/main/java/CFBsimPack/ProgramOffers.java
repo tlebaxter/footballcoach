@@ -38,80 +38,95 @@ public final class ProgramOffers {
         double bump = lengthAnnualBump(p, years);
         int amount = (int) Math.round(base * bump / 1000.0) * 1000;
         if (amount < 25000) amount = 25000;
-        if (amount > 6000000) amount = 6000000;
+        int ceiling = maxSingleDeal(destination);
+        if (amount > ceiling) amount = ceiling;
         return amount;
     }
 
     public static int yearOneCost(Team team, RosterStatus status, int annualNil, int years) {
         if (team == null) return 0;
-        return NilMoney.offerCashCost(status, annualNil, team.teamPrestige);
+        return NilMoney.offerCashCost(status, annualNil, team.programProfile);
     }
 
     public static int nilAmountFor(Player p, Team destination) {
         int base = NilMoney.marketValue(p);
-        double fit = 1.0;
+        double multiplier = 1.0;
         TransferReason reason = p.transferReason != null ? p.transferReason : TransferReason.NONE;
-        Team prior = p.priorTeam != null ? p.priorTeam : p.team;
-
-        int destPrestige = destination != null ? destination.teamPrestige : 70;
-        int priorPrestige = prior != null ? prior.teamPrestige : destPrestige;
+        ProgramProfile profile = destination != null ? destination.programProfile : null;
+        int brand = profile != null ? profile.brandAttract : 60;
+        int pipeline = profile != null ? profile.pipeline : 60;
+        int momentum = profile != null ? profile.momentum : 60;
         int depthRank = projectedDepthRank(p, destination);
 
         switch (reason) {
             case PLAYING_TIME:
-                if (depthRank <= 1) fit = 0.75;
-                else if (depthRank <= 2) fit = 0.90;
-                else fit = 1.25;
+                if (depthRank <= 1) multiplier *= 0.72;
+                else if (depthRank <= 2) multiplier *= 0.86;
+                else multiplier *= 1.22;
                 break;
             case MOVE_UP:
-                if (destPrestige > priorPrestige + 8) fit = 0.80;
-                else if (destPrestige >= priorPrestige) fit = 1.05;
-                else fit = 1.35;
+                multiplier *= brand >= 82 ? 0.82 : brand >= 70 ? 1.0 : 1.25;
                 break;
             case COACHING_CHANGE:
-                fit = destPrestige >= priorPrestige ? 0.90 : 1.10;
+                multiplier *= momentum >= 70 ? 0.90 : 1.10;
                 break;
             case SCHEME_FIT:
-                fit = depthRank <= 1 ? 0.85 : 1.15;
+                multiplier *= depthRank <= 1 ? 0.82 : 1.12;
                 break;
             case WINNING:
                 if (destination != null && destination.rankTeamPollScore > 0 && destination.rankTeamPollScore <= 25) {
-                    fit = 0.85;
-                } else if (destPrestige >= 80) {
-                    fit = 0.90;
+                    multiplier *= 0.84;
+                } else if (momentum >= 80) {
+                    multiplier *= 0.90;
                 } else {
-                    fit = 1.20;
+                    multiplier *= 1.18;
                 }
                 break;
-            case PRESTIGE_FREEFALL:
-                fit = destination != null && destination.diffPrestige >= 0 ? 0.85 : 1.20;
+            case PROGRAM_FREEFALL:
+                multiplier *= profile != null && profile.diffProgramPower >= 0 ? 0.86 : 1.20;
                 break;
             case TITLE_CHASE:
-                if (destPrestige >= 88 || (destination != null && destination.totalNCs > 0)) fit = 0.80;
-                else fit = 1.30;
+                multiplier *= brand >= 88 || (destination != null && destination.totalNCs > 0)
+                        ? 0.78 : 1.28;
                 break;
             case INJURY_COMEBACK:
-                fit = 0.90;
+                multiplier *= 0.90;
                 base = (int) (base * 0.90);
                 break;
             case NONE:
-                fit = 0.95;
+                multiplier *= 0.95;
                 break;
             case BETTER_FIT:
             default:
-                fit = 1.0;
                 break;
         }
 
-        double brand = 1.0 + Math.max(0, destPrestige - 70) * 0.008;
-        if (reason == TransferReason.MOVE_UP || reason == TransferReason.TITLE_CHASE) {
-            brand = 1.0 + Math.max(0, destPrestige - 70) * 0.004;
+        multiplier *= 1.0 - Math.max(0, brand - 60) * 0.004;
+        if (brand < 55) multiplier *= 1.0 + (55 - brand) * 0.006;
+        if (p.year >= 3 || reason == TransferReason.TITLE_CHASE || reason == TransferReason.MOVE_UP) {
+            multiplier *= 1.0 - Math.max(0, pipeline - 60) * 0.002;
         }
+        multiplier *= deterministicMarketPreference(p, destination);
 
-        int amount = (int) Math.round(base * fit * brand / 1000.0) * 1000;
+        int amount = (int) Math.round(base * multiplier / 1000.0) * 1000;
         if (amount < 25000) amount = 25000;
-        if (amount > 6000000) amount = 6000000;
+        if (amount > maxSingleDeal(destination)) amount = maxSingleDeal(destination);
         return amount;
+    }
+
+    private static double deterministicMarketPreference(Player player, Team destination) {
+        String playerKey = player != null && player.name != null ? player.name : "PLAYER";
+        String teamKey = destination != null && destination.abbr != null ? destination.abbr : "TEAM";
+        int hash = (playerKey + ":" + teamKey).hashCode();
+        int basisPoints = Math.floorMod(hash, 601) - 300;
+        return 1.0 + basisPoints / 10_000.0;
+    }
+
+    public static int maxSingleDeal(Team destination) {
+        if (destination == null || destination.programProfile == null) return 7_000_000;
+        int concentrationLimit = (int) Math.round(
+                NilMoney.yearlyBudget(destination.programProfile) * 0.20 / 1000.0) * 1000;
+        return Math.max(500_000, Math.min(7_000_000, concentrationLimit));
     }
 
     public static int projectedDepthRank(Player p, Team destination) {
@@ -138,6 +153,19 @@ public final class ProgramOffers {
         return offerOrdinal(offer) >= offerOrdinal(min);
     }
 
+    public static boolean acceptsOffer(
+            Player p,
+            Team destination,
+            RosterStatus offer,
+            int annualNil,
+            int riskTier) {
+        if (!acceptsOffer(p, offer, riskTier)) return false;
+        if (offer != RosterStatus.SCHOLARSHIP_PLUS_NIL) {
+            return minimumAcceptable(p, riskTier) != RosterStatus.SCHOLARSHIP_PLUS_NIL;
+        }
+        return annualNil >= nilAmountFor(p, destination);
+    }
+
     private static int offerOrdinal(RosterStatus s) {
         if (s == RosterStatus.SCHOLARSHIP_PLUS_NIL) return 2;
         if (s == RosterStatus.SCHOLARSHIP) return 1;
@@ -148,7 +176,7 @@ public final class ProgramOffers {
      * Project NFL draft round 1–7, or 0 for UDFA / not declaring-level.
      */
     public static int projectDraftRound(Player p) {
-        if (p == null || p.year < 3 || p.year >= 5) return 0;
+        if (p == null || p.year < 3) return 0;
         if ("K".equals(p.position)) return 0;
 
         int score = p.ratOvr;
@@ -193,11 +221,14 @@ public final class ProgramOffers {
         else if (round == 7) mult = 0.65;
         else mult = 0.45; // UDFA-leaning early declare
         if (t != null) {
-            mult *= 1.0 + Math.max(0, t.teamPrestige - 70) * 0.004;
+            int brand = t.programProfile != null ? t.programProfile.brandAttract : 60;
+            int collective = t.programProfile != null ? t.programProfile.collectivePool : 60;
+            mult *= 1.0 - Math.max(0, brand - 65) * 0.002;
+            mult *= 1.0 + Math.max(0, collective - 75) * 0.0015;
         }
         int amount = (int) Math.round(base * mult / 1000.0) * 1000;
         if (amount < 100000) amount = 100000;
-        if (amount > 8000000) amount = 8000000;
+        if (amount > maxSingleDeal(t)) amount = maxSingleDeal(t);
         return amount;
     }
 

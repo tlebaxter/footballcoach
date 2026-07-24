@@ -481,11 +481,13 @@ public class Game implements Serializable {
 
         int guard = 0;
         while (!state.gameOver && !hasPlayed && guard++ < 800) {
-            autoResolveTryIfNeeded();
+            autoResolveTryIfNeeded(true);
             Team offense = state.possessionHome ? homeTeam : awayTeam;
             Team defense = state.possessionHome ? awayTeam : homeTeam;
             PlayCall call = aiCaller.choose(offense, defense, state);
             PlayResult r = executeSnap(call);
+            // User TDs leave a try choice pending; resolve with AI policy so sim can continue.
+            autoResolveTryIfNeeded(true);
 
             if (until == AutoSimUntil.GAME) {
                 if (state.gameOver) break;
@@ -751,12 +753,20 @@ public class Game implements Serializable {
     }
 
     /**
-     * AI / auto-sim: if a try is awaiting choice and offense is AI (or force), pick and resolve.
-     * When going for 2 with AI offense, leaves tryIsTwoPoint set for the next snap.
+     * AI / auto-sim: if a try is awaiting choice and offense is AI, pick and resolve.
+     * When going for 2 with AI offense, leaves tryIsTwoPoint set for the next snap
+     * (or snaps immediately when defense is also AI).
      */
     public void autoResolveTryIfNeeded() {
+        autoResolveTryIfNeeded(false);
+    }
+
+    /**
+     * @param force when true, also resolve for user-controlled offense (used by auto-sim).
+     */
+    public void autoResolveTryIfNeeded(boolean force) {
         if (state == null || !state.pendingTry || !state.tryAwaitingChoice) return;
-        if (userControlsOffense()) return;
+        if (!force && userControlsOffense()) return;
         ensureEngine();
         Team offense = state.possessionHome ? homeTeam : awayTeam;
         Team defense = state.possessionHome ? awayTeam : homeTeam;
@@ -944,7 +954,7 @@ public class Game implements Serializable {
                 + "\nDef: " + awayTeam.defSystem.displayName
                 + "\nOff Tal " + awayTeam.getOffTalent()
                 + "\nDef Tal " + awayTeam.getDefTalent()
-                + "\nPrestige " + awayTeam.teamPrestige;
+                + "\nProgram Power " + awayTeam.programProfile.programPower;
         int rivalry = rivalryStrength();
         String center = gameName + "\n\nSCOUT"
                 + (rivalry > 0
@@ -954,13 +964,13 @@ public class Game implements Serializable {
                 + "\nDef: " + homeTeam.defSystem.displayName
                 + "\nOff Tal " + homeTeam.getOffTalent()
                 + "\nDef Tal " + homeTeam.getDefTalent()
-                + "\nPrestige " + homeTeam.teamPrestige;
+                + "\nProgram Power " + homeTeam.programProfile.programPower;
         String notes = "Philosophies and fronts shape personnel and playcalling.\n"
                 + "Set your Offense Philosophy and Defense System on the Team tab.";
-        if (rivalry >= Rivalry.PRESTIGE_THRESHOLD) {
+        if (rivalry >= Rivalry.MOMENTUM_THRESHOLD) {
             int swing = rivalry >= Rivalry.HOT_THRESHOLD ? 2 : 1;
             notes += "\nRivalry stakes: about ±" + swing
-                    + " prestige when the programs are competitive.";
+                    + " momentum when the programs are competitive.";
         }
         if (contractId != null && homeTeam.league != null && homeTeam.league.oocContracts != null) {
             OocContractGame cg = homeTeam.league.oocContracts.findById(contractId) != null

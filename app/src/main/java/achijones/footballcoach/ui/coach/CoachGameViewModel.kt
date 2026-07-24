@@ -256,11 +256,6 @@ class CoachGameViewModel : ViewModel() {
     fun autoSim(until: AutoSimUntil) {
         val g = game ?: return
         if (g.state?.awaitingCoinToss == true) return
-        if (g.state?.pendingTry == true && g.state?.tryAwaitingChoice == true
-            && g.getSituation().userChoosesTry
-        ) {
-            return
-        }
         g.autoSimUntil(until)
         if (g.state?.gameOver == true && !g.hasPlayed) g.finalizeGame()
         refresh()

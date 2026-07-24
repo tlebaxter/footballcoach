@@ -55,7 +55,18 @@ data class TeamPickerTeamUi(
     val teamListIndex: Int,
     val name: String,
     val abbr: String,
-    val prestige: Int,
+    val programPower: Int,
+    val tradition: Int,
+    val fanbase: Int,
+    val donors: Int,
+    val footprint: Int,
+    val pipeline: Int,
+    val momentum: Int,
+    val revShare: String,
+    val collective: String,
+    val offTalent: Int,
+    val defTalent: Int,
+    val stTalent: Int,
 )
 
 data class TeamPickerConfUi(

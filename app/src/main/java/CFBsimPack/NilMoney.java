@@ -63,35 +63,55 @@ public final class NilMoney {
         return "$" + dollars;
     }
 
-    public static int yearlyBudget(int prestige) {
-        if (prestige < 40) prestige = 40;
-        if (prestige > 99) prestige = 99;
-        double p = prestige;
-        double budget = 400_000 + Math.pow(p, 2.15) * 650;
-        return (int) Math.round(budget / 1000.0) * 1000;
+    public static int yearlyBudget(ProgramProfile profile) {
+        if (profile == null) return yearlyBudget(50);
+        return yearlyRevShare(profile) + yearlyCollective(profile);
     }
 
-    public static int scholarshipCoa(int prestige) {
-        if (prestige < 40) prestige = 40;
-        if (prestige > 99) prestige = 99;
-        return 45000 + (prestige - 40) * 750;
+    /** Compatibility helper for isolated callers/tests using a capital score. */
+    public static int yearlyBudget(int capitalScore) {
+        int score = clampScore(capitalScore);
+        double normalized = (score - 25) / 74.0;
+        double total = 3_000_000 + Math.pow(normalized, 1.55) * 42_000_000;
+        return roundToThousand(total);
+    }
+
+    public static int yearlyRevShare(ProgramProfile profile) {
+        int score = profile != null ? profile.revSharePool : 50;
+        double normalized = (clampScore(score) - 25) / 74.0;
+        return roundToThousand(2_000_000 + Math.pow(normalized, 1.50) * 20_000_000);
+    }
+
+    public static int yearlyCollective(ProgramProfile profile) {
+        int score = profile != null ? profile.collectivePool : 50;
+        double normalized = (clampScore(score) - 25) / 74.0;
+        return roundToThousand(500_000 + Math.pow(normalized, 2.40) * 24_500_000);
+    }
+
+    public static int scholarshipCoa(ProgramProfile profile) {
+        return scholarshipCoa(profile != null ? profile.revSharePool : 50);
+    }
+
+    public static int scholarshipCoa(int revShareScore) {
+        int score = clampScore(revShareScore);
+        return roundToThousand(30_000 + (score - 25) * 550.0);
     }
 
     public static double positionPremium(String position) {
         if (position == null) return 1.0;
         switch (position) {
-            case "QB": return 1.55;
-            case "RB": return 1.20;
-            case "FB": return 0.95;
-            case "WR": return 1.25;
-            case "TE": return 1.15;
-            case "OL": return 1.05;
+            case "QB": return 1.50;
+            case "RB": return 0.92;
+            case "FB": return 0.65;
+            case "WR": return 1.18;
+            case "TE": return 1.02;
+            case "OL": return 1.08;
             case "EDGE": return 1.20;
             case "DL": return 1.10;
-            case "LB": return 1.10;
-            case "CB": return 1.15;
-            case "S": return 1.05;
-            case "K": return 0.70;
+            case "LB": return 1.02;
+            case "CB": return 1.16;
+            case "S": return 0.98;
+            case "K": return 0.50;
             default: return 1.0;
         }
     }
@@ -141,15 +161,15 @@ public final class NilMoney {
 
         double base;
         if (ovr < 60) {
-            base = 25000 + (ovr - 50) * 5000;
+            base = 25_000 + Math.max(0, ovr - 50) * 5_000;
         } else if (ovr < 70) {
-            base = 75000 + (ovr - 60) * 25000;
+            base = 75_000 + (ovr - 60) * 20_000;
         } else if (ovr < 80) {
-            base = 350000 + (ovr - 70) * 40000;
+            base = 300_000 + (ovr - 70) * 45_000;
         } else if (ovr < 90) {
-            base = 750000 + (ovr - 80) * 150000;
+            base = 800_000 + (ovr - 80) * 150_000;
         } else {
-            base = 2250000 + (ovr - 90) * 400000;
+            base = 2_400_000 + (ovr - 90) * 350_000;
         }
 
         base *= premium;
@@ -159,9 +179,14 @@ public final class NilMoney {
         else if (p.careerAllAmerican > 0 || p.wonAllAmerican) base *= 1.15;
         else if (p.careerAllConference > 0 || p.wonAllConference) base *= 1.06;
 
-        int value = (int) Math.round(base / 1000.0) * 1000;
+        if (p.transferReason != null && p.transferReason != TransferReason.NONE) {
+            double portalPremium = p.ratOvr >= 85 ? 1.40 : p.ratOvr >= 75 ? 1.25 : 1.15;
+            base *= portalPremium;
+        }
+
+        int value = roundToThousand(base);
         if (value < 25000) value = 25000;
-        if (value > 6000000) value = 6000000;
+        if (value > 7000000) value = 7000000;
         return value;
     }
 
@@ -172,8 +197,8 @@ public final class NilMoney {
         double potBump = 1.0 + Math.min(0.45, gap / 80.0);
 
         double age;
-        if (year <= 1) age = 1.55;
-        else if (year == 2) age = 1.30;
+        if (year <= 1) age = 1.25;
+        else if (year == 2) age = 1.18;
         else if (year == 3) age = 1.05;
         else if (year == 4) age = 0.82;
         else age = 0.70;
@@ -185,13 +210,19 @@ public final class NilMoney {
         return age;
     }
 
-    public static int offerCashCost(RosterStatus status, int nilAmount, int prestige) {
-        int coa = status != null && status.usesScholarship() ? scholarshipCoa(prestige) : 0;
+    public static int offerCashCost(RosterStatus status, int nilAmount, ProgramProfile profile) {
+        int coa = status != null && status.usesScholarship() ? scholarshipCoa(profile) : 0;
         int nil = (status == RosterStatus.SCHOLARSHIP_PLUS_NIL) ? Math.max(0, nilAmount) : 0;
         return coa + nil;
     }
 
-    public static int buyoutCost(Player p, int prestige) {
+    public static int offerCashCost(RosterStatus status, int nilAmount, int revShareScore) {
+        int coa = status != null && status.usesScholarship() ? scholarshipCoa(revShareScore) : 0;
+        int nil = status == RosterStatus.SCHOLARSHIP_PLUS_NIL ? Math.max(0, nilAmount) : 0;
+        return coa + nil;
+    }
+
+    public static int buyoutCost(Player p, ProgramProfile profile) {
         if (p == null) return 0;
         int remainingYears = Math.max(0, p.contractYearsRemaining);
         if (remainingYears <= 0 && (p.rosterStatus == null || p.rosterStatus == RosterStatus.PWO)) {
@@ -201,7 +232,7 @@ public final class NilMoney {
         if (remainingYears <= 0 && p.rosterStatus != null && p.rosterStatus.usesScholarship()) {
             years = 1;
         }
-        int annual = offerCashCost(p.rosterStatus, p.nilDealAmount, prestige);
+        int annual = offerCashCost(p.rosterStatus, p.nilDealAmount, profile);
         double remaining = annual * (double) years;
         double rate = 0.35;
         if (p.year <= 2) rate += 0.25;
@@ -216,13 +247,39 @@ public final class NilMoney {
         return Math.max(0, cost);
     }
 
+    public static int buyoutCost(Player p, int revShareScore) {
+        if (p == null) return 0;
+        int remainingYears = Math.max(0, p.contractYearsRemaining);
+        if (remainingYears <= 0 && (p.rosterStatus == null || p.rosterStatus == RosterStatus.PWO)) {
+            return 0;
+        }
+        int years = Math.max(1, remainingYears);
+        int annual = offerCashCost(p.rosterStatus, p.nilDealAmount, revShareScore);
+        double rate = p.year <= 2 ? 0.60 : p.year == 3 ? 0.45 : 0.30;
+        if (remainingYears >= 2) rate += 0.12;
+        if (p.ratOvr >= 85 || p.ratPot - p.ratOvr >= 15) rate += 0.10;
+        return roundToThousand(annual * years * Math.max(0.25, Math.min(0.85, rate)));
+    }
+
     /**
      * Guarantee paid by home to away for a buy game.
      * Higher when home is much stronger than the visitor.
      */
-    public static int buyGameGuarantee(int homePrestige, int awayPrestige) {
-        int home = clampPrestige(homePrestige);
-        int away = clampPrestige(awayPrestige);
+    public static int buyGameGuarantee(ProgramProfile home, ProgramProfile away) {
+        int homeTier = home != null
+                ? (int) Math.round(home.scheduleTier * 0.55 + home.capitalPool * 0.45)
+                : 50;
+        int awayTier = away != null
+                ? (int) Math.round(away.scheduleTier * 0.55 + away.capitalPool * 0.45)
+                : 50;
+        int gap = Math.max(0, homeTier - awayTier);
+        double base = 600_000 + gap * 30_000 + (100 - awayTier) * 8_000;
+        return roundToThousand(base);
+    }
+
+    public static int buyGameGuarantee(int homeScheduleTier, int awayScheduleTier) {
+        int home = clampScore(homeScheduleTier);
+        int away = clampScore(awayScheduleTier);
         int gap = Math.max(0, home - away);
         double base = 150_000 + gap * 18_000 + (100 - away) * 2_500;
         return (int) Math.round(base / 1000.0) * 1000;
@@ -238,7 +295,7 @@ public final class NilMoney {
 
     /**
      * Cancel fee for an OOC contract. Buy deals scale with remaining guarantees;
-     * H&amp;H / single use a flat prestige-style floor.
+     * H&amp;H / single use a flat program-tier floor.
      */
     public static int oocCancelBuyout(OocContract.Type type, int remainingGuarantees, int lengthYears) {
         int years = Math.max(1, lengthYears);
@@ -259,9 +316,13 @@ public final class NilMoney {
         return (int) Math.round(base * 1.25 / 1000.0) * 1000;
     }
 
-    private static int clampPrestige(int prestige) {
-        if (prestige < 40) return 40;
-        if (prestige > 99) return 99;
-        return prestige;
+    private static int clampScore(int score) {
+        if (score < 25) return 25;
+        if (score > 99) return 99;
+        return score;
+    }
+
+    private static int roundToThousand(double dollars) {
+        return (int) Math.round(dollars / 1000.0) * 1000;
     }
 }

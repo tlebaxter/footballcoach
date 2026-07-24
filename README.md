@@ -22,10 +22,11 @@ Relative to the original Football Coach codebase, Football Coach 3 notably inclu
 - A **play-by-play game engine** (concepts, coverages, tempo, box score)
 - **2026 FBS conference alignment** and scheduling (bye weeks, conference + OOC)
 - Expanded **positions** (e.g. TE, FB, DL, EDGE, LB) and depth-chart / role systems
-- Updated **offseason** flow (transfers, NIL-oriented recruiting concepts, prestige-driven budgets)
+- Updated **offseason** flow with transfers and a market-shaped NIL economy
+- Multi-factor **Program Profile**: tradition, fanbase, donors, recruiting footprint, NFL pipeline, and momentum
 - Modern Gradle / Kotlin project layout and unit tests around the new sim systems
 
-Saves from the original app (and from older fictional 60-team league formats) are **not** expected to be compatible.
+Program Profile saves use format version 5. Older careers are intentionally incompatible and must be restarted.
 
 ---
 
@@ -36,9 +37,9 @@ Saves from the original app (and from older fictional 60-team league formats) ar
 - Regular season: **13 weeks** (12 games + 1 locked bye) using the **2026 FBS** map.
 - Conferences schedule up to nine conference games; OOC fills open weeks (Pac-12 plays a full round robin; independents are all OOC).
 - Before the season, a **Schedule** phase pre-fills a suggested OOC slate you can edit week-by-week (bye is fixed); the CPU fills other teams.
-- Use the **Games** tab for schedule, scouting, and game summaries. Rivalry results affect prestige.
+- Use the **Games** tab for schedule, scouting, and game summaries. Rivalry results affect momentum.
 - After the regular season: conference championships, bowls, and a national title path for the top teams.
-- Prestige rises or falls vs expectations, then you move into the offseason / talent hub.
+- Results versus expectations organically move momentum, donors, fanbase, tradition, recruiting reach, and the NFL pipeline.
 
 ### Rankings & stats
 
@@ -50,11 +51,15 @@ You inherit a full roster with overall/potential and position ratings. Manage de
 
 ### Recruiting & offseason
 
-After the season, eligibility attrition and transfers open spots. Recruit against a prestige-driven budget; Football Coach 3 also explores NIL/offer-style offseason systems beyond the original recruiting screen.
+After the season, eligibility attrition and transfers open spots. Player spending combines conference-influenced revenue share with donor-collective money. Market value is top-heavy, portal players command premiums, and offer acceptance weighs cash against brand, playing time, winning, and NFL development.
 
 ### Saving
 
-You can save during a season; treat save compatibility as best-effort while the fork is under heavy development. Prefer a fresh league when major format changes land.
+You can save during a season. Save format version 5 stores the full Program Profile and recent finish/draft history; older saves are rejected.
+
+### Program seed data
+
+Team identities are assigned categorical program, region, and NFL-pipeline classes in `app/src/main/assets/fbs_2026_classes.csv`. Run `python3 scripts/seed_program_profiles.py` to deterministically regenerate the numeric `fbs_2026.csv`; edit the rubric classes rather than hand-tuning generated scores.
 
 ---
 

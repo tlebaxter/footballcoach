@@ -151,6 +151,8 @@ fun TalentHubScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 BudgetChip(state.cashLabel)
+                BudgetChip(state.revShareLabel)
+                BudgetChip(state.collectiveLabel)
                 BudgetChip(state.y1Label)
                 BudgetChip(state.schollyLabel)
                 BudgetChip(state.rosterLabel)

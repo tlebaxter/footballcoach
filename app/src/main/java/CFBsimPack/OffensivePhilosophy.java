@@ -43,12 +43,12 @@ public enum OffensivePhilosophy {
         return v[i];
     }
 
-    public static OffensivePhilosophy assignForPrestige(int prestige, java.util.Random rng) {
-        if (prestige >= 85) {
+    public static OffensivePhilosophy assignForProgramStrength(int programStrength, java.util.Random rng) {
+        if (programStrength >= 85) {
             OffensivePhilosophy[] elite = {AIR_RAID, SPREAD, WEST_COAST, MULTIPLE, RPO_SPREAD};
             return elite[rng.nextInt(elite.length)];
         }
-        if (prestige >= 70) {
+        if (programStrength >= 70) {
             OffensivePhilosophy[] mid = {PRO_STYLE, SPREAD, MULTIPLE, PISTOL, POWER_RUN, WEST_COAST};
             return mid[rng.nextInt(mid.length)];
         }

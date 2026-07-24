@@ -197,6 +197,44 @@ public class EngineGreenfieldTest {
         assertTrue(g.hasPlayed);
     }
 
+    @Test
+    public void autoSimResolvesUserTryChoice() throws Exception {
+        League league = createLeague();
+        Team home = league.teamList.get(0);
+        Team away = league.teamList.get(1);
+        home.userControlled = true;
+        away.userControlled = false;
+        Game g = new Game(home, away);
+        g.setRandom(new Random(8L));
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.state.possessionHome = true;
+        g.state.yardLine = 99;
+        g.state.down = 1;
+        g.state.yardsNeed = 1;
+        g.state.pendingKickoff = false;
+        int guard = 0;
+        while (!g.state.pendingTry && guard++ < 40) {
+            g.state.yardLine = 99;
+            g.state.down = 1;
+            g.state.yardsNeed = 1;
+            g.state.pendingKickoff = false;
+            g.state.clearTry();
+            g.executeSnap(PlayCall.fromConcepts(
+                    Playbook.offenseById("i_dive"),
+                    Playbook.defenseFor(CoverageCall.COVER_3),
+                    TempoCall.NORMAL));
+        }
+        assertTrue("expected a TD to open a try", g.state.pendingTry);
+        assertTrue(g.state.tryAwaitingChoice);
+        assertTrue(g.getSituation().userChoosesTry);
+
+        g.autoSimUntil(AutoSimUntil.POSSESSION);
+
+        assertFalse(g.state.tryAwaitingChoice);
+        assertFalse(g.getSituation().userChoosesTry);
+    }
+
     private int countPassCalls(Team offense, Team defense, int snaps, long seed) {
         Game g = new Game(offense, defense);
         g.setRandom(new Random(seed));

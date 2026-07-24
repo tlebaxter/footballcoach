@@ -27,6 +27,7 @@ data class ScheduleWeekUi(
     val opponentName: String? = null,
     val homeGame: Boolean = true,
     val contractLocked: Boolean = false,
+    val contractId: String? = null,
     val rivalryLabel: String? = null,
     val moneyLabel: String? = null,
     val isBye: Boolean = false,
@@ -39,6 +40,8 @@ data class ContractGameChipUi(
     val opponentAbbr: String,
     val opponentName: String?,
     val guaranteeLabel: String?,
+    val canReschedule: Boolean = false,
+    val preferredWeek: Int = -1,
 )
 
 data class ContractCardUi(
@@ -88,6 +91,14 @@ data class ScheduleUiState(
     val hhReturnOffset: Int = 1,
     val cancelConfirmId: String? = null,
     val cancelConfirmLabel: String? = null,
+    val rescheduleContractId: String? = null,
+    val rescheduleFromYear: Int? = null,
+    val rescheduleSelectedYear: Int? = null,
+    val rescheduleSelectedWeek: Int? = null,
+    val rescheduleEligibleYears: List<Int> = emptyList(),
+    val rescheduleEligibleWeeks: List<Int> = emptyList(),
+    val rescheduleFulfillByYear: Int? = null,
+    val rescheduleOpponentLabel: String = "",
     val primaryLabel: String? = null,
     val message: String? = null,
     val navigateToMain: Boolean = false,
@@ -175,10 +186,9 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val u = user ?: return
         val l = league ?: return
         val existing = u.gameSchedule.getOrNull(week)
-        if (existing?.contractId != null) {
-            _uiState.update {
-                it.copy(message = "That week is locked by an OOC contract. Cancel the deal to change it.")
-            }
+        val lockedContractId = existing?.contractId
+        if (lockedContractId != null) {
+            openRescheduleDialog(lockedContractId, l.year)
             return
         }
         if (!u.isOpenOocWeek(week) && existing?.let {
@@ -213,7 +223,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val options = l.teamList
             .filter { it != u && it.conference != u.conference }
             .filter { !book.alreadyContracted(u, it, year) }
-            .sortedByDescending { it.teamPrestige }
+            .sortedByDescending { it.programProfile.scheduleTier }
             .map { formatOpponent(u, it) }
         _uiState.update {
             it.copy(
@@ -244,7 +254,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val l = league ?: return
         val opponent = l.findTeamAbbr(abbr) ?: return
         val book = l.oocContracts ?: return
-        val quote = if (u.teamPrestige >= opponent.teamPrestige) {
+        val quote = if (u.programProfile.scheduleTier >= opponent.programProfile.scheduleTier) {
             book.quoteBuyGame(u, opponent) + " · Or H&H / single game."
         } else {
             book.quoteReceiveBuyGame(opponent, u) + " · Or H&H / single game."
@@ -266,7 +276,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val home: Team
         val away: Team
         if (withGuarantee) {
-            if (u.teamPrestige >= opponent.teamPrestige) {
+            if (u.programProfile.scheduleTier >= opponent.programProfile.scheduleTier) {
                 home = u
                 away = opponent
             } else {
@@ -295,7 +305,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val opponent = l.findTeamAbbr(oppAbbr) ?: return
         val home: Team
         val away: Team
-        if (u.teamPrestige >= opponent.teamPrestige) {
+        if (u.programProfile.scheduleTier >= opponent.programProfile.scheduleTier) {
             home = u
             away = opponent
         } else {
@@ -370,6 +380,115 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         _uiState.update { it.copy(cancelConfirmId = null, cancelConfirmLabel = null) }
     }
 
+    fun openRescheduleDialog(contractId: String, fromYear: Int) {
+        val book = league?.oocContracts ?: return
+        if (!book.canReschedule(contractId, fromYear)) {
+            _uiState.update {
+                it.copy(message = "That game can no longer be moved (settled or past fulfill-by).")
+            }
+            return
+        }
+        val contract = book.findById(contractId) ?: return
+        val game = contract.gameForYear(fromYear) ?: return
+        val years = book.eligibleRescheduleYears(contractId, fromYear)
+        val weeks = book.eligibleRescheduleWeeks(contractId, fromYear, fromYear)
+        val u = user
+        val oppAbbr = if (u != null && game.homeAbbr == u.abbr) game.awayAbbr else game.homeAbbr
+        val opp = league?.findTeamAbbr(oppAbbr)
+        val placedWeek = weeks.firstOrNull { w ->
+            val slot = u?.gameSchedule?.getOrNull(w)
+            slot?.contractId == contractId
+        }
+        val selectedWeek = when {
+            game.preferredWeek >= 0 && weeks.contains(game.preferredWeek) -> game.preferredWeek
+            placedWeek != null -> placedWeek
+            weeks.isNotEmpty() -> weeks.first()
+            else -> null
+        }
+        _uiState.update {
+            it.copy(
+                rescheduleContractId = contractId,
+                rescheduleFromYear = fromYear,
+                rescheduleSelectedYear = fromYear,
+                rescheduleSelectedWeek = selectedWeek,
+                rescheduleEligibleYears = years,
+                rescheduleEligibleWeeks = weeks,
+                rescheduleFulfillByYear = contract.mustFulfillByYear,
+                rescheduleOpponentLabel = opp?.name ?: oppAbbr,
+            )
+        }
+    }
+
+    fun dismissRescheduleDialog() {
+        _uiState.update {
+            it.copy(
+                rescheduleContractId = null,
+                rescheduleFromYear = null,
+                rescheduleSelectedYear = null,
+                rescheduleSelectedWeek = null,
+                rescheduleEligibleYears = emptyList(),
+                rescheduleEligibleWeeks = emptyList(),
+                rescheduleFulfillByYear = null,
+                rescheduleOpponentLabel = "",
+            )
+        }
+    }
+
+    fun selectRescheduleYear(year: Int) {
+        val contractId = _uiState.value.rescheduleContractId ?: return
+        val fromYear = _uiState.value.rescheduleFromYear ?: return
+        val book = league?.oocContracts ?: return
+        if (!_uiState.value.rescheduleEligibleYears.contains(year)) return
+        val weeks = book.eligibleRescheduleWeeks(contractId, fromYear, year)
+        val preferred = book.findById(contractId)?.gameForYear(fromYear)?.preferredWeek ?: -1
+        val selectedWeek = when {
+            preferred >= 0 && weeks.contains(preferred) -> preferred
+            weeks.isNotEmpty() -> weeks.first()
+            else -> null
+        }
+        _uiState.update {
+            it.copy(
+                rescheduleSelectedYear = year,
+                rescheduleEligibleWeeks = weeks,
+                rescheduleSelectedWeek = selectedWeek,
+            )
+        }
+    }
+
+    fun selectRescheduleWeek(week: Int) {
+        if (!_uiState.value.rescheduleEligibleWeeks.contains(week)) return
+        _uiState.update { it.copy(rescheduleSelectedWeek = week) }
+    }
+
+    fun confirmReschedule() {
+        val book = league?.oocContracts ?: return
+        val contractId = _uiState.value.rescheduleContractId ?: return
+        val fromYear = _uiState.value.rescheduleFromYear ?: return
+        val toYear = _uiState.value.rescheduleSelectedYear ?: return
+        val week = _uiState.value.rescheduleSelectedWeek
+        if (toYear != fromYear) {
+            if (!book.rescheduleYear(contractId, fromYear, toYear)) {
+                _uiState.update {
+                    it.copy(message = "Could not move that game to $toYear.")
+                }
+                return
+            }
+        }
+        if (week != null) {
+            if (!book.rescheduleWeek(contractId, toYear, week)) {
+                _uiState.update {
+                    it.copy(message = "Could not set week ${week + 1} (no shared open week).")
+                }
+                dismissRescheduleDialog()
+                reload()
+                return
+            }
+        }
+        dismissRescheduleDialog()
+        _uiState.update { it.copy(message = "Game date updated.") }
+        reload()
+    }
+
     fun confirmCancelContract() {
         val id = _uiState.value.cancelConfirmId ?: return
         val l = league ?: return
@@ -388,10 +507,9 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         if (!schedulingActive()) return
         val u = user ?: return
         val game = u.gameSchedule.getOrNull(week)
-        if (game?.contractId != null) {
-            _uiState.update {
-                it.copy(message = "Cancel the OOC contract to clear this week.")
-            }
+        val lockedContractId = game?.contractId
+        if (lockedContractId != null) {
+            openRescheduleDialog(lockedContractId, league?.year ?: return)
             return
         }
         if (OocScheduleBuilder.clearUserOocGame(u, week)) {
@@ -509,10 +627,10 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         } else {
             null
         }
-        val buyHint = if (user.teamPrestige >= t.teamPrestige) {
-            "Buy: you pay ${NilMoney.format(NilMoney.buyGameGuarantee(user.teamPrestige, t.teamPrestige))}"
+        val buyHint = if (user.programProfile.scheduleTier >= t.programProfile.scheduleTier) {
+            "Buy: you pay ${NilMoney.format(NilMoney.buyGameGuarantee(user.programProfile, t.programProfile))}"
         } else {
-            "Buy: you get ${NilMoney.format(NilMoney.buyGameGuarantee(t.teamPrestige, user.teamPrestige))}"
+            "Buy: you get ${NilMoney.format(NilMoney.buyGameGuarantee(t.programProfile, user.programProfile))}"
         }
         return OpponentOptionUi(
             abbr = t.abbr,
@@ -548,6 +666,8 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                         } else {
                             null
                         },
+                        canReschedule = book.canReschedule(c.id, g.year),
+                        preferredWeek = g.preferredWeek,
                     )
                 }
             if (games.isEmpty()) return@mapNotNull null
@@ -655,7 +775,8 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                     opponentAbbr = opp.abbr,
                     opponentName = opp.name,
                     homeGame = homeGame,
-                    contractLocked = contractLocked,
+                    contractLocked = contractLocked && isOoc,
+                    contractId = if (contractLocked && isOoc) game.contractId else null,
                     rivalryLabel = if (rivalry > 0) "${Rivalry.band(rivalry)} ($rivalry)" else null,
                     moneyLabel = moneyLabel,
                     isOoc = isOoc,

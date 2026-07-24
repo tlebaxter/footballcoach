@@ -2,11 +2,20 @@ package CFBsimPack;
 
 import org.junit.Test;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
 public class ProgramOffersTest {
+    private static final String FIRST_NAMES =
+            "Alex,Blake,Casey,Drew,Evan,Frankie,Gray,Hayden";
+    private static final String LAST_NAMES =
+            "Adams,Baker,Clark,Davis,Evans,Foster,Green,Hill";
 
     @Test
     public void maxContractYearsCapsByEligibility() {
@@ -69,6 +78,34 @@ public class ProgramOffersTest {
     }
 
     @Test
+    public void brandAndPipelineLowerRequiredCash() throws Exception {
+        League league = createLeague();
+        Team destination = league.findTeamAbbr("ALA");
+        Player player = playerYear(3);
+        player.position = "WR";
+        player.ratOvr = 70;
+        player.ratPot = 75;
+        player.transferReason = TransferReason.MOVE_UP;
+
+        destination.programProfile = new ProgramProfile(45, 45, 45, 70, 45, 50, 50);
+        int lowBrandAsk = ProgramOffers.nilAmountFor(player, destination);
+        destination.programProfile = new ProgramProfile(95, 95, 95, 90, 95, 95, 95);
+        int eliteBrandAsk = ProgramOffers.nilAmountFor(player, destination);
+
+        assertTrue(eliteBrandAsk < lowBrandAsk);
+    }
+
+    @Test
+    public void singleDealIsLimitedToTwentyPercentOfPurse() throws Exception {
+        League league = createLeague();
+        Team destination = league.findTeamAbbr("ALA");
+        int limit = ProgramOffers.maxSingleDeal(destination);
+
+        assertTrue(limit <= NilMoney.yearlyBudget(destination.programProfile) / 5);
+        assertTrue(limit <= 7_000_000);
+    }
+
+    @Test
     public void draftRoundLabel() {
         assertEquals("Rd 2", ProgramOffers.draftRoundLabel(2));
         assertEquals("UDFA", ProgramOffers.draftRoundLabel(0));
@@ -79,5 +116,14 @@ public class ProgramOffersTest {
         Player p = new Player();
         p.year = year;
         return p;
+    }
+
+    private static League createLeague() throws Exception {
+        Path asset = Paths.get("src/main/assets/fbs_2026.csv");
+        if (!Files.exists(asset)) {
+            asset = Paths.get("app/src/main/assets/fbs_2026.csv");
+        }
+        String teamsCsv = new String(Files.readAllBytes(asset), StandardCharsets.UTF_8);
+        return new League(FIRST_NAMES, LAST_NAMES, teamsCsv, false);
     }
 }

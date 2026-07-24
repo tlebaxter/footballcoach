@@ -72,7 +72,7 @@ public class Team {
     public int teamTODiff;
     public int teamOffTalent;
     public int teamDefTalent;
-    public int teamPrestige;
+    public ProgramProfile programProfile;
     public int teamPollScore;
     public int teamStrengthOfWins;
 
@@ -87,13 +87,12 @@ public class Team {
     public int rankTeamTODiff;
     public int rankTeamOffTalent;
     public int rankTeamDefTalent;
-    public int rankTeamPrestige;
+    public int rankTeamProgramPower;
     public int rankTeamRecruitClass;
     public int rankTeamPollScore;
     public int rankTeamStrengthOfWins;
 
-    //prestige/talent improvements
-    public int diffPrestige;
+    //program/talent improvements
     public int diffOffTalent;
     public int diffDefTalent;
 
@@ -142,6 +141,7 @@ public class Team {
     public boolean confTVDeal;
     public boolean teamTVDeal;
     public boolean hadCoachingChange;
+    public boolean programProfileUpdatedThisOffseason;
 
     private static final int NFL_OVR = 90;
     private static final double NFL_CHANCE = 0.7;
@@ -152,10 +152,23 @@ public class Team {
      * @param abbr abbreviation of the team, 3 letters
      * @param conference conference the team is in
      * @param league reference to the league object all must obey
-     * @param prestige prestige of that team, between 0-100
      */
-    public Team( String name, String abbr, String conference, League league, int prestige, String rivalsEncoded ) {
+    public Team(
+            String name,
+            String abbr,
+            String conference,
+            League league,
+            int tradition,
+            int fanbase,
+            int donors,
+            int footprint,
+            int pipeline,
+            int momentum,
+            String rivalsEncoded) {
         this.league = league;
+        this.name = name;
+        this.abbr = abbr;
+        this.conference = conference;
         userControlled = false;
         showPopups = true;
         teamHistory = new ArrayList<String>();
@@ -192,16 +205,24 @@ public class Team {
         semiFinalWL = "";
         natChampWL = "";
 
-        teamPrestige = prestige;
+        programProfile = new ProgramProfile(
+                tradition,
+                fanbase,
+                donors,
+                footprint,
+                pipeline,
+                momentum,
+                Conference.mediaShareFor(conference));
         playersTransferring = new ArrayList<>();
         hadCoachingChange = false;
-        assignSystemsForPrestige();
+        programProfileUpdatedThisOffseason = false;
+        assignSystemsForProgram();
         recruitPlayers(NilMoney.INIT_QB, NilMoney.INIT_RB, NilMoney.INIT_FB, NilMoney.INIT_WR, NilMoney.INIT_TE,
                 NilMoney.INIT_OL, NilMoney.INIT_K, NilMoney.INIT_S, NilMoney.INIT_CB,
                 NilMoney.INIT_EDGE, NilMoney.INIT_DL, NilMoney.INIT_LB);
         assignInitialRosterStatuses();
         ensureSpecialTeamsDepth();
-        recruitMoney = NilMoney.yearlyBudget(teamPrestige);
+        recruitMoney = NilMoney.yearlyBudget(programProfile);
 
         //set stats
         totalWins = 0;
@@ -214,9 +235,6 @@ public class Team {
         totalNCLosses = 0;
         totalBowls = 0;
         totalBowlLosses = 0;
-        this.name = name;
-        this.abbr = abbr;
-        this.conference = conference;
         teamPoints = 0;
         teamOppPoints = 0;
         teamYards = 0;
@@ -229,7 +247,7 @@ public class Team {
         teamOffTalent = getOffTalent();
         teamDefTalent = getDefTalent();
 
-        teamPollScore = teamPrestige + getOffTalent() + getDefTalent();
+        teamPollScore = programProfile.programPower + getOffTalent() + getDefTalent();
 
         teamStratOffNum = 1;
         teamStratDefNum = 1;
@@ -302,58 +320,53 @@ public class Team {
 
         // Lines 0 is team info
         String[] teamInfo = lines[0].split(",");
-        if (teamInfo.length >= 9) {
+        if (teamInfo.length >= 31) {
             conference = teamInfo[0];
             name = teamInfo[1];
             abbr = teamInfo[2];
-            winStreak = new TeamStreak(league.getYear(), league.getYear(), 0, abbr);
-            yearStartWinStreak = new TeamStreak(league.getYear(), league.getYear(), 0, abbr);
-            teamPrestige = Integer.parseInt(teamInfo[3]);
-            totalWins = Integer.parseInt(teamInfo[4]);
-            totalLosses = Integer.parseInt(teamInfo[5]);
-            totalCCs = Integer.parseInt(teamInfo[6]);
-            totalNCs = Integer.parseInt(teamInfo[7]);
-            String rivalsField = teamInfo[8];
+            programProfile = new ProgramProfile(
+                    Integer.parseInt(teamInfo[3]),
+                    Integer.parseInt(teamInfo[4]),
+                    Integer.parseInt(teamInfo[5]),
+                    Integer.parseInt(teamInfo[6]),
+                    Integer.parseInt(teamInfo[7]),
+                    Integer.parseInt(teamInfo[8]),
+                    Conference.mediaShareFor(conference));
+            totalWins = Integer.parseInt(teamInfo[9]);
+            totalLosses = Integer.parseInt(teamInfo[10]);
+            totalCCs = Integer.parseInt(teamInfo[11]);
+            totalNCs = Integer.parseInt(teamInfo[12]);
+            String rivalsField = teamInfo[13];
             if (rivalsField.contains(":") || rivalsField.contains(";")) {
                 rivalries = new ArrayList<>(Rivalry.parseEncoded(rivalsField));
             } else {
                 rivalries = new ArrayList<>(Rivalry.singlePrimary(rivalsField));
             }
-            if (teamInfo.length >= 13) {
-                totalNCLosses = Integer.parseInt(teamInfo[9]);
-                totalCCLosses = Integer.parseInt(teamInfo[10]);
-                totalBowls = Integer.parseInt(teamInfo[11]);
-                totalBowlLosses = Integer.parseInt(teamInfo[12]);
-                    if (teamInfo.length >= 16) {
-                    // Legacy weekly strategy indices — ignored; keep save column alignment
-                    teamStratOffNum = 1;
-                    teamStratDefNum = 1;
-                    showPopups = (Integer.parseInt(teamInfo[15]) == 1);
-                    if (teamInfo.length >= 20) {
-                        winStreak = new TeamStreak(Integer.parseInt(teamInfo[18]),
-                                Integer.parseInt(teamInfo[19]),
-                                Integer.parseInt(teamInfo[16]),
-                                teamInfo[17]);
-                        yearStartWinStreak = new TeamStreak(Integer.parseInt(teamInfo[18]),
-                                Integer.parseInt(teamInfo[19]),
-                                Integer.parseInt(teamInfo[16]),
-                                teamInfo[17]);
-                        if (teamInfo.length >= 22){
-                            teamTVDeal = Boolean.parseBoolean(teamInfo[20]);
-                            confTVDeal = Boolean.parseBoolean(teamInfo[21]);
-                        }
-                        if (teamInfo.length >= 24) {
-                            offPhilosophy = OffensivePhilosophy.fromOrdinalSafe(Integer.parseInt(teamInfo[22]));
-                            defSystem = DefensiveSystem.fromOrdinalSafe(Integer.parseInt(teamInfo[23]));
-                        }
-                    }
-                }
-            } else {
-                totalCCLosses = 0;
-                totalNCLosses = 0;
-                totalBowls = 0;
-                totalBowlLosses = 0;
-            }
+            totalNCLosses = Integer.parseInt(teamInfo[14]);
+            totalCCLosses = Integer.parseInt(teamInfo[15]);
+            totalBowls = Integer.parseInt(teamInfo[16]);
+            totalBowlLosses = Integer.parseInt(teamInfo[17]);
+            showPopups = Integer.parseInt(teamInfo[18]) == 1;
+            winStreak = new TeamStreak(
+                    Integer.parseInt(teamInfo[21]),
+                    Integer.parseInt(teamInfo[22]),
+                    Integer.parseInt(teamInfo[19]),
+                    teamInfo[20]);
+            yearStartWinStreak = new TeamStreak(
+                    Integer.parseInt(teamInfo[21]),
+                    Integer.parseInt(teamInfo[22]),
+                    Integer.parseInt(teamInfo[19]),
+                    teamInfo[20]);
+            teamTVDeal = Boolean.parseBoolean(teamInfo[23]);
+            confTVDeal = Boolean.parseBoolean(teamInfo[24]);
+            offPhilosophy = OffensivePhilosophy.fromOrdinalSafe(Integer.parseInt(teamInfo[25]));
+            defSystem = DefensiveSystem.fromOrdinalSafe(Integer.parseInt(teamInfo[26]));
+            programProfile.restoreHistory(teamInfo[27], teamInfo[28]);
+            programProfile.refreshDerived(Conference.mediaShareFor(conference));
+            programProfileUpdatedThisOffseason = Boolean.parseBoolean(teamInfo[29]);
+            programProfile.restoreAnnualDeltas(teamInfo[30]);
+        } else {
+            throw new IllegalArgumentException("Unsupported team save profile.");
         }
 
         // Lines 1 is Team Home/Away Rotation
@@ -389,7 +402,7 @@ public class Team {
         playersTransferring = new ArrayList<>();
         hadCoachingChange = false;
         if (recruitMoney <= 0) {
-            recruitMoney = NilMoney.yearlyBudget(teamPrestige);
+            recruitMoney = NilMoney.yearlyBudget(programProfile);
         }
         if (offPhilosophy == null) offPhilosophy = OffensivePhilosophy.MULTIPLE;
         if (defSystem == null) defSystem = DefensiveSystem.BASE_4_3;
@@ -404,7 +417,7 @@ public class Team {
     public void updateTalentRatings() {
         teamOffTalent = getOffTalent();
         teamDefTalent = getDefTalent();
-        teamPollScore = teamPrestige + getOffTalent() + getDefTalent();
+        teamPollScore = programProfile.programPower + getOffTalent() + getDefTalent();
     }
 
     public String encodeRivalries() {
@@ -514,9 +527,9 @@ public class Team {
     }
 
     /**
-     * Prestige delta from rivalry games this season (does not mutate prestige).
+     * Momentum delta from rivalry games this season.
      */
-    public int computeRivalryPrestigeDelta() {
+    public int computeRivalryMomentumDelta() {
         int delta = 0;
         if (rivalries == null || rivalryResults == null || league == null) {
             return 0;
@@ -530,39 +543,43 @@ public class Team {
             if (rival == null) {
                 continue;
             }
-            delta += rivalryPrestigeSwing(rivalry.strength, won, teamPrestige, rival.teamPrestige);
+            delta += rivalryMomentumSwing(
+                    rivalry.strength,
+                    won,
+                    programProfile.programPower,
+                    rival.programProfile.programPower);
         }
         return delta;
     }
 
-    static int rivalryPrestigeSwing(
+    static int rivalryMomentumSwing(
             int strength,
             boolean won,
-            int ownPrestige,
-            int rivalPrestige) {
-        if (strength < Rivalry.PRESTIGE_THRESHOLD) {
+            int ownPower,
+            int rivalPower) {
+        if (strength < Rivalry.MOMENTUM_THRESHOLD) {
             return 0;
         }
         int competitiveGap = 15 + strength / 10;
-        int prestigeSwing = strength >= Rivalry.HOT_THRESHOLD ? 2 : 1;
-        int gap = ownPrestige - rivalPrestige;
+        int momentumSwing = strength >= Rivalry.HOT_THRESHOLD ? 2 : 1;
+        int gap = ownPower - rivalPower;
         if (won) {
             if (gap >= competitiveGap) {
                 return 0;
             }
-            int swing = prestigeSwing;
-            if (rivalPrestige - ownPrestige >= 10) {
+            int swing = momentumSwing;
+            if (rivalPower - ownPower >= 10) {
                 swing += 1;
             }
             return swing;
         }
-        if (rivalPrestige - ownPrestige >= competitiveGap) {
+        if (rivalPower - ownPower >= competitiveGap) {
             return 0;
         }
-        return -prestigeSwing;
+        return -momentumSwing;
     }
 
-    public String rivalryPrestigeSummaryLines() {
+    public String rivalryMomentumSummaryLines() {
         StringBuilder sb = new StringBuilder();
         if (rivalries == null || rivalryResults == null || league == null) {
             return "";
@@ -576,23 +593,26 @@ public class Team {
             if (rival == null) {
                 continue;
             }
-            int swing = rivalryPrestigeSwing(
-                    rivalry.strength, won, teamPrestige, rival.teamPrestige);
+            int swing = rivalryMomentumSwing(
+                    rivalry.strength,
+                    won,
+                    programProfile.programPower,
+                    rival.programProfile.programPower);
             String label = rivalry.displayLabel();
             if (won) {
                 if (swing > 0) {
                     sb.append("\n\nWon your rivalry vs ").append(label)
                             .append(". Recruits noticed (+")
-                            .append(swing).append(" prestige).");
+                            .append(swing).append(" momentum).");
                 } else {
                     sb.append("\n\nWon your rivalry vs ").append(label)
-                            .append(", but it was expected given the prestige gap (no change).");
+                            .append(", but it was expected given the program gap (no change).");
                 }
             } else {
                 if (swing < 0) {
                     sb.append("\n\nLost your rivalry vs ").append(label)
                             .append(". Recruits soured (")
-                            .append(swing).append(" prestige).");
+                            .append(swing).append(" momentum).");
                 } else {
                     sb.append("\n\nLost your rivalry vs ").append(label)
                             .append(", but it was expected in a rebuild (no change).");
@@ -725,11 +745,12 @@ public class Team {
         }
     }
 
-    private void assignSystemsForPrestige() {
+    private void assignSystemsForProgram() {
         String seedKey = name != null ? name : (abbr != null ? abbr : "TEAM");
-        java.util.Random rng = new java.util.Random(seedKey.hashCode() ^ teamPrestige * 31L);
-        offPhilosophy = OffensivePhilosophy.assignForPrestige(teamPrestige, rng);
-        defSystem = DefensiveSystem.assignForPrestige(teamPrestige, rng);
+        int gravity = programProfile != null ? programProfile.talentGravity : 50;
+        java.util.Random rng = new java.util.Random(seedKey.hashCode() ^ gravity * 31L);
+        offPhilosophy = OffensivePhilosophy.assignForProgramStrength(gravity, rng);
+        defSystem = DefensiveSystem.assignForProgramStrength(gravity, rng);
     }
 
     public void setOffPhilosophy(OffensivePhilosophy phil) {
@@ -743,10 +764,8 @@ public class Team {
     }
 
     public void grantYearlyBudget() {
-        recruitMoney = NilMoney.yearlyBudget(teamPrestige);
+        recruitMoney = NilMoney.yearlyBudget(programProfile);
         // Pay remaining multi-year NIL only (COA was charged at sign/retain).
-        // Full COA+NIL for the whole roster was wiping the purse before retention.
-        int granted = recruitMoney;
         for (Player p : getAllPlayers()) {
             if (p.contractYearsRemaining <= 0) continue;
             if (playersLeaving != null && playersLeaving.contains(p)) continue;
@@ -755,13 +774,10 @@ public class Team {
             p.retainedThisOffseason = false;
         }
         if (recruitMoney < 0) recruitMoney = 0;
-        // Keep a playable recruiting floor after installment payments
-        int floor = granted / 3;
-        if (recruitMoney < floor) recruitMoney = floor;
     }
 
     public int projectedBudget(int yearOffset) {
-        int base = NilMoney.yearlyBudget(teamPrestige);
+        int base = NilMoney.yearlyBudget(programProfile);
         if (yearOffset <= 0) return base;
         return base;
     }
@@ -815,7 +831,7 @@ public class Team {
     }
 
     public int offerTotalCost(RosterStatus status, int nilAmount) {
-        return NilMoney.offerCashCost(status, nilAmount, teamPrestige);
+        return NilMoney.offerCashCost(status, nilAmount, programProfile);
     }
 
     public boolean spendOffer(RosterStatus status, int nilAmount) {
@@ -846,7 +862,7 @@ public class Team {
     }
 
     public int buyoutCost(Player p) {
-        return NilMoney.buyoutCost(p, teamPrestige);
+        return NilMoney.buyoutCost(p, programProfile);
     }
 
     /**
@@ -922,7 +938,15 @@ public class Team {
     }
 
     public String budgetCashLabel() {
-        return NilMoney.format(recruitMoney);
+        return "Available " + NilMoney.format(recruitMoney);
+    }
+
+    public String budgetRevShareLabel() {
+        return "Rev share " + NilMoney.format(NilMoney.yearlyRevShare(programProfile));
+    }
+
+    public String budgetCollectiveLabel() {
+        return "Collective " + NilMoney.format(NilMoney.yearlyCollective(programProfile));
     }
 
     public String budgetY1FreeLabel() {
@@ -941,7 +965,9 @@ public class Team {
     public ArrayList<String> budgetLedgerRows() {
         ArrayList<String> rows = new ArrayList<>();
         rows.add("This year\nAvailable " + NilMoney.format(recruitMoney)
-                + "\nPurse " + NilMoney.format(projectedBudget(0)));
+                + "\nRev share " + NilMoney.format(NilMoney.yearlyRevShare(programProfile))
+                + " · collective " + NilMoney.format(NilMoney.yearlyCollective(programProfile))
+                + "\nTotal purse " + NilMoney.format(projectedBudget(0)));
         for (int y = 1; y <= 3; y++) {
             rows.add("Y+" + y
                     + "\nFree " + NilMoney.format(Math.max(0, availableForOffset(y)))
@@ -1007,31 +1033,9 @@ public class Team {
         return 99;
     }
 
-    /**
-     * Advance season, hiring new coach if needed and calculating new prestige level.
-     */
+    /** Advance season and update the program's market identity. */
     public void advanceSeason() {
-        int oldPrestige = teamPrestige;
-        teamPrestige += computeRivalryPrestigeDelta();
-
-        int expectedPollFinish = 1 + (int) Math.round(
-                (100 - teamPrestige) / 100.0 * (league.teamList.size() - 1));
-        int diffExpected = expectedPollFinish - rankTeamPollScore;
-        oldPrestige = teamPrestige;
-
-        if (teamPrestige > 45 || diffExpected > 0) {
-            teamPrestige = (int) Math.pow(teamPrestige, 1 + (float) diffExpected / 1500);// + diffExpected/2500);
-        }
-
-        if (rankTeamPollScore == 1) {
-            // NCW
-            teamPrestige += 3;
-        }
-
-        if (teamPrestige > 95) teamPrestige = 95;
-        if (teamPrestige < 45) teamPrestige = 45;
-
-        diffPrestige = teamPrestige - oldPrestige;
+        updateProgramProfileForOffseason();
         if (!rivalryDynamicsAppliedThisOffseason) {
             RivalryDynamics.evolveTeam(this);
         }
@@ -1044,7 +1048,45 @@ public class Team {
         if (league.userTeam == this) checkCareerRecords(league.userTeamRecords);
 
         advanceSeasonPlayers();
+        applyProgramDevelopment();
+        programProfileUpdatedThisOffseason = false;
 
+    }
+
+    public void updateProgramProfileForOffseason() {
+        if (programProfileUpdatedThisOffseason) return;
+        programProfile.updateForSeason(
+                rankTeamPollScore,
+                league.teamList.size(),
+                rankTeamPollScore == 1,
+                computeRivalryMomentumDelta(),
+                draftClassScore(),
+                Conference.mediaShareFor(conference));
+        programProfileUpdatedThisOffseason = true;
+    }
+
+    private int draftClassScore() {
+        int score = 0;
+        if (playersLeaving == null) return score;
+        for (Player player : playersLeaving) {
+            int round = player.projectedDraftRound > 0
+                    ? player.projectedDraftRound
+                    : ProgramOffers.projectDraftRound(player);
+            if (round == 1) score += 10;
+            else if (round == 2) score += 8;
+            else if (round == 3) score += 6;
+            else if (round >= 4 && round <= 5) score += 4;
+            else if (round >= 6 && round <= 7) score += 2;
+        }
+        return score;
+    }
+
+    private void applyProgramDevelopment() {
+        int bonus = programProfile.developmentBonus();
+        if (bonus == 0) return;
+        for (Player player : getAllPlayers()) {
+            player.ratPot = Math.max(player.ratOvr, Math.min(99, player.ratPot + bonus));
+        }
     }
 
     /**
@@ -1468,7 +1510,7 @@ public class Team {
 
     /**
      * Recruits the needed amount of players at each position.
-     * Rating of each player based on team prestige.
+     * Rating of each player based on the program's talent gravity.
      * This is used when first creating a team.
      * @param qbNeeds
      * @param rbNeeds
@@ -1483,8 +1525,9 @@ public class Team {
                                 int olNeeds, int kNeeds, int sNeeds, int cbNeeds,
                                 int edgeNeeds, int dlNeeds, int lbNeeds ) {
         //make team
-        int stars = teamPrestige/20 + 1;
-        int chance = 20 - (teamPrestige - 20*( teamPrestige/20 )); //between 0 and 20
+        int talentGravity = programProfile.talentGravity;
+        int stars = talentGravity/20 + 1;
+        int chance = 20 - (talentGravity - 20*( talentGravity/20 )); //between 0 and 20
 
         for( int i = 0; i < qbNeeds; ++i ) {
             //make QBs
@@ -1610,15 +1653,16 @@ public class Team {
                                         int olNeeds, int kNeeds, int sNeeds, int cbNeeds,
                                         int edgeNeeds, int dlNeeds, int lbNeeds ) {
         //make team
-        int stars = teamPrestige/20 + 1;
-        int chance = 20 - (teamPrestige - 20*( teamPrestige/20 )); //between 0 and 20
+        int talentGravity = programProfile.talentGravity;
+        int stars = talentGravity/20 + 1;
+        int chance = 20 - (talentGravity - 20*( talentGravity/20 )); //between 0 and 20
 
         double starsBonusChance = 0.15;
         double starsBonusDoubleChance = 0.05;
 
         for( int i = 0; i < qbNeeds; ++i ) {
             // Add some randomness so that players with higher stars can be recruited
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1630,7 +1674,7 @@ public class Team {
 
         for( int i = 0; i < kNeeds; ++i ) {
             // Add some randomness so that players with higher stars can be recruited
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1642,7 +1686,7 @@ public class Team {
 
         for( int i = 0; i < rbNeeds; ++i ) {
             // Add some randomness so that players with higher stars can be recruited
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1654,7 +1698,7 @@ public class Team {
 
         for( int i = 0; i < wrNeeds; ++i ) {
             // Add some randomness so that players with higher stars can be recruited
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1666,7 +1710,7 @@ public class Team {
 
         for( int i = 0; i < olNeeds; ++i ) {
             // Add some randomness so that players with higher stars can be recruited
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1678,7 +1722,7 @@ public class Team {
 
         for( int i = 0; i < cbNeeds; ++i ) {
             // Add some randomness so that players with higher stars can be recruited
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1689,7 +1733,7 @@ public class Team {
         }
 
         for( int i = 0; i < fbNeeds; ++i ) {
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1698,7 +1742,7 @@ public class Team {
         }
 
         for( int i = 0; i < teNeeds; ++i ) {
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1707,7 +1751,7 @@ public class Team {
         }
 
         for( int i = 0; i < edgeNeeds; ++i ) {
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1716,7 +1760,7 @@ public class Team {
         }
 
         for( int i = 0; i < dlNeeds; ++i ) {
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1725,7 +1769,7 @@ public class Team {
         }
 
         for( int i = 0; i < lbNeeds; ++i ) {
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -1735,7 +1779,7 @@ public class Team {
 
         for( int i = 0; i < sNeeds; ++i ) {
             // Add some randomness so that players with higher stars can be recruited
-            stars = teamPrestige/20 + 1;
+            stars = talentGravity/20 + 1;
             if ( 100*Math.random() < 5*chance ) stars = stars - 1;
             if (Math.random() < starsBonusChance) stars = stars + 1;
             else if (Math.random() < starsBonusDoubleChance) stars = stars + 2;
@@ -2338,7 +2382,7 @@ public class Team {
         if (preseasonBias < 0) preseasonBias = 0;
         teamPollScore = (wins*200 + 3*(teamPoints-teamOppPoints) +
                 (teamYards-teamOppYards)/40 +
-                3*(preseasonBias)*(teamPrestige + getOffTalent() + getDefTalent()) +
+                3*(preseasonBias)*(programProfile.programPower + getOffTalent() + getDefTalent()) +
                 teamStrengthOfWins)/10;
         if ( "CC".equals(confChampion) ) {
             //bonus for winning conference
@@ -2632,6 +2676,24 @@ public class Team {
      */
     public int getDefTalent() {
         return ( getRushDef() + getPassDef() ) / 2;
+    }
+
+    /**
+     * Special teams talent from K/P/RET overalls.
+     * Kickers handle punts in this sim, so K and P use the same specialist.
+     * RET is the average of punt and kick returner overalls.
+     * @return Special Teams Talent Level
+     */
+    public int getSTTalent() {
+        ensureSpecialTeamsDepth();
+        int k = getK(0).ratOvr;
+        int p = k;
+        Player pr = getPuntReturner();
+        Player kr = getKickReturner();
+        int prOvr = pr != null ? pr.ratOvr : k;
+        int krOvr = kr != null ? kr.ratOvr : prOvr;
+        int ret = (prOvr + krOvr) / 2;
+        return (k + p + ret) / 3;
     }
 
     /**
@@ -3171,9 +3233,20 @@ public class Team {
         ts0.append("Def Talent" + ",");
         ts0.append(getRankStr(rankTeamDefTalent) + "%\n");
 
-        ts0.append(teamPrestige + ",");
-        ts0.append("Prestige" + ",");
-        ts0.append(getRankStr(rankTeamPrestige) + "%\n");
+        ts0.append(programProfile.programPower + ",");
+        ts0.append("Program Power" + ",");
+        ts0.append(getRankStr(rankTeamProgramPower) + "%\n");
+
+        ts0.append(programProfile.tradition + ",Tradition,—%\n");
+        ts0.append(programProfile.fanbase + ",Fanbase,—%\n");
+        ts0.append(programProfile.donors + ",Donors,—%\n");
+        ts0.append(programProfile.footprint + ",Recruiting Footprint,—%\n");
+        ts0.append(programProfile.pipeline + ",NFL Pipeline,—%\n");
+        ts0.append(programProfile.momentum + ",Momentum,—%\n");
+        ts0.append(NilMoney.format(NilMoney.yearlyRevShare(programProfile))
+                + ",Rev Share,—%\n");
+        ts0.append(NilMoney.format(NilMoney.yearlyCollective(programProfile))
+                + ",Collective,—%\n");
 
         ts0.append(getRecruitingClassRat() + ",");
         ts0.append("Recruit Class" + ",");
@@ -3240,33 +3313,44 @@ public class Team {
      */
     public String seasonSummaryStr() {
         String summary = "Your team, " + name + ", finished the season ranked #" + rankTeamPollScore + " with " + wins + " wins and " + losses + " losses.";
-        int expectedPollFinish = 1 + (int) Math.round(
-                (100 - teamPrestige) / 100.0 * (league.teamList.size() - 1));
+        int expectedPollFinish = programProfile.expectedPollFinish(league.teamList.size());
         int diffExpected = expectedPollFinish - rankTeamPollScore;
-        int oldPrestige = teamPrestige;
-        int newPrestige = oldPrestige;
-        if ( teamPrestige > 45 || diffExpected > 0 ) {
-            newPrestige = (int)Math.pow(teamPrestige, 1 + (float)diffExpected/1500);// + diffExpected/2500);
-        }
 
         if ( natChampWL.equals("NCW") ) {
-            summary += "\n\nYou won the National Championship! Recruits want to play for winners and you have proved that you are one. You gain +3 prestige!";
+            summary += "\n\nYou won the National Championship. Momentum, donor support, fan demand, and long-term tradition will all benefit.";
         }
 
-        if ((newPrestige - oldPrestige) > 0) {
-            summary += "\n\nGreat job coach! You exceeded expectations and gained " + (newPrestige - oldPrestige) + " prestige! This will help your recruiting.";
-        } else if ((newPrestige - oldPrestige) < 0) {
-            summary += "\n\nA bit of a down year, coach? You fell short expectations and lost " + (oldPrestige - newPrestige) + " prestige. This will hurt your recruiting.";
+        if (diffExpected > 2) {
+            summary += "\n\nYou beat the program's #" + expectedPollFinish
+                    + " expectation. Momentum and collective support should rise.";
+        } else if (diffExpected < -2) {
+            summary += "\n\nYou fell short of the program's #" + expectedPollFinish
+                    + " expectation. Momentum and donor support should soften.";
         } else {
-            summary += "\n\nWell, your team performed exactly how many expected. This won't hurt or help recruiting, but try to improve next year!";
+            summary += "\n\nThe season landed near the program's #" + expectedPollFinish
+                    + " expectation, so its market profile should remain stable.";
         }
 
-        summary += rivalryPrestigeSummaryLines();
+        if (programProfileUpdatedThisOffseason) {
+            summary += "\n\nProgram changes: Power " + signed(programProfile.diffProgramPower)
+                    + " · Momentum " + signed(programProfile.diffMomentum)
+                    + " · Donors " + signed(programProfile.diffDonors)
+                    + " · Fans " + signed(programProfile.diffFanbase)
+                    + " · Tradition " + signed(programProfile.diffTradition)
+                    + " · Footprint " + signed(programProfile.diffFootprint)
+                    + " · NFL pipeline " + signed(programProfile.diffPipeline) + ".";
+        }
+
+        summary += rivalryMomentumSummaryLines();
         for (String note : RivalryDynamics.previewNotes(this)) {
             summary += "\n\n" + note;
         }
 
         return summary;
+    }
+
+    private static String signed(int value) {
+        return value > 0 ? "+" + value : Integer.toString(value);
     }
 
     public Player findBenchPlayer(String line) {
@@ -3462,11 +3546,12 @@ public class Team {
     }
 
     /**
-     * Str rep of team, with prestige
+     * String representation of team with program power.
      * @return ranking abbr (Pres: XX)
      */
-    public String strRepWithPrestige() {
-        return "#" + rankTeamPollScore + " " + abbr + " (Pres: " + teamPrestige + ")";
+    public String strRepWithProgramPower() {
+        return "#" + rankTeamPollScore + " " + abbr
+                + " (Power: " + programProfile.programPower + ")";
     }
 
     /**

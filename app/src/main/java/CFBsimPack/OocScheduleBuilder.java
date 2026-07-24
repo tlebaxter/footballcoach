@@ -184,9 +184,9 @@ public final class OocScheduleBuilder {
     }
 
     /**
-     * Fills the user's currently open OOC weeks with a balanced prestige slate.
+     * Fills the user's currently open OOC weeks with a balanced program-tier slate.
      * Soft-prefers highest cross-conference rival (strength ≥ 50) when a shared
-     * open week exists (never required). Then rotates tough / peer / easy by prestige.
+     * open week exists (never required). Then rotates tough / peer / easy by schedule tier.
      *
      * @return number of games placed
      */
@@ -227,7 +227,7 @@ public final class OocScheduleBuilder {
         return placed;
     }
 
-    private static final int PRESTIGE_BAND = 8;
+    private static final int SCHEDULE_TIER_BAND = 8;
 
     private static int findSharedOpenWeek(Team user, Team opponent) {
         for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
@@ -248,15 +248,15 @@ public final class OocScheduleBuilder {
         int bestOverallDist = Integer.MAX_VALUE;
 
         for (Team candidate : eligible) {
-            int diff = candidate.teamPrestige - user.teamPrestige;
+            int diff = candidate.programProfile.scheduleTier - user.programProfile.scheduleTier;
             int dist = Math.abs(diff);
             boolean inBand;
             if (bandIndex == 0) {
-                inBand = diff > PRESTIGE_BAND;
+                inBand = diff > SCHEDULE_TIER_BAND;
             } else if (bandIndex == 2) {
-                inBand = diff < -PRESTIGE_BAND;
+                inBand = diff < -SCHEDULE_TIER_BAND;
             } else {
-                inBand = dist <= PRESTIGE_BAND;
+                inBand = dist <= SCHEDULE_TIER_BAND;
             }
 
             if (inBand && isBetterPick(candidate, dist, bestInBand, bestInBandDist)) {

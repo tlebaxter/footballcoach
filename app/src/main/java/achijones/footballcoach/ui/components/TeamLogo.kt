@@ -16,6 +16,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Color
@@ -31,7 +32,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.palette.graphics.Palette
+import org.json.JSONObject
 import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.abs
 import kotlin.math.max
 import kotlin.math.min
 import kotlin.math.pow
@@ -44,12 +48,15 @@ data class TeamColors(
 object TeamLogoResolver {
     private const val TEAM_LOGO_DIR = "cfb_logos/teams"
     private const val CONF_LOGO_DIR = "cfb_logos/conferences"
+    private const val TEAM_COLORS_ASSET = "team_colors.json"
     private const val OPAQUE_ALPHA_THRESHOLD = 32
     private const val SAMPLE_STEP = 4
     private const val MONOCHROME_CONTRAST_THRESHOLD = 3.0
     private const val ANY_CONTRAST_THRESHOLD = 2.5
     private const val MONOCHROME_CHROMA_STD_MAX = 28.0
     private const val MONOCHROME_HUE_STD_MAX = 18.0
+    private const val NEAR_WHITE_LUMINANCE = 0.85
+    private const val NEAR_BLACK_LUMINANCE = 0.08
 
     private val conferenceAssetStem: Map<String, String> = mapOf(
         "SEC" to "Southeastern_Conference",
@@ -64,9 +71,10 @@ object TeamLogoResolver {
         "Sun Belt" to "Sun_Belt",
     )
 
-    private val bitmapCache = ConcurrentHashMap<String, ImageBitmap?>()
+    private val bitmapCache = ConcurrentHashMap<String, ImageBitmap>()
     private val colorCache = ConcurrentHashMap<String, TeamColors>()
     private val contrastBoostCache = ConcurrentHashMap<String, Boolean>()
+    private val brandColorsRef = AtomicReference<Map<String, TeamColors>?>()
 
     fun teamAssetPath(teamName: String): String = "$TEAM_LOGO_DIR/$teamName.png"
 
@@ -76,15 +84,16 @@ object TeamLogoResolver {
     }
 
     fun load(context: Context, assetPath: String): ImageBitmap? {
-        return bitmapCache.computeIfAbsent(assetPath) {
-            try {
-                context.assets.open(assetPath).use { stream ->
-                    BitmapFactory.decodeStream(stream)?.asImageBitmap()
-                }
-            } catch (_: Exception) {
-                null
+        bitmapCache[assetPath]?.let { return it }
+        val loaded = try {
+            context.assets.open(assetPath).use { stream ->
+                BitmapFactory.decodeStream(stream)?.asImageBitmap()
             }
-        }
+        } catch (_: Exception) {
+            null
+        } ?: return null
+        val existing = bitmapCache.putIfAbsent(assetPath, loaded)
+        return existing ?: loaded
     }
 
     fun loadTeam(context: Context, teamName: String): ImageBitmap? =
@@ -97,7 +106,15 @@ object TeamLogoResolver {
 
     fun colorsForTeam(context: Context, teamName: String?, abbr: String): TeamColors {
         val key = teamName?.takeIf { it.isNotBlank() } ?: abbr
-        return colorCache.computeIfAbsent(key) {
+        colorCache[key]?.let { return it }
+        val brand = if (!teamName.isNullOrBlank()) {
+            brandColors(context)[teamName]
+        } else {
+            null
+        }
+        val computed = if (brand != null) {
+            brand
+        } else {
             val image = if (!teamName.isNullOrBlank()) loadTeam(context, teamName) else null
             if (image != null) {
                 extractColors(image.asAndroidBitmap()) ?: fallbackColors(abbr)
@@ -105,15 +122,88 @@ object TeamLogoResolver {
                 fallbackColors(abbr)
             }
         }
+        val existing = colorCache.putIfAbsent(key, computed)
+        return existing ?: computed
+    }
+
+    private fun brandColors(context: Context): Map<String, TeamColors> {
+        brandColorsRef.get()?.let { return it }
+        val loaded = loadBrandColors(context)
+        brandColorsRef.compareAndSet(null, loaded)
+        return brandColorsRef.get() ?: loaded
+    }
+
+    private fun loadBrandColors(context: Context): Map<String, TeamColors> {
+        return try {
+            context.assets.open(TEAM_COLORS_ASSET).bufferedReader().use { reader ->
+                val root = JSONObject(reader.readText())
+                buildMap {
+                    val keys = root.keys()
+                    while (keys.hasNext()) {
+                        val name = keys.next()
+                        val entry = root.getJSONObject(name)
+                        val primary = parseHexColor(entry.getString("primary")) ?: continue
+                        val secondary = parseHexColor(entry.optString("secondary", "")) ?: primary
+                        put(name, normalizeBrandColors(primary, secondary))
+                    }
+                }
+            }
+        } catch (_: Exception) {
+            emptyMap()
+        }
+    }
+
+    private fun parseHexColor(raw: String): Color? {
+        val cleaned = raw.trim().let { if (it.startsWith("#")) it else "#$it" }
+        return try {
+            Color(android.graphics.Color.parseColor(cleaned))
+        } catch (_: IllegalArgumentException) {
+            null
+        }
+    }
+
+    private fun normalizeBrandColors(primary: Color, secondary: Color): TeamColors {
+        val primaryDark = nearBlack(primary)
+        val secondaryLight = nearWhite(secondary)
+        val secondarySame = colorsNearlyEqual(primary, secondary)
+
+        // Near-black primaries (Army) should lead with the brand accent.
+        if (primaryDark && !nearBlack(secondary) && !secondaryLight) {
+            return TeamColors(
+                primary = secondary,
+                secondary = secondary.darkenCompose(),
+            )
+        }
+
+        val usableSecondary = when {
+            secondaryLight || secondarySame || nearBlack(secondary) -> primary.darkenCompose()
+            else -> secondary
+        }
+        return TeamColors(primary = primary, secondary = usableSecondary)
+    }
+
+    private fun nearWhite(color: Color): Boolean = relativeLuminance(color) >= NEAR_WHITE_LUMINANCE
+
+    private fun nearBlack(color: Color): Boolean = relativeLuminance(color) <= NEAR_BLACK_LUMINANCE
+
+    private fun colorsNearlyEqual(a: Color, b: Color): Boolean {
+        return abs(a.red - b.red) < 0.04f &&
+            abs(a.green - b.green) < 0.04f &&
+            abs(a.blue - b.blue) < 0.04f
     }
 
     fun needsContrastBoost(context: Context, teamName: String?, background: Color): Boolean {
         if (teamName.isNullOrBlank()) return false
         val cacheKey = "$teamName|${quantizeColor(background)}"
-        return contrastBoostCache.computeIfAbsent(cacheKey) {
-            val image = loadTeam(context, teamName) ?: return@computeIfAbsent false
+        contrastBoostCache[cacheKey]?.let { return it }
+        val image = loadTeam(context, teamName)
+        val computed = if (image == null) {
+            false
+        } else {
             analyzeNeedsContrastBoost(image.asAndroidBitmap(), background)
         }
+        val existing = contrastBoostCache.putIfAbsent(cacheKey, computed)
+        return existing ?: computed
     }
 
     private fun analyzeNeedsContrastBoost(bitmap: Bitmap, background: Color): Boolean {
@@ -318,34 +408,53 @@ fun TeamLogo(
                 modifier = imageModifier,
                 contentAlignment = Alignment.Center,
             ) {
-                val softGlow = ColorFilter.tint(Color.White.copy(alpha = 0.55f), BlendMode.SrcIn)
-                val hardGlow = ColorFilter.tint(Color.White.copy(alpha = 0.35f), BlendMode.SrcIn)
+                val shadowTint = ColorFilter.tint(Color.Black, BlendMode.SrcIn)
+                // Outer feathered halo — centered, larger blur
                 Image(
                     bitmap = bitmap,
                     contentDescription = null,
                     modifier = Modifier
                         .size(size)
                         .graphicsLayer {
-                            scaleX = 1.08f
-                            scaleY = 1.08f
-                            alpha = 0.45f
-                        },
+                            scaleX = 1.18f
+                            scaleY = 1.18f
+                            alpha = 0.4f
+                        }
+                        .blur(18.dp),
                     contentScale = ContentScale.Fit,
-                    colorFilter = softGlow,
+                    colorFilter = shadowTint,
                 )
+                // Mid feather — slight downward bias for depth
                 Image(
                     bitmap = bitmap,
                     contentDescription = null,
                     modifier = Modifier
                         .size(size)
-                        .offset(x = 2.dp, y = 3.dp)
+                        .offset(y = 2.dp)
+                        .graphicsLayer {
+                            scaleX = 1.1f
+                            scaleY = 1.1f
+                            alpha = 0.55f
+                        }
+                        .blur(10.dp),
+                    contentScale = ContentScale.Fit,
+                    colorFilter = shadowTint,
+                )
+                // Tight core shadow so the silhouette still reads
+                Image(
+                    bitmap = bitmap,
+                    contentDescription = null,
+                    modifier = Modifier
+                        .size(size)
+                        .offset(y = 1.dp)
                         .graphicsLayer {
                             scaleX = 1.04f
                             scaleY = 1.04f
-                            alpha = 0.5f
-                        },
+                            alpha = 0.65f
+                        }
+                        .blur(4.dp),
                     contentScale = ContentScale.Fit,
-                    colorFilter = hardGlow,
+                    colorFilter = shadowTint,
                 )
                 Image(
                     bitmap = bitmap,

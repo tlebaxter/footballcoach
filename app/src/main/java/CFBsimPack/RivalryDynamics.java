@@ -199,19 +199,19 @@ public final class RivalryDynamics {
         int margin = Math.abs(game.homeScore - game.awayScore);
         boolean won = (game.homeTeam == team && game.homeScore > game.awayScore)
                 || (game.awayTeam == team && game.awayScore > game.homeScore);
-        int ownPrestige = team.teamPrestige;
-        int oppPrestige = opponent.teamPrestige;
+        int ownPower = team.programProfile.programPower;
+        int opponentPower = opponent.programProfile.programPower;
 
-        if (won && oppPrestige - ownPrestige >= 10) {
+        if (won && opponentPower - ownPower >= 10) {
             return 8;
         }
-        if (won && margin >= 28 && ownPrestige - oppPrestige >= 15) {
+        if (won && margin >= 28 && ownPower - opponentPower >= 15) {
             return -4;
         }
         if (margin <= 14) {
             return 6;
         }
-        if (!won && Math.abs(ownPrestige - oppPrestige) < 20) {
+        if (!won && Math.abs(ownPower - opponentPower) < 20) {
             return 4;
         }
         return 2;
@@ -227,7 +227,7 @@ public final class RivalryDynamics {
                 : game.awayTeam == a;
         Team winner = aWon ? a : b;
         Team loser = aWon ? b : a;
-        if (loser.teamPrestige - winner.teamPrestige >= 10) {
+        if (loser.programProfile.programPower - winner.programProfile.programPower >= 10) {
             return true;
         }
         return a.rankTeamPollScore > 0 && b.rankTeamPollScore > 0

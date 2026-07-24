@@ -56,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import achijones.footballcoach.ui.components.TeamLogo
+import achijones.footballcoach.ui.components.rememberLogoNeedsContrastBoost
 import achijones.footballcoach.ui.components.rememberTeamColors
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -203,7 +204,14 @@ fun ScheduleScreen(
                 }
             } else {
                 items(state.filteredContracts, key = { it.id }) { card ->
-                    ContractDeskCard(card, onCancel = { viewModel.requestCancelContract(card.id) })
+                    ContractDeskCard(
+                        card = card,
+                        userAbbr = state.teamAbbr,
+                        onCancel = { viewModel.requestCancelContract(card.id) },
+                        onChangeDate = { year ->
+                            viewModel.openRescheduleDialog(card.id, year)
+                        },
+                    )
                 }
             }
 
@@ -221,6 +229,8 @@ fun ScheduleScreen(
                     week = week,
                     onClick = {
                         when {
+                            week.contractLocked && week.contractId != null ->
+                                viewModel.openRescheduleDialog(week.contractId, state.year)
                             week.open -> viewModel.openOpponentPicker(week.week)
                             !week.locked && !week.open -> viewModel.clearScheduleWeek(week.week)
                         }
@@ -251,19 +261,31 @@ fun ScheduleScreen(
             },
         )
     }
+
+    if (state.rescheduleContractId != null) {
+        RescheduleDialog(state, viewModel)
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun ContractDeskCard(card: ContractCardUi, onCancel: () -> Unit) {
-    val aColors = rememberTeamColors(card.teamAName, card.teamAAbbr)
-    val bColors = rememberTeamColors(card.teamBName, card.teamBAbbr)
+private fun ContractDeskCard(
+    card: ContractCardUi,
+    userAbbr: String,
+    onCancel: () -> Unit,
+    onChangeDate: (Int) -> Unit,
+) {
+    val opponentAbbr = if (card.teamAAbbr == userAbbr) card.teamBAbbr else card.teamAAbbr
+    val opponentName = if (card.teamAAbbr == userAbbr) card.teamBName else card.teamAName
+    val colors = rememberTeamColors(opponentName, opponentAbbr)
+    val leftColor = colors.primary.copy(alpha = 0.55f)
     val brush = Brush.horizontalGradient(
         listOf(
-            aColors.primary.copy(alpha = 0.45f),
-            bColors.primary.copy(alpha = 0.45f),
+            leftColor,
+            colors.secondary.copy(alpha = 0.35f),
         ),
     )
+    val contrastBoost = rememberLogoNeedsContrastBoost(opponentName, leftColor)
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -274,15 +296,25 @@ private fun ContractDeskCard(card: ContractCardUi, onCancel: () -> Unit) {
             .padding(12.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
-            TeamLogo(card.teamAName, card.teamAAbbr, size = 36.dp)
-            Spacer(Modifier.width(8.dp))
-            Text("vs", style = MaterialTheme.typography.labelMedium)
-            Spacer(Modifier.width(8.dp))
-            TeamLogo(card.teamBName, card.teamBAbbr, size = 36.dp)
-            Spacer(Modifier.weight(1f))
+            TeamLogo(
+                opponentName,
+                opponentAbbr,
+                size = 36.dp,
+                framed = false,
+                contrastBoost = contrastBoost,
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                opponentName ?: opponentAbbr,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.weight(1f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             TypeBadge(card.typeLabel)
         }
-        Spacer(Modifier.height(8.dp))
+        Spacer(modifier = Modifier.height(8.dp))
         FlowRow(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -294,6 +326,7 @@ private fun ContractDeskCard(card: ContractCardUi, onCancel: () -> Unit) {
                     modifier = Modifier
                         .clip(RoundedCornerShape(50))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f))
+                        .clickable(enabled = g.canReschedule) { onChangeDate(g.year) }
                         .padding(horizontal = 10.dp, vertical = 4.dp),
                 )
             }
@@ -312,6 +345,13 @@ private fun ContractDeskCard(card: ContractCardUi, onCancel: () -> Unit) {
             color = MaterialTheme.colorScheme.tertiary,
             modifier = Modifier.padding(top = 4.dp),
         )
+        if (card.games.any { it.canReschedule }) {
+            TextButton(onClick = {
+                card.games.firstOrNull { it.canReschedule }?.let { onChangeDate(it.year) }
+            }) {
+                Text("Change date")
+            }
+        }
         TextButton(onClick = onCancel) {
             Text("Cancel deal")
         }
@@ -344,6 +384,7 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
     } else {
         null
     }
+    val leftColor = colors?.primary?.copy(alpha = 0.55f)
     val brush = when {
         week.isBye -> Brush.horizontalGradient(
             listOf(
@@ -351,9 +392,9 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
                 MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.25f),
             ),
         )
-        colors != null -> Brush.horizontalGradient(
+        colors != null && leftColor != null -> Brush.horizontalGradient(
             listOf(
-                colors.primary.copy(alpha = 0.55f),
+                leftColor,
                 colors.secondary.copy(alpha = 0.35f),
             ),
         )
@@ -370,7 +411,11 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
             ),
         )
     }
-    val clickable = week.open || (!week.locked && !week.open && !week.isBye)
+    val logoBackground = leftColor ?: MaterialTheme.colorScheme.surface
+    val contrastBoost = rememberLogoNeedsContrastBoost(week.opponentName, logoBackground)
+    val clickable = week.contractLocked
+        || week.open
+        || (!week.locked && !week.open && !week.isBye)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -381,8 +426,14 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         if (week.opponentAbbr != null) {
-            TeamLogo(week.opponentName, week.opponentAbbr, size = 40.dp)
-            Spacer(Modifier.width(12.dp))
+            TeamLogo(
+                week.opponentName,
+                week.opponentAbbr,
+                size = 40.dp,
+                framed = false,
+                contrastBoost = contrastBoost,
+            )
+            Spacer(modifier = Modifier.width(12.dp))
         } else {
             Box(
                 modifier = Modifier
@@ -397,7 +448,7 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
                     fontWeight = FontWeight.Bold,
                 )
             }
-            Spacer(Modifier.width(12.dp))
+            Spacer(modifier = Modifier.width(12.dp))
         }
         Column(modifier = Modifier.weight(1f)) {
             val rivalry = week.rivalryLabel?.let { " · $it" } ?: ""
@@ -415,7 +466,7 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
             when {
                 week.contractLocked ->
                     Text(
-                        "Contract locked — cancel deal to change",
+                        "Tap to change week or year",
                         style = MaterialTheme.typography.labelSmall,
                     )
                 clickable && !week.open ->
@@ -516,3 +567,77 @@ private fun OpponentDealDialog(state: ScheduleUiState, viewModel: ScheduleViewMo
         },
     )
 }
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun RescheduleDialog(state: ScheduleUiState, viewModel: ScheduleViewModel) {
+    AlertDialog(
+        onDismissRequest = viewModel::dismissRescheduleDialog,
+        title = { Text("Change date") },
+        text = {
+            Column {
+                Text(
+                    state.rescheduleOpponentLabel,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                Text(
+                    "Editable until ${state.rescheduleFulfillByYear}",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.tertiary,
+                    modifier = Modifier.padding(bottom = 8.dp),
+                )
+                Text(
+                    "Year",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    state.rescheduleEligibleYears.forEach { year ->
+                        FilterChip(
+                            selected = state.rescheduleSelectedYear == year,
+                            onClick = { viewModel.selectRescheduleYear(year) },
+                            label = { Text(year.toString()) },
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Text(
+                    "Week",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                )
+                if (state.rescheduleEligibleWeeks.isEmpty()) {
+                    Text(
+                        "No open weeks available for that year yet.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        state.rescheduleEligibleWeeks.forEach { week ->
+                            FilterChip(
+                                selected = state.rescheduleSelectedWeek == week,
+                                onClick = { viewModel.selectRescheduleWeek(week) },
+                                label = { Text("W${week + 1}") },
+                            )
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(
+                onClick = viewModel::confirmReschedule,
+                enabled = state.rescheduleSelectedYear != null,
+            ) {
+                Text("Save")
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = viewModel::dismissRescheduleDialog) {
+                Text("Cancel")
+            }
+        },
+    )
+}
+

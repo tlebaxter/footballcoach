@@ -22,6 +22,7 @@ public class LeagueOffseason {
 
     public void grantAllBudgets() {
         for (Team t : league.teamList) {
+            t.updateProgramProfileForOffseason();
             t.grantYearlyBudget();
         }
     }
@@ -30,7 +31,10 @@ public class LeagueOffseason {
         for (Team t : league.teamList) {
             t.hadCoachingChange = false;
             if (t.userControlled) continue;
-            if (t.diffPrestige <= -4 || (t.wins + t.losses > 0 && t.wins <= 3 && t.teamPrestige >= 70)) {
+            if (t.programProfile.diffProgramPower <= -4
+                    || (t.wins + t.losses > 0
+                    && t.wins <= 3
+                    && t.programProfile.expectation >= 70)) {
                 if (Math.random() < 0.35) {
                     t.hadCoachingChange = true;
                 }
@@ -76,7 +80,7 @@ public class LeagueOffseason {
                 score = p.ratOvr >= 78 ? 3 : 2;
                 break;
             case COACHING_CHANGE:
-            case PRESTIGE_FREEFALL:
+            case PROGRAM_FREEFALL:
             case WINNING:
             case INJURY_COMEBACK:
             case SCHEME_FIT:
@@ -100,14 +104,14 @@ public class LeagueOffseason {
 
         if (t.hadCoachingChange && Math.random() < 0.55) return TransferReason.COACHING_CHANGE;
 
-        if (t.diffPrestige <= -5) return TransferReason.PRESTIGE_FREEFALL;
+        if (t.programProfile.diffProgramPower <= -5) return TransferReason.PROGRAM_FREEFALL;
 
         if (p.injury != null || (p.gamesPlayed <= 2 && p.year >= 2 && p.ratOvr >= 70)) {
             if (Math.random() < 0.4) return TransferReason.INJURY_COMEBACK;
         }
 
         boolean strongYear = p.gamesPlayed >= 8 && p.ratOvr >= 76;
-        if (strongYear && t.teamPrestige < 78) return TransferReason.MOVE_UP;
+        if (strongYear && t.programProfile.brandAttract < 78) return TransferReason.MOVE_UP;
 
         if (p.year >= 3 && p.ratOvr >= 80 && t.rankTeamPollScore > 25) return TransferReason.TITLE_CHASE;
 
@@ -115,7 +119,9 @@ public class LeagueOffseason {
             return TransferReason.SCHEME_FIT;
         }
 
-        if (t.wins + t.losses > 0 && t.wins <= 4 && t.teamPrestige >= 65) return TransferReason.WINNING;
+        if (t.wins + t.losses > 0
+                && t.wins <= 4
+                && t.programProfile.expectation >= 65) return TransferReason.WINNING;
 
         // Most players are happy — no issue
         if (Math.random() < 0.72) return TransferReason.NONE;
@@ -272,7 +278,8 @@ public class LeagueOffseason {
         if ("DRAFT_STAY".equals(s.bucket)) {
             return user.payDraftStay(p, s.stayBonus);
         }
-        if (!ProgramOffers.acceptsOffer(p, s.status, Math.max(1, p.portalRiskTier))) {
+        if (!ProgramOffers.acceptsOffer(
+                p, user, s.status, s.nil, Math.max(1, p.portalRiskTier))) {
             if (!"RENEWAL".equals(s.bucket)) return false;
         }
         if (!user.spendRetentionOffer(s.status, s.nil, s.years, p)) return false;
@@ -458,7 +465,8 @@ public class LeagueOffseason {
         int y = Math.min(years, ProgramOffers.maxContractYears(p));
         int cost = user.offerTotalCost(status, nilAmount);
         if (!user.canAffordContract(status, nilAmount, y)) return false;
-        if (!ProgramOffers.acceptsOffer(p, status, Math.max(1, p.portalRiskTier))) return false;
+        if (!ProgramOffers.acceptsOffer(
+                p, user, status, nilAmount, Math.max(1, p.portalRiskTier))) return false;
         user.recruitMoney -= cost;
         p.applyOffer(status, nilAmount, y);
         p.team = user;
@@ -475,6 +483,7 @@ public class LeagueOffseason {
         int y = Math.min(years, ProgramOffers.maxContractYears(p));
         int cost = user.offerTotalCost(status, nilAmount);
         if (!user.canAffordContract(status, nilAmount, y)) return false;
+        if (!ProgramOffers.acceptsOffer(p, user, status, nilAmount, 0)) return false;
         user.recruitMoney -= cost;
         p.applyOffer(status, nilAmount, y);
         user.addPlayerToRoster(p);
@@ -506,13 +515,15 @@ public class LeagueOffseason {
                 if (!t.canAddToRoster()) continue;
                 PositionBudgetBalancer bal = bals.get(t);
                 int depth = ProgramOffers.projectedDepthRank(p, t);
-                double score = t.teamPrestige * 0.5 - depth * 8 + fitBonus(p, t)
+                double score = t.programProfile.brandAttract * 0.35
+                        + t.programProfile.pipeline * 0.15
+                        - depth * 8 + fitBonus(p, t)
                         + bal.needWeight(p.position) * 12;
                 RosterStatus offer = ProgramOffers.minimumAcceptable(p, Math.max(1, p.portalRiskTier));
                 if (offer.usesScholarship() && !t.canAwardScholarship()) {
                     if (offer == RosterStatus.SCHOLARSHIP_PLUS_NIL) continue;
                     offer = RosterStatus.PWO;
-                    if (!ProgramOffers.acceptsOffer(p, offer, p.portalRiskTier)) continue;
+                    if (!ProgramOffers.acceptsOffer(p, t, offer, 0, p.portalRiskTier)) continue;
                 }
                 int years = Math.min(ProgramOffers.suggestedContractYears(p), ProgramOffers.maxContractYears(p));
                 int nil = offer == RosterStatus.SCHOLARSHIP_PLUS_NIL
@@ -525,7 +536,8 @@ public class LeagueOffseason {
                             ? ProgramOffers.annualNilFor(p, t, 1) : 0;
                     cost = t.offerTotalCost(offer, nil);
                     if (!t.canAffordContract(offer, nil, years) || !bal.canSpend(p.position, cost, critical)) {
-                        if (ProgramOffers.acceptsOffer(p, RosterStatus.SCHOLARSHIP, p.portalRiskTier)
+                        if (ProgramOffers.acceptsOffer(
+                                p, t, RosterStatus.SCHOLARSHIP, 0, p.portalRiskTier)
                                 && t.canAwardScholarship()) {
                             offer = RosterStatus.SCHOLARSHIP;
                             nil = 0;
@@ -570,18 +582,20 @@ public class LeagueOffseason {
 
     private double fitBonus(Player p, Team t) {
         TransferReason r = p.transferReason != null ? p.transferReason : TransferReason.BETTER_FIT;
-        int prior = p.priorTeam != null ? p.priorTeam.teamPrestige : 70;
+        int prior = p.priorTeam != null
+                ? p.priorTeam.programProfile.brandAttract
+                : 70;
         switch (r) {
             case PLAYING_TIME:
                 return (3 - Math.min(3, ProgramOffers.projectedDepthRank(p, t))) * 15;
             case MOVE_UP:
-                return t.teamPrestige - prior;
+                return t.programProfile.brandAttract - prior;
             case TITLE_CHASE:
-                return t.teamPrestige >= 88 ? 20 : -10;
+                return t.programProfile.brandAttract >= 88 ? 20 : -10;
             case WINNING:
                 return t.wins * 2;
-            case PRESTIGE_FREEFALL:
-                return t.diffPrestige >= 0 ? 10 : -10;
+            case PROGRAM_FREEFALL:
+                return t.programProfile.diffProgramPower >= 0 ? 10 : -10;
             default:
                 return 0;
         }
@@ -650,7 +664,7 @@ public class LeagueOffseason {
         Collections.sort(teams, new Comparator<Team>() {
             @Override
             public int compare(Team a, Team b) {
-                return b.teamPrestige - a.teamPrestige;
+                return b.programProfile.talentGravity - a.programProfile.talentGravity;
             }
         });
         for (Team t : teams) {

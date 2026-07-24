@@ -72,7 +72,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         "Poll Votes", "Conference Standings", "Strength of Sched", "Points Per Game",
         "Opp Points Per Game", "Yards Per Game", "Opp Yards Per Game", "Pass Yards Per Game",
         "Rush Yards Per Game", "Opp Pass YPG", "Opp Rush YPG", "TO Differential",
-        "Off Talent", "Def Talent", "Prestige", "Recruiting Class",
+        "Off Talent", "Def Talent", "Program Power", "Recruiting Class",
     )
 
     init {
@@ -1348,7 +1348,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         "TO Diff" -> 11
         "Off Talent" -> 12
         "Def Talent" -> 13
-        "Prestige" -> 14
+        "Program Power" -> 14
         "Recruit Class" -> 15
         else -> null
     }
@@ -1581,7 +1581,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val dealAmount = when {
             player.nilDealAmount > 0 -> "${NilMoney.format(player.nilDealAmount)}/yr"
             player.rosterStatus == RosterStatus.SCHOLARSHIP -> {
-                NilMoney.format(NilMoney.scholarshipCoa(displayTeam.teamPrestige)) + " COA"
+                NilMoney.format(NilMoney.scholarshipCoa(displayTeam.programProfile)) + " COA"
             }
             else -> null
         }
@@ -1706,7 +1706,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         teamListIndex = index,
                         name = team.name,
                         abbr = team.abbr,
-                        prestige = team.teamPrestige,
+                        programPower = team.programProfile.programPower,
+                        tradition = team.programProfile.tradition,
+                        fanbase = team.programProfile.fanbase,
+                        donors = team.programProfile.donors,
+                        footprint = team.programProfile.footprint,
+                        pipeline = team.programProfile.pipeline,
+                        momentum = team.programProfile.momentum,
+                        revShare = NilMoney.format(NilMoney.yearlyRevShare(team.programProfile)),
+                        collective = NilMoney.format(NilMoney.yearlyCollective(team.programProfile)),
+                        offTalent = team.getOffTalent(),
+                        defTalent = team.getDefTalent(),
+                        stTalent = team.getSTTalent(),
                     )
                 },
             )

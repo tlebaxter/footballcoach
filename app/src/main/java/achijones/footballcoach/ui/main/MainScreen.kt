@@ -11,12 +11,15 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -28,6 +31,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -97,18 +101,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import achijones.footballcoach.ui.components.ConferenceLogo
 import achijones.footballcoach.ui.components.SegmentedControl
 import achijones.footballcoach.ui.components.TabContentTransition
 import achijones.footballcoach.ui.components.TeamLogo
+import achijones.footballcoach.ui.components.TeamLogoResolver
 import achijones.footballcoach.ui.components.rememberLogoNeedsContrastBoost
 import achijones.footballcoach.ui.components.rememberTeamColors
 import achijones.footballcoach.ui.theme.FcChipPosBg
@@ -1677,6 +1686,44 @@ private fun BowlCard(bowl: BowlRowUi) {
 }
 
 @Composable
+private fun TeamPickerStatChip(label: String, value: String) {
+    val shape = RoundedCornerShape(16.dp)
+    Column(
+        modifier = Modifier
+            .widthIn(min = 76.dp)
+            .clip(shape)
+            .background(
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.White.copy(alpha = 0.22f),
+                        Color.Black.copy(alpha = 0.38f),
+                    ),
+                ),
+            )
+            .border(1.dp, Color.White.copy(alpha = 0.35f), shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White.copy(alpha = 0.72f),
+            letterSpacing = 0.8.sp,
+            maxLines = 1,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold,
+            color = Color.White,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun TeamPickerScreen(
     conferences: List<TeamPickerConfUi>,
     onPick: (Int) -> Unit,
@@ -1730,74 +1777,53 @@ private fun TeamPickerScreen(
             .fillMaxSize()
             .background(gradientBrush),
     ) {
-        Column(
+        val context = LocalContext.current
+        val logoSize = 200.dp
+        val logoTextGap = 20.dp
+        BoxWithConstraints(
             modifier = Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .padding(top = 20.dp, bottom = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(
-                text = "Choose your team",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                textAlign = TextAlign.Center,
+            val watermarkSize = maxOf(maxWidth, maxHeight) * 0.92f
+            AnimatedContent(
+                targetState = currentTeam?.name,
+                transitionSpec = {
+                    fadeIn(tween(320)) togetherWith fadeOut(tween(220))
+                },
+                label = "teamWatermark",
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-            )
-
-            LazyRow(
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                itemsIndexed(conferences) { index, conf ->
-                    val selected = index == confIndex
-                    Row(
+                    .align(Alignment.Center)
+                    .fillMaxSize(),
+                contentAlignment = Alignment.Center,
+            ) { teamName ->
+                val watermark = remember(teamName) {
+                    if (teamName.isNullOrBlank()) null
+                    else TeamLogoResolver.loadTeam(context, teamName)
+                }
+                if (watermark != null) {
+                    Image(
+                        bitmap = watermark,
+                        contentDescription = null,
+                        contentScale = ContentScale.Fit,
                         modifier = Modifier
-                            .clip(RoundedCornerShape(22.dp))
-                            .background(
-                                if (selected) Color.White.copy(alpha = 0.24f)
-                                else Color.Black.copy(alpha = 0.32f),
-                            )
-                            .border(
-                                width = if (selected) 1.5.dp else 1.dp,
-                                color = if (selected) Color.White.copy(alpha = 0.9f)
-                                else Color.White.copy(alpha = 0.2f),
-                                shape = RoundedCornerShape(22.dp),
-                            )
-                            .clickable { selectedConfIndex = index }
-                            .padding(horizontal = 12.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(6.dp),
-                    ) {
-                        ConferenceLogo(conferenceName = conf.name, size = 24.dp)
-                        Text(
-                            text = conf.name,
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
-                            color = Color.White,
-                            maxLines = 1,
-                        )
-                    }
+                            .size(watermarkSize)
+                            .graphicsLayer { alpha = 0.14f },
+                    )
                 }
             }
-
             if (selectedConf.teams.isEmpty() || currentTeam == null) {
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .fillMaxWidth(),
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Text("No teams in this conference.", color = Color.White)
-                }
+                Text(
+                    text = "No teams in this conference.",
+                    color = Color.White,
+                    modifier = Modifier.align(Alignment.Center),
+                )
             } else {
                 Row(
                     modifier = Modifier
-                        .weight(1f)
+                        .align(Alignment.Center)
                         .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -1817,7 +1843,6 @@ private fun TeamPickerScreen(
                     Box(
                         modifier = Modifier
                             .weight(1f)
-                            .fillMaxHeight()
                             .pointerInput(confIndex, selectedConf.teams.size, teamIndex) {
                                 detectHorizontalDragGestures(
                                     onDragStart = { dragAccum = 0f },
@@ -1855,36 +1880,13 @@ private fun TeamPickerScreen(
                                 teamName = team.name,
                                 background = teamBoostBg,
                             )
-                            Column(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalAlignment = Alignment.CenterHorizontally,
-                                verticalArrangement = Arrangement.Center,
-                            ) {
-                                TeamLogo(
-                                    teamName = team.name,
-                                    abbr = team.abbr,
-                                    size = 200.dp,
-                                    framed = false,
-                                    contrastBoost = needsContrastBoost,
-                                )
-                                Spacer(Modifier.height(20.dp))
-                                Text(
-                                    text = team.name,
-                                    style = MaterialTheme.typography.headlineSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    textAlign = TextAlign.Center,
-                                    color = Color.White,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                                Spacer(Modifier.height(6.dp))
-                                Text(
-                                    text = "${team.abbr} · Prestige ${team.prestige}",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    color = Color.White.copy(alpha = 0.85f),
-                                    textAlign = TextAlign.Center,
-                                )
-                            }
+                            TeamLogo(
+                                teamName = team.name,
+                                abbr = team.abbr,
+                                size = logoSize,
+                                framed = false,
+                                contrastBoost = needsContrastBoost,
+                            )
                         }
                     }
                     IconButton(
@@ -1906,53 +1908,172 @@ private fun TeamPickerScreen(
                     }
                 }
 
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.Center,
-                ) {
-                    val pageCount = selectedConf.teams.size
-                    val maxDots = 11
-                    val current = teamIndex
-                    val windowStart = when {
-                        pageCount <= maxDots -> 0
-                        current <= maxDots / 2 -> 0
-                        current >= pageCount - (maxDots / 2) -> pageCount - maxDots
-                        else -> current - maxDots / 2
-                    }
-                    val windowEnd = (windowStart + maxDots).coerceAtMost(pageCount)
-                    for (i in windowStart until windowEnd) {
-                        Box(
-                            modifier = Modifier
-                                .padding(horizontal = 3.dp)
-                                .size(if (i == current) 9.dp else 6.dp)
-                                .clip(CircleShape)
-                                .background(
-                                    if (i == current) Color.White
-                                    else Color.White.copy(alpha = 0.35f),
-                                ),
+                AnimatedContent(
+                    targetState = currentTeam,
+                    transitionSpec = {
+                        fadeIn(tween(240)) togetherWith fadeOut(tween(180))
+                    },
+                    label = "teamTextSwap",
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .offset(y = maxHeight / 2 + logoSize / 2 + logoTextGap),
+                    contentAlignment = Alignment.TopCenter,
+                ) { team ->
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                    ) {
+                        Text(
+                            text = team.name,
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            textAlign = TextAlign.Center,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
                         )
+                        Spacer(Modifier.height(10.dp))
+                        Box(
+                            modifier = Modifier.fillMaxWidth(),
+                            contentAlignment = Alignment.Center,
+                        ) {
+                            Row(
+                                modifier = Modifier
+                                    .horizontalScroll(rememberScrollState())
+                                    .padding(horizontal = 4.dp),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                TeamPickerStatChip(label = "POWER", value = team.programPower.toString())
+                                TeamPickerStatChip(label = "TRADITION", value = team.tradition.toString())
+                                TeamPickerStatChip(label = "FANS", value = team.fanbase.toString())
+                                TeamPickerStatChip(label = "DONORS", value = team.donors.toString())
+                                TeamPickerStatChip(label = "FOOTPRINT", value = team.footprint.toString())
+                                TeamPickerStatChip(label = "NFL PIPE", value = team.pipeline.toString())
+                                TeamPickerStatChip(label = "MOMENTUM", value = team.momentum.toString())
+                                TeamPickerStatChip(label = "REV SHARE", value = team.revShare)
+                                TeamPickerStatChip(label = "COLLECTIVE", value = team.collective)
+                                TeamPickerStatChip(label = "OFF", value = team.offTalent.toString())
+                                TeamPickerStatChip(label = "DEF", value = team.defTalent.toString())
+                                TeamPickerStatChip(label = "ST", value = team.stTalent.toString())
+                            }
+                        }
                     }
                 }
             }
 
-            Button(
-                onClick = { if (currentTeam != null) onPick(currentTeam.teamListIndex) },
-                enabled = currentTeam != null,
+            Column(
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp)
-                    .height(52.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = Color.White,
-                    contentColor = Color.Black,
-                    disabledContainerColor = Color.White.copy(alpha = 0.4f),
-                    disabledContentColor = Color.Black.copy(alpha = 0.5f),
-                ),
-                shape = RoundedCornerShape(16.dp),
+                    .align(Alignment.TopCenter)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                Text("Select", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(
+                    text = "Choose your team",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = Color.White,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp),
+                )
+
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    itemsIndexed(conferences) { index, conf ->
+                        val selected = index == confIndex
+                        Row(
+                            modifier = Modifier
+                                .clip(RoundedCornerShape(22.dp))
+                                .background(
+                                    if (selected) Color.White.copy(alpha = 0.24f)
+                                    else Color.Black.copy(alpha = 0.32f),
+                                )
+                                .border(
+                                    width = if (selected) 1.5.dp else 1.dp,
+                                    color = if (selected) Color.White.copy(alpha = 0.9f)
+                                    else Color.White.copy(alpha = 0.2f),
+                                    shape = RoundedCornerShape(22.dp),
+                                )
+                                .clickable { selectedConfIndex = index }
+                                .padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        ) {
+                            ConferenceLogo(conferenceName = conf.name, size = 24.dp)
+                            Text(
+                                text = conf.name,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = if (selected) FontWeight.Bold else FontWeight.Medium,
+                                color = Color.White,
+                                maxLines = 1,
+                            )
+                        }
+                    }
+                }
+            }
+
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+            ) {
+                if (currentTeam != null && selectedConf.teams.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                    ) {
+                        val pageCount = selectedConf.teams.size
+                        val maxDots = 11
+                        val current = teamIndex
+                        val windowStart = when {
+                            pageCount <= maxDots -> 0
+                            current <= maxDots / 2 -> 0
+                            current >= pageCount - (maxDots / 2) -> pageCount - maxDots
+                            else -> current - maxDots / 2
+                        }
+                        val windowEnd = (windowStart + maxDots).coerceAtMost(pageCount)
+                        for (i in windowStart until windowEnd) {
+                            Box(
+                                modifier = Modifier
+                                    .padding(horizontal = 3.dp)
+                                    .size(if (i == current) 9.dp else 6.dp)
+                                    .clip(CircleShape)
+                                    .background(
+                                        if (i == current) Color.White
+                                        else Color.White.copy(alpha = 0.35f),
+                                    ),
+                            )
+                        }
+                    }
+                }
+
+                Button(
+                    onClick = { if (currentTeam != null) onPick(currentTeam.teamListIndex) },
+                    enabled = currentTeam != null,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp)
+                        .height(52.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = Color.White,
+                        contentColor = Color.Black,
+                        disabledContainerColor = Color.White.copy(alpha = 0.4f),
+                        disabledContentColor = Color.Black.copy(alpha = 0.5f),
+                    ),
+                    shape = RoundedCornerShape(16.dp),
+                ) {
+                    Text("Select", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                }
             }
         }
+
     }
 }
 
@@ -2051,7 +2172,7 @@ private fun RankingsDialog(state: MainUiState, viewModel: MainViewModel) {
             "Poll Votes", "Conference Standings", "Strength of Sched", "Points Per Game",
             "Opp Points Per Game", "Yards Per Game", "Opp Yards Per Game", "Pass Yards Per Game",
             "Rush Yards Per Game", "Opp Pass YPG", "Opp Rush YPG", "TO Differential",
-            "Off Talent", "Def Talent", "Prestige", "Recruiting Class",
+            "Off Talent", "Def Talent", "Program Power", "Recruiting Class",
         ),
         modeIndex = state.rankingsModeIndex,
         onModeChange = viewModel::setRankingsMode,
