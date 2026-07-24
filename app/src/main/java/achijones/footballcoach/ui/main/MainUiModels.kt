@@ -94,24 +94,75 @@ data class LineupRowUi(
 
 data class BowlRowUi(
     val name: String,
-    val away: String,
-    val home: String,
+    val awayAbbr: String,
+    val homeAbbr: String,
     val score: String,
+    val awayName: String? = null,
+    val homeName: String? = null,
+    val awayRank: Int? = null,
+    val homeRank: Int? = null,
+    val awayRecord: String? = null,
+    val homeRecord: String? = null,
+    val played: Boolean = false,
+    val isUserInvolved: Boolean = false,
 )
 
 data class AwardRowUi(
-    val lines: List<String>,
-    val highlightUser: Boolean,
+    val highlightUser: Boolean = false,
+    val rankLabel: String? = null,
+    val rankNum: Int = 0,
+    val teamName: String? = null,
+    val abbr: String? = null,
+    val position: String? = null,
+    val playerName: String? = null,
+    val yearLabel: String? = null,
+    val metaLine: String? = null,
+    val statsLine: String? = null,
+    val isMessage: Boolean = false,
+    val title: String? = null,
+    val subtitle: String? = null,
 )
 
 data class RankingRowUi(
     val line: String,
     val teamName: String?,
+    val abbr: String? = null,
+    val rankLabel: String = "",
+    val rankNum: Int = 0,
+    val pollRank: Int? = null,
+    val record: String? = null,
+    val statValue: String = "",
+    val isSectionHeader: Boolean = false,
+    val sectionTitle: String? = null,
+    val isUserTeam: Boolean = false,
 )
 
+data class BrowseTeamOptionUi(
+    val label: String,
+    val name: String,
+    val abbr: String,
+)
+
+enum class HistoryRowKind {
+    TEXT,
+    SECTION,
+    RECORD,
+    YEAR,
+    SUMMARY_STAT,
+    HOF,
+}
+
 data class HistoryRowUi(
-    val text: String,
-    val highlightAbbr: String?,
+    val kind: HistoryRowKind = HistoryRowKind.TEXT,
+    val text: String = "",
+    val title: String? = null,
+    val value: String? = null,
+    val holder: String? = null,
+    val yearLabel: String? = null,
+    val teamName: String? = null,
+    val abbr: String? = null,
+    val isUserRelated: Boolean = false,
+    val highlightAbbr: String? = null,
 )
 
 data class StatChipUi(
@@ -159,6 +210,30 @@ data class PlayerCareerUi(
     val timeline: List<TimelineEventUi>,
 )
 
+data class GameScoutTeamUi(
+    val name: String,
+    val abbr: String,
+    val rank: Int,
+    val offPhilosophy: String,
+    val defSystem: String,
+    val offTalent: Int,
+    val defTalent: Int,
+    val programPower: Int,
+)
+
+data class GameBoxTeamUi(
+    val name: String,
+    val abbr: String,
+    val rank: Int,
+    val record: String,
+    val score: Int,
+    val passYards: Int,
+    val rushYards: Int,
+    val turnovers: Int,
+    val offPhilosophy: String,
+    val defSystem: String,
+)
+
 data class GameDialogUi(
     val title: String,
     val played: Boolean,
@@ -173,6 +248,14 @@ data class GameDialogUi(
     val bottom: String,
     val canCoach: Boolean,
     val gameKey: Int,
+    val gameName: String = "",
+    val rivalryLabel: String? = null,
+    val awayScout: GameScoutTeamUi? = null,
+    val homeScout: GameScoutTeamUi? = null,
+    val awayBox: GameBoxTeamUi? = null,
+    val homeBox: GameBoxTeamUi? = null,
+    val awayWon: Boolean? = null,
+    val gameLogLines: List<String> = emptyList(),
 )
 
 data class RenameDialogUi(
@@ -230,7 +313,7 @@ data class MainUiState(
     val browseRoster: List<RosterRowUi> = emptyList(),
     val browseSchedule: List<ScheduleRowUi> = emptyList(),
     val confNames: List<String> = emptyList(),
-    val browseTeamLabels: List<String> = emptyList(),
+    val browseTeamOptions: List<BrowseTeamOptionUi> = emptyList(),
     val selectedConfIndex: Int = 0,
     val selectedBrowseTeamIndex: Int = 0,
     val lineupPositionIndex: Int = 0,
@@ -252,6 +335,8 @@ data class MainUiState(
     val potyHeader: String? = null,
     val potySubhead: String? = null,
     val potyStats: String? = null,
+    val potyTeamName: String? = null,
+    val potyAbbr: String? = null,
     val awardsSectionLabel: String = "",
     val awardRows: List<AwardRowUi> = emptyList(),
     val bowlSpinnerOptions: List<String> = emptyList(),

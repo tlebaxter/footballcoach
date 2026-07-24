@@ -465,12 +465,14 @@ private fun LeaguePanel(state: MainUiState, viewModel: MainViewModel, modifier: 
             options = state.confNames,
             selectedIndex = state.selectedConfIndex,
             onSelect = viewModel::selectConfIndex,
+            showConferenceLogos = true,
         )
         SpinnerDropdown(
             label = "Team",
-            options = state.browseTeamLabels,
+            options = state.browseTeamOptions.map { it.label },
             selectedIndex = state.selectedBrowseTeamIndex,
             onSelect = viewModel::selectBrowseTeamIndex,
+            teamLogoOptions = state.browseTeamOptions,
         )
         SegmentRow(
             labels = listOf("Stats", "Roster", "Games"),
@@ -832,52 +834,94 @@ private fun AwardsPanel(state: MainUiState, viewModel: MainViewModel, modifier: 
         ) { segment ->
             when (segment) {
                 AwardsSegment.HONORS -> {
-                    if (state.awardCategories.isNotEmpty()) {
-                        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            state.awardCategories.forEachIndexed { i, cat ->
-                                FilterChip(
-                                    selected = state.selectedAwardCategory == i,
-                                    onClick = { viewModel.selectAwardCategory(i) },
-                                    label = { Text(cat) },
-                                )
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        if (state.awardCategories.isNotEmpty()) {
+                            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                state.awardCategories.forEachIndexed { i, cat ->
+                                    FilterChip(
+                                        selected = state.selectedAwardCategory == i,
+                                        onClick = { viewModel.selectAwardCategory(i) },
+                                        label = { Text(cat) },
+                                    )
+                                }
                             }
                         }
-                    }
-                    state.potyHeader?.let { header ->
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(vertical = 8.dp)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(MaterialTheme.colorScheme.surfaceVariant)
-                                .padding(12.dp),
-                        ) {
-                            Text(header, fontWeight = FontWeight.Bold)
-                            state.potySubhead?.let { Text(it) }
-                            state.potyStats?.let { Text(it) }
+                        state.potyHeader?.let { header ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 8.dp)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                        RoundedCornerShape(12.dp),
+                                    )
+                                    .padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                            ) {
+                                if (!state.potyTeamName.isNullOrBlank() && !state.potyAbbr.isNullOrBlank()) {
+                                    TeamLogo(
+                                        teamName = state.potyTeamName,
+                                        abbr = state.potyAbbr,
+                                        size = 48.dp,
+                                    )
+                                }
+                                Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                    Text(
+                                        header,
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                    )
+                                    state.potySubhead?.let {
+                                        Text(
+                                            it,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        )
+                                    }
+                                    state.potyStats?.let {
+                                        Text(
+                                            it,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            fontWeight = FontWeight.SemiBold,
+                                        )
+                                    }
+                                }
+                            }
                         }
-                    }
-                    Text(
-                        state.awardsSectionLabel,
-                        style = MaterialTheme.typography.titleSmall,
-                        modifier = Modifier.padding(vertical = 4.dp),
-                    )
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.awardRows) { row ->
-                            AwardCard(row)
+                        Text(
+                            state.awardsSectionLabel,
+                            style = MaterialTheme.typography.titleSmall,
+                            modifier = Modifier.padding(vertical = 4.dp),
+                        )
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(state.awardRows) { row ->
+                                AwardCard(row)
+                            }
                         }
                     }
                 }
                 AwardsSegment.BOWLS -> {
-                    SpinnerDropdown(
-                        label = "View",
-                        options = state.bowlSpinnerOptions,
-                        selectedIndex = state.selectedBowlOption,
-                        onSelect = viewModel::selectBowlOption,
-                    )
-                    LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        items(state.bowlRows) { bowl ->
-                            BowlCard(bowl)
+                    Column(modifier = Modifier.fillMaxSize()) {
+                        SpinnerDropdown(
+                            label = "View",
+                            options = state.bowlSpinnerOptions,
+                            selectedIndex = state.selectedBowlOption,
+                            onSelect = viewModel::selectBowlOption,
+                        )
+                        LazyColumn(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            items(state.bowlRows) { bowl ->
+                                BowlCard(bowl)
+                            }
                         }
                     }
                 }
@@ -932,16 +976,39 @@ private fun SpinnerDropdown(
     options: List<String>,
     selectedIndex: Int,
     onSelect: (Int) -> Unit,
+    showConferenceLogos: Boolean = false,
+    teamLogoOptions: List<BrowseTeamOptionUi>? = null,
 ) {
     if (options.isEmpty()) return
     var expanded by remember { mutableStateOf(false) }
     val idx = selectedIndex.coerceIn(options.indices)
+    val selectedTeam = teamLogoOptions?.getOrNull(idx)
     ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
         OutlinedTextField(
             value = options[idx],
             onValueChange = {},
             readOnly = true,
             label = { Text(label) },
+            leadingIcon = when {
+                showConferenceLogos -> {
+                    {
+                        ConferenceLogo(
+                            conferenceName = options[idx],
+                            size = 24.dp,
+                        )
+                    }
+                }
+                selectedTeam != null -> {
+                    {
+                        TeamLogo(
+                            teamName = selectedTeam.name,
+                            abbr = selectedTeam.abbr,
+                            size = 24.dp,
+                        )
+                    }
+                }
+                else -> null
+            },
             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded) },
             modifier = Modifier
                 .fillMaxWidth()
@@ -950,8 +1017,33 @@ private fun SpinnerDropdown(
         )
         ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             options.forEachIndexed { i, opt ->
+                val team = teamLogoOptions?.getOrNull(i)
                 DropdownMenuItem(
-                    text = { Text(opt) },
+                    text = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            when {
+                                showConferenceLogos -> {
+                                    Box(
+                                        modifier = Modifier.size(24.dp),
+                                        contentAlignment = Alignment.Center,
+                                    ) {
+                                        ConferenceLogo(conferenceName = opt, size = 24.dp)
+                                    }
+                                }
+                                team != null -> {
+                                    TeamLogo(
+                                        teamName = team.name,
+                                        abbr = team.abbr,
+                                        size = 24.dp,
+                                    )
+                                }
+                            }
+                            Text(opt)
+                        }
+                    },
                     onClick = {
                         onSelect(i)
                         expanded = false
@@ -1775,37 +1867,220 @@ private fun ByeWeekCard(row: ScheduleRowUi, cardShape: RoundedCornerShape) {
 
 @Composable
 private fun AwardCard(row: AwardRowUi) {
-    Column(
+    if (row.isMessage) {
+        Text(
+            text = row.title.orEmpty(),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(12.dp),
+        )
+        return
+    }
+
+    val cardShape = RoundedCornerShape(12.dp)
+    val accents = rankAccent(row.rankNum, MaterialTheme.colorScheme.primary)
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
+            .clip(cardShape)
             .background(
-                if (row.highlightUser) MaterialTheme.colorScheme.primaryContainer
-                else MaterialTheme.colorScheme.surfaceVariant,
+                if (row.highlightUser) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+            )
+            .border(
+                1.dp,
+                if (row.highlightUser) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                },
+                cardShape,
             )
             .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        row.lines.forEach { Text(it) }
+        if (!row.rankLabel.isNullOrBlank()) {
+            Box(
+                modifier = Modifier
+                    .size(36.dp)
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(accents.bg)
+                    .border(1.dp, accents.border, RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = row.rankLabel,
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = accents.fg,
+                )
+            }
+        }
+        if (!row.teamName.isNullOrBlank() && !row.abbr.isNullOrBlank()) {
+            TeamLogo(teamName = row.teamName, abbr = row.abbr, size = 40.dp)
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            val headline = when {
+                !row.playerName.isNullOrBlank() -> {
+                    listOfNotNull(row.position, row.playerName).joinToString(" ")
+                }
+                !row.title.isNullOrBlank() -> row.title
+                else -> row.abbr.orEmpty()
+            }
+            Text(
+                text = headline,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val meta = listOfNotNull(
+                row.abbr?.let { ab ->
+                    buildString {
+                        append(ab)
+                        row.yearLabel?.let { append(" · $it") }
+                    }
+                },
+                row.metaLine,
+                row.subtitle,
+            ).filter { it.isNotBlank() }
+            if (meta.isNotEmpty()) {
+                Text(
+                    text = meta.joinToString(" · "),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            row.statsLine?.takeIf { it.isNotBlank() }?.let {
+                Text(
+                    text = it,
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = FontWeight.SemiBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
 
 @Composable
 private fun BowlCard(bowl: BowlRowUi) {
+    val cardShape = RoundedCornerShape(12.dp)
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .clip(cardShape)
+            .background(
+                if (bowl.isUserInvolved) {
+                    MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f)
+                } else {
+                    MaterialTheme.colorScheme.surfaceVariant
+                },
+            )
+            .border(
+                1.dp,
+                if (bowl.isUserInvolved) {
+                    MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
+                } else {
+                    MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                },
+                cardShape,
+            )
             .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        Text(bowl.name, fontWeight = FontWeight.Bold)
+        Text(
+            text = bowl.name,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+        )
         Row(
             modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceEvenly,
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text(bowl.away)
-            Text(bowl.score, fontWeight = FontWeight.Bold)
-            Text(bowl.home)
+            BowlSide(
+                name = bowl.awayName,
+                abbr = bowl.awayAbbr,
+                rank = bowl.awayRank,
+                record = bowl.awayRecord,
+                modifier = Modifier.weight(1f),
+            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) {
+                Text(
+                    text = bowl.score,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                )
+                Text(
+                    text = if (bowl.played) "FINAL" else "PREVIEW",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            BowlSide(
+                name = bowl.homeName,
+                abbr = bowl.homeAbbr,
+                rank = bowl.homeRank,
+                record = bowl.homeRecord,
+                modifier = Modifier.weight(1f),
+            )
+        }
+    }
+}
+
+@Composable
+private fun BowlSide(
+    name: String?,
+    abbr: String,
+    rank: Int?,
+    record: String?,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        TeamLogo(
+            teamName = name,
+            abbr = abbr,
+            size = 44.dp,
+        )
+        Text(
+            text = abbr,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        val meta = buildList {
+            rank?.let { add("#$it") }
+            record?.let { add("($it)") }
+        }.joinToString(" ")
+        if (meta.isNotBlank()) {
+            Text(
+                text = meta,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
         }
     }
 }
@@ -2470,10 +2745,21 @@ private fun PlayersLeavingDialog(dialog: PlayersLeavingDialogUi, viewModel: Main
 private fun RecruitingClassDialog(rows: List<RankingRowUi>, onDismiss: () -> Unit) {
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Recruiting Class Rankings") },
+        title = {
+            Text(
+                "Recruiting Class Rankings",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        },
         text = {
-            LazyColumn(modifier = Modifier.height(280.dp)) {
-                items(rows) { row -> Text(row.line, modifier = Modifier.padding(vertical = 2.dp)) }
+            LazyColumn(
+                modifier = Modifier.height(360.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                items(rows) { row ->
+                    RankingRowCard(row = row, onClick = null)
+                }
             }
         },
         confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
@@ -2503,46 +2789,419 @@ private fun SaveDialog(state: MainUiState, viewModel: MainViewModel) {
 
 @Composable
 private fun RankingsDialog(state: MainUiState, viewModel: MainViewModel) {
-    SimpleListDialog(
-        title = "Team Rankings",
-        modeLabels = arrayOf(
-            "Poll Votes", "Conference Standings", "Strength of Sched", "Points Per Game",
-            "Opp Points Per Game", "Yards Per Game", "Opp Yards Per Game", "Pass Yards Per Game",
-            "Rush Yards Per Game", "Opp Pass YPG", "Opp Rush YPG", "TO Differential",
-            "Off Talent", "Def Talent", "Program Power", "Recruiting Class",
-        ),
-        modeIndex = state.rankingsModeIndex,
-        onModeChange = viewModel::setRankingsMode,
-        lines = state.rankingsRows.map { it.line },
-        onLineClick = viewModel::examineTeamFromRankingLine,
-        onDismiss = viewModel::dismissRankingsDialog,
+    val modeLabels = arrayOf(
+        "Poll Votes", "Conference Standings", "Strength of Sched", "Points Per Game",
+        "Opp Points Per Game", "Yards Per Game", "Opp Yards Per Game", "Pass Yards Per Game",
+        "Rush Yards Per Game", "Opp Pass YPG", "Opp Rush YPG", "TO Differential",
+        "Off Talent", "Def Talent", "Program Power", "Recruiting Class",
+    )
+    AlertDialog(
+        onDismissRequest = viewModel::dismissRankingsDialog,
+        title = {
+            Text(
+                "Team Rankings",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SpinnerDropdown(
+                    label = "View",
+                    options = modeLabels.toList(),
+                    selectedIndex = state.rankingsModeIndex,
+                    onSelect = viewModel::setRankingsMode,
+                )
+                LazyColumn(
+                    modifier = Modifier.height(360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(
+                        items = state.rankingsRows,
+                        key = { row ->
+                            if (row.isSectionHeader) {
+                                "hdr-${row.sectionTitle}"
+                            } else {
+                                "${row.rankLabel}-${row.abbr}-${row.statValue}-${row.line}"
+                            }
+                        },
+                    ) { row ->
+                        RankingRowCard(
+                            row = row,
+                            onClick = if (row.teamName != null) {
+                                { viewModel.examineTeamFromRankingRow(row) }
+                            } else {
+                                null
+                            },
+                        )
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = viewModel::dismissRankingsDialog) { Text("OK") }
+        },
     )
 }
 
 @Composable
+private fun RankingRowCard(
+    row: RankingRowUi,
+    onClick: (() -> Unit)?,
+) {
+    if (row.isSectionHeader) {
+        Text(
+            text = row.sectionTitle.orEmpty().uppercase(),
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 4.dp, bottom = 2.dp),
+        )
+        return
+    }
+
+    val cardShape = RoundedCornerShape(12.dp)
+    val brandPrimary = MaterialTheme.colorScheme.primary
+    val accents = rankAccent(row.rankNum, brandPrimary)
+    val bg = if (row.isUserTeam) {
+        MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    val border = if (row.isUserTeam) {
+        brandPrimary.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(bg)
+            .border(1.dp, border, cardShape)
+            .then(
+                if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier,
+            )
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(10.dp))
+                .background(accents.bg)
+                .border(1.dp, accents.border, RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                text = row.rankLabel.ifBlank { row.rankNum.toString() },
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = accents.fg,
+                maxLines = 1,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (!row.teamName.isNullOrBlank() && !row.abbr.isNullOrBlank()) {
+            TeamLogo(
+                teamName = row.teamName,
+                abbr = row.abbr,
+                size = 36.dp,
+            )
+        }
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = row.abbr ?: row.teamName.orEmpty(),
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            val meta = buildList {
+                row.pollRank?.let { add("#$it") }
+                row.record?.let { add("($it)") }
+            }.joinToString(" ")
+            if (meta.isNotBlank()) {
+                Text(
+                    text = meta,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        Text(
+            text = row.statValue,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun LeagueHistoryDialog(state: MainUiState, viewModel: MainViewModel) {
-    SimpleListDialog(
+    HistoryListDialog(
         title = "League History / Records",
         modeLabels = arrayOf("League History", "League Records"),
         modeIndex = state.leagueHistoryModeIndex,
         onModeChange = viewModel::setLeagueHistoryMode,
-        lines = state.leagueHistoryRows.map { it.text },
-        onLineClick = {},
+        rows = state.leagueHistoryRows,
         onDismiss = viewModel::dismissLeagueHistoryDialog,
     )
 }
 
 @Composable
 private fun TeamHistoryDialog(state: MainUiState, viewModel: MainViewModel) {
-    SimpleListDialog(
+    HistoryListDialog(
         title = "Team History",
         modeLabels = arrayOf("Team History", "Team Records", "Hall of Fame"),
         modeIndex = state.teamHistoryModeIndex,
         onModeChange = viewModel::setTeamHistoryMode,
-        lines = state.teamHistoryRows.map { it.text },
-        onLineClick = {},
+        rows = state.teamHistoryRows,
         onDismiss = viewModel::dismissTeamHistoryDialog,
     )
+}
+
+@Composable
+private fun HistoryListDialog(
+    title: String,
+    modeLabels: Array<String>,
+    modeIndex: Int,
+    onModeChange: (Int) -> Unit,
+    rows: List<HistoryRowUi>,
+    onDismiss: () -> Unit,
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                title,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+        },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SpinnerDropdown(
+                    label = "View",
+                    options = modeLabels.toList(),
+                    selectedIndex = modeIndex,
+                    onSelect = onModeChange,
+                )
+                LazyColumn(
+                    modifier = Modifier.height(360.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    items(rows) { row ->
+                        HistoryRowCard(row)
+                    }
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = onDismiss) { Text("OK") } },
+    )
+}
+
+@Composable
+private fun HistoryRowCard(row: HistoryRowUi) {
+    when (row.kind) {
+        HistoryRowKind.SECTION -> {
+            Text(
+                text = row.title.orEmpty().uppercase(),
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 4.dp, bottom = 2.dp),
+            )
+        }
+
+        HistoryRowKind.SUMMARY_STAT -> {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = row.title.orEmpty(),
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Text(
+                    text = row.value.orEmpty(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+
+        HistoryRowKind.RECORD -> {
+            val cardShape = RoundedCornerShape(12.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(cardShape)
+                    .background(
+                        if (row.isUserRelated) {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    )
+                    .border(
+                        1.dp,
+                        if (row.isUserRelated) {
+                            MaterialTheme.colorScheme.primary.copy(alpha = 0.45f)
+                        } else {
+                            MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
+                        },
+                        cardShape,
+                    )
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (!row.teamName.isNullOrBlank() && !row.abbr.isNullOrBlank()) {
+                    TeamLogo(teamName = row.teamName, abbr = row.abbr, size = 36.dp)
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = row.title.orEmpty(),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                    Text(
+                        text = listOfNotNull(row.holder, row.yearLabel).joinToString(" · "),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
+                Text(
+                    text = row.value.orEmpty(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+            }
+        }
+
+        HistoryRowKind.YEAR -> {
+            val cardShape = RoundedCornerShape(12.dp)
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(cardShape)
+                    .background(
+                        if (row.isUserRelated) {
+                            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.5f)
+                        } else {
+                            MaterialTheme.colorScheme.surfaceVariant
+                        },
+                    )
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.18f),
+                        cardShape,
+                    )
+                    .padding(12.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                if (!row.teamName.isNullOrBlank() && !row.abbr.isNullOrBlank()) {
+                    TeamLogo(teamName = row.teamName, abbr = row.abbr, size = 40.dp)
+                }
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Text(
+                        text = row.title.orEmpty(),
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    row.value?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.bodySmall,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                    row.holder?.takeIf { it.isNotBlank() }?.let {
+                        Text(
+                            text = it,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                    }
+                }
+            }
+        }
+
+        HistoryRowKind.HOF -> {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .border(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                        RoundedCornerShape(12.dp),
+                    )
+                    .padding(12.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                Text(
+                    text = row.title.orEmpty(),
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                )
+                if (row.text.isNotBlank()) {
+                    Text(
+                        text = row.text,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        }
+
+        HistoryRowKind.TEXT -> {
+            Text(
+                text = row.text,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(12.dp),
+            )
+        }
+    }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -2627,6 +3286,12 @@ private fun RenameDialog(dialog: RenameDialogUi, viewModel: MainViewModel) {
 private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val cardShape = RoundedCornerShape(14.dp)
+    val awayScout = dialog.awayScout
+    val homeScout = dialog.homeScout
+    val awayBox = dialog.awayBox
+    val homeBox = dialog.homeBox
+    val showScoutUi = !dialog.played && awayScout != null && homeScout != null
+    val showResultUi = dialog.played && awayBox != null && homeBox != null
     ModalBottomSheet(
         onDismissRequest = viewModel::dismissGameDialog,
         sheetState = sheetState,
@@ -2638,14 +3303,16 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                 .padding(horizontal = 20.dp)
                 .padding(bottom = 20.dp),
         ) {
-            Text(
-                text = dialog.title,
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
+            if (!showScoutUi && !showResultUi) {
+                Text(
+                    text = dialog.title,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                Spacer(modifier = Modifier.height(12.dp))
+            }
             Column(
                 modifier = Modifier
                     .weight(1f)
@@ -2654,133 +3321,745 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                if (dialog.played) {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(cardShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), cardShape)
-                            .padding(16.dp),
-                        horizontalArrangement = Arrangement.SpaceEvenly,
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.weight(1f),
+                when {
+                    showScoutUi && awayScout != null && homeScout != null -> {
+                        GameScoutMatchupHeader(
+                            away = awayScout,
+                            home = homeScout,
+                            gameName = dialog.gameName.ifBlank { dialog.title },
+                            rivalryLabel = dialog.rivalryLabel,
+                        )
+                        Text(
+                            "SCOUT REPORT",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
                         ) {
-                            Text(
-                                dialog.awayName.orEmpty(),
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            GameScoutTeamCard(team = awayScout, modifier = Modifier.weight(1f))
+                            GameScoutTeamCard(team = homeScout, modifier = Modifier.weight(1f))
+                        }
+                    }
+
+                    showResultUi && awayBox != null && homeBox != null -> {
+                        GameResultMatchupHeader(
+                            away = awayBox,
+                            home = homeBox,
+                            gameName = dialog.gameName.ifBlank { dialog.title },
+                            otLabel = dialog.otLabel,
+                            awayWon = dialog.awayWon,
+                            rivalryLabel = dialog.rivalryLabel,
+                        )
+                        Text(
+                            "BOX SCORE",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        ) {
+                            GameBoxTeamCard(
+                                team = awayBox,
+                                won = dialog.awayWon == true,
+                                modifier = Modifier.weight(1f),
                             )
-                            Text(
-                                dialog.awayScore.orEmpty(),
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.headlineMedium,
+                            GameBoxTeamCard(
+                                team = homeBox,
+                                won = dialog.awayWon == false,
+                                modifier = Modifier.weight(1f),
                             )
                         }
+                    }
+
+                    else -> {
+                        if (dialog.played) {
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clip(cardShape)
+                                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                                    .border(
+                                        1.dp,
+                                        MaterialTheme.colorScheme.primary.copy(alpha = 0.35f),
+                                        cardShape,
+                                    )
+                                    .padding(16.dp),
+                                horizontalArrangement = Arrangement.SpaceEvenly,
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        dialog.awayName.orEmpty(),
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        dialog.awayScore.orEmpty(),
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.headlineMedium,
+                                    )
+                                }
+                                Text(
+                                    dialog.otLabel.orEmpty(),
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.padding(horizontal = 8.dp),
+                                )
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    modifier = Modifier.weight(1f),
+                                ) {
+                                    Text(
+                                        dialog.homeName.orEmpty(),
+                                        textAlign = TextAlign.Center,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                    Text(
+                                        dialog.homeScore.orEmpty(),
+                                        fontWeight = FontWeight.Bold,
+                                        style = MaterialTheme.typography.headlineMedium,
+                                    )
+                                }
+                            }
+                        }
+
                         Text(
-                            dialog.otLabel.orEmpty(),
+                            if (dialog.played) "BOX SCORE" else "SCOUT REPORT",
                             style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
+                            fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.padding(horizontal = 8.dp),
                         )
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            modifier = Modifier.weight(1f),
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(cardShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant)
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                                    cardShape,
+                                )
+                                .padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
                             Text(
-                                dialog.homeName.orEmpty(),
-                                textAlign = TextAlign.Center,
-                                style = MaterialTheme.typography.labelMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                dialog.left.trimEnd(),
+                                style = MaterialTheme.typography.bodySmall,
+                                modifier = Modifier.weight(1f),
                             )
                             Text(
-                                dialog.homeScore.orEmpty(),
-                                fontWeight = FontWeight.Bold,
-                                style = MaterialTheme.typography.headlineMedium,
+                                dialog.center.trimEnd(),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
+                            )
+                            Text(
+                                dialog.right.trimEnd(),
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f),
                             )
                         }
                     }
                 }
 
-                Text(
-                    if (dialog.played) "BOX SCORE" else "SCOUT REPORT",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clip(cardShape)
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                        .border(
-                            1.dp,
-                            MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                            cardShape,
+                when {
+                    showResultUi && awayBox != null && homeBox != null -> {
+                        Text(
+                            "SCHEMES",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
                         )
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Text(
-                        dialog.left.trimEnd(),
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        dialog.center.trimEnd(),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Text(
-                        dialog.right.trimEnd(),
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.SemiBold,
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                if (dialog.bottom.isNotBlank()) {
-                    Text(
-                        if (dialog.played) "GAME LOG" else "NOTES",
-                        style = MaterialTheme.typography.labelLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                    Text(
-                        text = dialog.bottom.trim(),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(cardShape)
-                            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
-                            .border(
-                                1.dp,
-                                MaterialTheme.colorScheme.outline.copy(alpha = 0.15f),
-                                cardShape,
+                        GameSchemesCard(away = awayBox, home = homeBox)
+                        if (dialog.gameLogLines.isNotEmpty()) {
+                            Text(
+                                "GAME LOG",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
                             )
-                            .padding(12.dp),
-                    )
+                            GameLogCard(lines = dialog.gameLogLines)
+                        }
+                    }
+
+                    !showResultUi && dialog.bottom.isNotBlank() -> {
+                        Text(
+                            if (dialog.played) "GAME LOG" else "NOTES",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = dialog.bottom.trim(),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(cardShape)
+                                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.85f))
+                                .border(
+                                    1.dp,
+                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.28f),
+                                    cardShape,
+                                )
+                                .padding(12.dp),
+                        )
+                    }
                 }
 
                 if (!dialog.played && dialog.canCoach) {
                     Button(
                         onClick = { viewModel.startCoachGame(dialog.gameKey) },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
                     ) {
-                        Text("Coach this game")
+                        Text(
+                            "Coach this game",
+                            style = MaterialTheme.typography.titleSmall,
+                            fontWeight = FontWeight.Bold,
+                        )
                     }
                 }
 
                 Spacer(modifier = Modifier.height(8.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun GameResultMatchupHeader(
+    away: GameBoxTeamUi,
+    home: GameBoxTeamUi,
+    gameName: String,
+    otLabel: String?,
+    awayWon: Boolean?,
+    rivalryLabel: String?,
+) {
+    val awayColors = rememberTeamColors(away.name, away.abbr)
+    val homeColors = rememberTeamColors(home.name, home.abbr)
+    val cardShape = RoundedCornerShape(14.dp)
+    val headerBrush = when (awayWon) {
+        true -> Brush.horizontalGradient(
+            listOf(
+                FcWin.copy(alpha = 0.55f),
+                MaterialTheme.colorScheme.surfaceVariant,
+                FcLoss.copy(alpha = 0.35f),
+            ),
+        )
+        false -> Brush.horizontalGradient(
+            listOf(
+                FcLoss.copy(alpha = 0.35f),
+                MaterialTheme.colorScheme.surfaceVariant,
+                FcWin.copy(alpha = 0.55f),
+            ),
+        )
+        null -> Brush.horizontalGradient(
+            listOf(
+                awayColors.primary.copy(alpha = 0.42f),
+                MaterialTheme.colorScheme.surfaceVariant,
+                homeColors.primary.copy(alpha = 0.42f),
+            ),
+        )
+    }
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(headerBrush)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), cardShape)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GameResultHeaderTeam(
+                team = away,
+                won = awayWon == true,
+                modifier = Modifier.weight(1f),
+            )
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            ) {
+                Text(
+                    text = otLabel.takeUnless { it.isNullOrBlank() } ?: "@",
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary,
+                )
+                Text(
+                    text = "FINAL",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            GameResultHeaderTeam(
+                team = home,
+                won = awayWon == false,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            text = gameName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (rivalryLabel != null) {
+            Text(
+                text = rivalryLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun GameResultHeaderTeam(
+    team: GameBoxTeamUi,
+    won: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        TeamLogo(
+            teamName = team.name,
+            abbr = team.abbr,
+            size = 52.dp,
+        )
+        Text(
+            text = team.abbr,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = "(${team.record})",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = team.score.toString(),
+            style = MaterialTheme.typography.headlineMedium,
+            fontWeight = FontWeight.Bold,
+            color = if (won) {
+                Color(0xFF81C784)
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+        )
+    }
+}
+
+@Composable
+private fun GameBoxTeamCard(
+    team: GameBoxTeamUi,
+    won: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    val teamColors = rememberTeamColors(team.name, team.abbr)
+    val cardShape = RoundedCornerShape(14.dp)
+    val accent = if (won) FcWin else teamColors.primary
+    Column(
+        modifier = modifier
+            .clip(cardShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, accent.copy(alpha = 0.45f), cardShape),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(accent),
+        )
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = team.abbr,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (won) {
+                    Text(
+                        text = "W",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = Color(0xFF81C784),
+                    )
+                }
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                GameScoutMetricTile(
+                    label = "PASS",
+                    value = team.passYards.toString(),
+                    modifier = Modifier.weight(1f),
+                    valueColor = MaterialTheme.colorScheme.onSurface,
+                )
+                GameScoutMetricTile(
+                    label = "RUSH",
+                    value = team.rushYards.toString(),
+                    modifier = Modifier.weight(1f),
+                    valueColor = MaterialTheme.colorScheme.onSurface,
+                )
+                GameScoutMetricTile(
+                    label = "TO",
+                    value = team.turnovers.toString(),
+                    modifier = Modifier.weight(1f),
+                    valueColor = if (team.turnovers >= 3) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun GameSchemesCard(
+    away: GameBoxTeamUi,
+    home: GameBoxTeamUi,
+) {
+    val cardShape = RoundedCornerShape(14.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f), cardShape)
+            .padding(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        GameSchemeTeamColumn(team = away, modifier = Modifier.weight(1f))
+        GameSchemeTeamColumn(team = home, modifier = Modifier.weight(1f))
+    }
+}
+
+@Composable
+private fun GameSchemeTeamColumn(
+    team: GameBoxTeamUi,
+    modifier: Modifier = Modifier,
+) {
+    val teamColors = rememberTeamColors(team.name, team.abbr)
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .border(1.dp, teamColors.primary.copy(alpha = 0.4f), RoundedCornerShape(12.dp))
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            text = team.abbr,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        GameScoutMetaLine(label = "OFF", value = team.offPhilosophy)
+        GameScoutMetaLine(label = "DEF", value = team.defSystem)
+    }
+}
+
+@Composable
+private fun GameLogCard(lines: List<String>) {
+    val cardShape = RoundedCornerShape(14.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.9f))
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.28f), cardShape)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        lines.forEach { line ->
+            val kind = gameLogLineKind(line)
+            Text(
+                text = line,
+                style = when (kind) {
+                    GameLogLineKind.MARKER -> MaterialTheme.typography.labelMedium
+                    GameLogLineKind.SCORE -> MaterialTheme.typography.bodySmall
+                    GameLogLineKind.META -> MaterialTheme.typography.labelSmall
+                    GameLogLineKind.NORMAL -> MaterialTheme.typography.bodySmall
+                },
+                fontWeight = when (kind) {
+                    GameLogLineKind.MARKER, GameLogLineKind.SCORE -> FontWeight.SemiBold
+                    else -> FontWeight.Normal
+                },
+                color = when (kind) {
+                    GameLogLineKind.MARKER -> MaterialTheme.colorScheme.primary
+                    GameLogLineKind.SCORE -> MaterialTheme.colorScheme.onSurface
+                    GameLogLineKind.META -> MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.75f)
+                    GameLogLineKind.NORMAL -> MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+        }
+    }
+}
+
+private enum class GameLogLineKind {
+    META,
+    MARKER,
+    SCORE,
+    NORMAL,
+}
+
+private fun gameLogLineKind(line: String): GameLogLineKind {
+    val trimmed = line.trim()
+    if (trimmed.startsWith("LOG:") || trimmed.startsWith("---") || trimmed.startsWith("====")) {
+        return GameLogLineKind.META
+    }
+    if (Regex("""^\dQ\s+\d+:\d+""").containsMatchIn(trimmed) ||
+        trimmed.equals("FINAL", ignoreCase = true) ||
+        trimmed.contains("Time has expired", ignoreCase = true)
+    ) {
+        return GameLogLineKind.MARKER
+    }
+    if (trimmed.contains("TOUCHDOWN", ignoreCase = true) ||
+        trimmed.contains(" TD", ignoreCase = true) ||
+        trimmed.contains("field goal", ignoreCase = true) ||
+        trimmed.contains(" FG", ignoreCase = true) ||
+        trimmed.contains("safety", ignoreCase = true)
+    ) {
+        return GameLogLineKind.SCORE
+    }
+    return GameLogLineKind.NORMAL
+}
+
+@Composable
+private fun GameScoutMatchupHeader(
+    away: GameScoutTeamUi,
+    home: GameScoutTeamUi,
+    gameName: String,
+    rivalryLabel: String?,
+) {
+    val awayColors = rememberTeamColors(away.name, away.abbr)
+    val homeColors = rememberTeamColors(home.name, home.abbr)
+    val cardShape = RoundedCornerShape(14.dp)
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        awayColors.primary.copy(alpha = 0.42f),
+                        MaterialTheme.colorScheme.surfaceVariant,
+                        homeColors.primary.copy(alpha = 0.42f),
+                    ),
+                ),
+            )
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), cardShape)
+            .padding(16.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            GameScoutHeaderTeam(
+                team = away,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                text = "@",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.padding(horizontal = 8.dp),
+            )
+            GameScoutHeaderTeam(
+                team = home,
+                modifier = Modifier.weight(1f),
+            )
+        }
+        Text(
+            text = gameName,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            textAlign = TextAlign.Center,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        if (rivalryLabel != null) {
+            Text(
+                text = rivalryLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(MaterialTheme.colorScheme.secondaryContainer)
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun GameScoutHeaderTeam(
+    team: GameScoutTeamUi,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        TeamLogo(
+            teamName = team.name,
+            abbr = team.abbr,
+            size = 56.dp,
+        )
+        Text(
+            text = team.abbr,
+            style = MaterialTheme.typography.titleSmall,
+            fontWeight = FontWeight.Bold,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        Text(
+            text = "#${team.rank}",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun GameScoutTeamCard(
+    team: GameScoutTeamUi,
+    modifier: Modifier = Modifier,
+) {
+    val teamColors = rememberTeamColors(team.name, team.abbr)
+    val cardShape = RoundedCornerShape(14.dp)
+    Column(
+        modifier = modifier
+            .clip(cardShape)
+            .background(MaterialTheme.colorScheme.surfaceVariant)
+            .border(1.dp, teamColors.primary.copy(alpha = 0.45f), cardShape),
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(4.dp)
+                .background(teamColors.primary),
+        )
+        Column(
+            modifier = Modifier.padding(10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                text = team.abbr,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.Bold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            GameScoutMetaLine(label = "OFF", value = team.offPhilosophy)
+            GameScoutMetaLine(label = "DEF", value = team.defSystem)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                GameScoutMetricTile("OFF", team.offTalent.toString(), Modifier.weight(1f))
+                GameScoutMetricTile("DEF", team.defTalent.toString(), Modifier.weight(1f))
+                GameScoutMetricTile("PWR", team.programPower.toString(), Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+@Composable
+private fun GameScoutMetaLine(label: String, value: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+@Composable
+private fun GameScoutMetricTile(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = ovrColor(value.toIntOrNull() ?: 0),
+) {
+    Column(
+        modifier = modifier
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(vertical = 8.dp, horizontal = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = valueColor,
+            maxLines = 1,
+        )
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
