@@ -2,6 +2,7 @@ package CFBsimPack.engine;
 
 /**
  * Accept/decline so the fouling team is worse off when possible.
+ * Enforces previous-spot or spot fouls with half-the-distance when near the goal.
  */
 public final class PenaltyResolver {
 
@@ -11,17 +12,23 @@ public final class PenaltyResolver {
         if (pending == null || pending.foul == null || pending.result == null) return;
         PenaltyCatalog.Foul foul = pending.foul;
         PlayState accepted = pending.before.copy();
-        int spot = accepted.yardLine;
+        int previousSpot = accepted.yardLine;
+        int enforceFrom = previousSpot;
+        if (foul.enforcement == PenaltyCatalog.Enforcement.SPOT && pending.foulSpotYardLine > 0) {
+            enforceFrom = Math.max(1, Math.min(99, pending.foulSpotYardLine));
+        }
 
+        int enforcedYards;
         if (foul.againstOffense) {
-            accepted.yardLine = Math.max(1, spot - foul.yards);
+            enforcedYards = yardsTowardOwnGoal(enforceFrom, foul.yards, foul.halfDistance);
+            accepted.yardLine = Math.max(1, enforceFrom - enforcedYards);
             accepted.down = pending.before.down;
-            accepted.yardsNeed = Math.min(99, pending.before.yardsNeed + foul.yards);
+            accepted.yardsNeed = Math.min(99, pending.before.yardsNeed + enforcedYards);
         } else {
-            accepted.yardLine = Math.min(99, spot + foul.yards);
-            int gained = accepted.yardLine - spot;
-            if (foul == PenaltyCatalog.Foul.DPI || foul == PenaltyCatalog.Foul.ROUGHING_PASSER
-                    || gained >= pending.before.yardsNeed) {
+            enforcedYards = yardsTowardOpponentGoal(enforceFrom, foul.yards, foul.halfDistance);
+            accepted.yardLine = Math.min(99, enforceFrom + enforcedYards);
+            int gained = accepted.yardLine - previousSpot;
+            if (foul.autoFirstDown || gained >= pending.before.yardsNeed) {
                 accepted.down = 1;
                 accepted.yardsNeed = Math.min(10, 100 - accepted.yardLine);
                 if (accepted.yardsNeed < 1) accepted.yardsNeed = 1;
@@ -57,12 +64,51 @@ public final class PenaltyResolver {
             pending.result.safety = false;
             pending.result.turnover = false;
             pending.result.possessionChanged = false;
-            pending.result.logLine = (pending.result.logLine != null ? pending.result.logLine + " " : "")
-                    + "PENALTY: " + foul.name().replace('_', ' ') + " on " + side
-                    + ", " + foul.yards + " yards (accepted).";
+            StringBuilder log = new StringBuilder();
+            if (pending.result.logLine != null && !pending.result.logLine.isEmpty()) {
+                log.append(pending.result.logLine).append(' ');
+            }
+            log.append("PENALTY: ").append(foul.name().replace('_', ' ')).append(" on ").append(side);
+            if (foul.enforcement == PenaltyCatalog.Enforcement.SPOT) {
+                log.append(" at the ").append(enforceFrom);
+            }
+            log.append(", ").append(enforcedYards).append(" yards");
+            if (foul.halfDistance && enforcedYards < foul.yards) {
+                log.append(" (half the distance)");
+            }
+            if (foul.autoFirstDown) {
+                log.append(", automatic first down");
+            }
+            log.append(" (accepted).");
+            if (pending.ejectedPlayer != null) {
+                log.append(" ").append(pending.ejectedPlayer.name).append(" ejected.");
+            }
+            pending.result.logLine = log.toString();
         } else {
             pending.result.logLine = (pending.result.logLine != null ? pending.result.logLine + " " : "")
                     + "PENALTY: " + foul.name().replace('_', ' ') + " declined.";
         }
+    }
+
+    /** Yards lost by offense (toward own goal). */
+    public static int yardsTowardOwnGoal(int spot, int foulYards, boolean halfDistance) {
+        int toGoal = Math.max(1, spot);
+        int yards = Math.min(foulYards, toGoal - 1);
+        if (yards < 1) yards = 1;
+        if (halfDistance && foulYards >= toGoal) {
+            yards = Math.max(1, toGoal / 2);
+        }
+        return yards;
+    }
+
+    /** Yards gained by offense (toward opponent goal). */
+    public static int yardsTowardOpponentGoal(int spot, int foulYards, boolean halfDistance) {
+        int toGoal = Math.max(1, 100 - spot);
+        int yards = Math.min(foulYards, toGoal - 1);
+        if (yards < 1) yards = 1;
+        if (halfDistance && foulYards >= toGoal) {
+            yards = Math.max(1, toGoal / 2);
+        }
+        return yards;
     }
 }

@@ -25,11 +25,30 @@ public final class GameSession {
     private static boolean needsTeamPicker = false;
     /** Active live-coach game (optional HC mode). */
     private static Game activeCoachGame;
+    /** True while the user has stepped out of Talent Hub to browse Main mid-offseason. */
+    private static boolean stayingOnMainDuringOffseason = false;
+    /** Save slot last loaded or manually saved; null until the user picks one. */
+    private static Integer activeSaveSlot = null;
+    /** Set when a coached game finishes so Main can autosave + confirm. */
+    private static boolean pendingCoachResultSave = false;
+    private static String pendingCoachResultSummary = null;
 
     private GameSession() {}
 
     public static void setLeague(League l) {
         league = l;
+    }
+
+    public static void setActiveSaveSlot(Integer slot) {
+        activeSaveSlot = slot;
+    }
+
+    public static Integer getActiveSaveSlot() {
+        return activeSaveSlot;
+    }
+
+    public static boolean hasActiveSaveSlot() {
+        return activeSaveSlot != null;
     }
 
     public static void setNeedsTeamPicker(boolean needs) {
@@ -63,7 +82,19 @@ public final class GameSession {
         needsTeamPicker = false;
         needsOocScheduling = false;
         activeCoachGame = null;
+        stayingOnMainDuringOffseason = false;
+        activeSaveSlot = null;
+        pendingCoachResultSave = false;
+        pendingCoachResultSummary = null;
         OffseasonSession.clear();
+    }
+
+    public static void setStayingOnMainDuringOffseason(boolean staying) {
+        stayingOnMainDuringOffseason = staying;
+    }
+
+    public static boolean isStayingOnMainDuringOffseason() {
+        return stayingOnMainDuringOffseason;
     }
 
     public static void setActiveCoachGame(Game g) {
@@ -76,6 +107,39 @@ public final class GameSession {
 
     public static void clearActiveCoachGame() {
         activeCoachGame = null;
+    }
+
+    /**
+     * Clears the active coach game and, if it finished, marks Main to autosave / confirm.
+     */
+    public static void finishCoachGame(Game g) {
+        if (g != null && g.hasPlayed) {
+            pendingCoachResultSave = true;
+            Team user = league != null ? league.userTeam : null;
+            if (user != null && (g.homeTeam == user || g.awayTeam == user)) {
+                int userScore = g.homeTeam == user ? g.homeScore : g.awayScore;
+                int oppScore = g.homeTeam == user ? g.awayScore : g.homeScore;
+                pendingCoachResultSummary = userScore + "-" + oppScore;
+            } else {
+                pendingCoachResultSummary = g.homeScore + "-" + g.awayScore;
+            }
+        } else {
+            pendingCoachResultSave = false;
+            pendingCoachResultSummary = null;
+        }
+        activeCoachGame = null;
+    }
+
+    public static boolean consumePendingCoachResultSave() {
+        boolean pending = pendingCoachResultSave;
+        pendingCoachResultSave = false;
+        return pending;
+    }
+
+    public static String consumePendingCoachResultSummary() {
+        String s = pendingCoachResultSummary;
+        pendingCoachResultSummary = null;
+        return s;
     }
 
     public static boolean readyOffseason() {
@@ -98,18 +162,21 @@ public final class GameSession {
         setLeague(l);
         OffseasonSession.begin(l, off);
         pendingOffseasonResult = OffseasonResult.NONE;
+        stayingOnMainDuringOffseason = false;
     }
 
     public static void beginOffseason(League l, LeagueOffseason off, OffseasonSession.Phase startPhase) {
         setLeague(l);
         OffseasonSession.begin(l, off, startPhase);
         pendingOffseasonResult = OffseasonResult.NONE;
+        stayingOnMainDuringOffseason = false;
     }
 
     public static void clearOffseason() {
         OffseasonSession.clear();
         pendingOffseasonResult = OffseasonResult.NONE;
         pendingRemainingBudget = -1;
+        stayingOnMainDuringOffseason = false;
     }
 
     public static void setPendingOffseasonResult(OffseasonResult result) {

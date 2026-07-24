@@ -15,6 +15,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 
 /**
@@ -29,14 +30,21 @@ public class League {
     public static final int REGULAR_SEASON_GAMES = 12;
     /** Conference championship week index (after regular season). */
     public static final int WEEK_CCG = 13;
-    /** Bowl scheduling week (after CCG). */
-    public static final int WEEK_BOWL_SCHEDULE = 13;
-    /** Bowl games played. */
-    public static final int WEEK_BOWLS = 14;
+    /** Schedule CFP field + bowls (same week as CCG play). */
+    public static final int WEEK_POSTSEASON_SCHEDULE = 13;
+    /** @deprecated use {@link #WEEK_POSTSEASON_SCHEDULE} */
+    @Deprecated
+    public static final int WEEK_BOWL_SCHEDULE = WEEK_POSTSEASON_SCHEDULE;
+    /** CFP first round + non-CFP bowls. */
+    public static final int WEEK_CFP_FIRST_ROUND = 14;
+    /** CFP quarterfinals. */
+    public static final int WEEK_CFP_QUARTERS = 15;
+    /** CFP semifinals. */
+    public static final int WEEK_CFP_SEMIS = 16;
     /** National championship. */
-    public static final int WEEK_NCG = 15;
+    public static final int WEEK_NCG = 17;
     /** Season complete; recruiting begins. */
-    public static final int WEEK_SEASON_END = 16;
+    public static final int WEEK_SEASON_END = 18;
     //Lists of conferences/teams
     public ArrayList<String[]> leagueHistory;
     public ArrayList<String> heismanHistory;
@@ -52,13 +60,18 @@ public class League {
     public TeamStreak longestActiveWinStreak;
 
 
-    //Current week, 1-14
+    // Current week: 0 … WEEK_SEASON_END
     public int currentWeek;
 
-    //Bowl Games
+    // Postseason
     public boolean hasScheduledBowls;
-    public Game semiG14;
-    public Game semiG23;
+    /** CFP field in seed order (#1 at index 0). */
+    public ArrayList<Team> cfpField;
+    /** Teams among {@link #cfpField} that earned automatic conference-champ bids. */
+    public HashSet<Team> cfpAutoBids;
+    public Game[] cfpFirstRound;
+    public Game[] cfpQuarters;
+    public Game[] cfpSemis;
     public Game ncg;
     public Game[] bowlGames;
 
@@ -83,9 +96,6 @@ public class League {
     ArrayList<Player> allAmericans;
     private String allAmericanStr;
 
-    public String[] bowlNames = {"Lilac Bowl", "Apple Bowl", "Salty Bowl", "Salsa Bowl", "Mango Bowl",
-            "Patriot Bowl", "Salad Bowl", "Frost Bowl", "Tropical Bowl", "I'd Rather Bowl"};
-
     public static final String[] donationNames = {"Mark Eeslee", "Lee Sin", "Brent Uttwipe", "Gabriel Kemble",
             "Jon Stupak", "Kiergan Ren", "Dean Steinkuhler", "Declan Greally", "Parks Wilson", "Darren Ryder"};
 
@@ -96,7 +106,9 @@ public class League {
     public League(String namesCSV, String lastNamesCSV, String teamsCSV) {
         heismanDecided = false;
         hasScheduledBowls = false;
-        bowlGames = new Game[10];
+        cfpField = new ArrayList<>();
+        cfpAutoBids = new HashSet<>();
+        bowlGames = new Game[0];
         leagueHistory = new ArrayList<String[]>();
         heismanHistory = new ArrayList<String>();
         currentWeek = 0;
@@ -144,7 +156,9 @@ public class League {
             boolean ignored) {
         heismanDecided = false;
         hasScheduledBowls = false;
-        bowlGames = new Game[10];
+        cfpField = new ArrayList<>();
+        cfpAutoBids = new HashSet<>();
+        bowlGames = new Game[0];
         leagueHistory = new ArrayList<String[]>();
         heismanHistory = new ArrayList<String>();
         currentWeek = 0;
@@ -244,6 +258,13 @@ public class League {
         }
         prepareSeasonSchedule();
         hasScheduledBowls = false;
+        cfpField = new ArrayList<>();
+        cfpAutoBids = new HashSet<>();
+        cfpFirstRound = null;
+        cfpQuarters = null;
+        cfpSemis = null;
+        ncg = null;
+        bowlGames = new Game[0];
     }
 
     /**
@@ -255,7 +276,9 @@ public class League {
         hasScheduledBowls = false;
         loadedInOffseason = false;
         loadedOffseasonPhase = OffseasonSession.Phase.RETENTION;
-        bowlGames = new Game[10];
+        cfpField = new ArrayList<>();
+        cfpAutoBids = new HashSet<>();
+        bowlGames = new Game[0];
         // This will reference one line at a time
         String line = null;
         currentWeek = 0;
@@ -295,7 +318,7 @@ public class League {
                 throw new IOException("Save from older version — start a new career.");
             }
             int saveVersion = Integer.parseInt(line.substring("SAVE_VERSION,".length()).trim());
-            if (saveVersion != 6) {
+            if (saveVersion != 6 && saveVersion != 7 && saveVersion != 8) {
                 throw new IOException("Save from older version — start a new career.");
             }
             line = bufferedReader.readLine();
@@ -376,12 +399,22 @@ public class League {
                 userTeam.hallOfFame.add(line);
             }
 
-            // Optional schedule + OOC contracts + mid-offseason blocks
+            // Optional season progress + schedule + team season + OOC + mid-offseason
             line = bufferedReader.readLine();
             boolean restoredSchedule = false;
+            boolean restoredSeasonProgress = false;
+            if (line != null && line.equals("SEASON_PROGRESS")) {
+                restoreSeasonProgress(bufferedReader);
+                restoredSeasonProgress = true;
+                line = bufferedReader.readLine();
+            }
             if (line != null && line.equals("SCHEDULE")) {
                 restoreScheduleFromSave(bufferedReader);
                 restoredSchedule = true;
+                line = bufferedReader.readLine();
+            }
+            if (line != null && line.equals("TEAM_SEASON")) {
+                restoreTeamSeasonBlock(bufferedReader);
                 line = bufferedReader.readLine();
             }
             if (line != null && line.equals("OOC_CONTRACTS")) {
@@ -419,6 +452,10 @@ public class League {
             if (!restoredSchedule) {
                 setUpSeasonSchedule();
             }
+            if (restoredSeasonProgress) {
+                syncConferenceWeeksFromCurrentWeek();
+                setTeamRanks();
+            }
 
         }
         catch(FileNotFoundException ex) {
@@ -455,7 +492,7 @@ public class League {
     }
 
      /**
-     * Plays week. If normal week, handled by conferences. If bowl week, handled here.
+     * Plays week. If normal week, handled by conferences. If postseason, handled here.
      */
     public void playWeek() {
         if ( currentWeek <= WEEK_CCG ) {
@@ -464,37 +501,23 @@ public class League {
             }
         }
 
-        if ( currentWeek == WEEK_BOWL_SCHEDULE ) {
-            // After CCG: schedule bowls
+        if ( currentWeek == WEEK_POSTSEASON_SCHEDULE ) {
             for (int i = 0; i < teamList.size(); ++i) {
                 teamList.get(i).updatePollScore();
             }
             Collections.sort( teamList, new TeamCompPoll() );
-
             schedBowlGames();
-        } else if ( currentWeek == WEEK_BOWLS ) {
+        } else if ( currentWeek == WEEK_CFP_FIRST_ROUND ) {
             ArrayList<Player> heismans = getHeisman();
             heismanHistory.add(heismans.get(0).position + " " + heismans.get(0).getInitialName() + " [" + heismans.get(0).getYrStr() + "], "
                     + heismans.get(0).team.abbr + " (" + heismans.get(0).team.wins + "-" + heismans.get(0).team.losses + ")");
-            playBowlGames();
+            playCfpFirstRoundAndBowls();
+        } else if ( currentWeek == WEEK_CFP_QUARTERS ) {
+            playCfpQuarters();
+        } else if ( currentWeek == WEEK_CFP_SEMIS ) {
+            playCfpSemis();
         } else if ( currentWeek == WEEK_NCG ) {
-            ncg.playGame();
-            if ( ncg.homeScore > ncg.awayScore ) {
-                ncg.homeTeam.semiFinalWL = "";
-                ncg.awayTeam.semiFinalWL = "";
-                ncg.homeTeam.natChampWL = "NCW";
-                ncg.awayTeam.natChampWL = "NCL";
-                ncg.homeTeam.totalNCs++;
-                ncg.awayTeam.totalNCLosses++;
-
-            } else {
-                ncg.homeTeam.semiFinalWL = "";
-                ncg.awayTeam.semiFinalWL = "";
-                ncg.awayTeam.natChampWL = "NCW";
-                ncg.homeTeam.natChampWL = "NCL";
-                ncg.awayTeam.totalNCs++;
-                ncg.homeTeam.totalNCLosses++;
-            }
+            playNationalChampionship();
         }
 
         setTeamRanks();
@@ -504,135 +527,103 @@ public class League {
     }
     
     /**
-     * Schedules bowl games based on team rankings.
+     * Selects the 12-team CFP field, schedules first round + conference-tied bowls.
      */
     public void schedBowlGames() {
-        //bowl week
         for (int i = 0; i < teamList.size(); ++i) {
             teamList.get(i).updatePollScore();
         }
-        Collections.sort( teamList, new TeamCompPoll() );
+        Collections.sort(teamList, new TeamCompPoll());
 
-        //semifinals
-        semiG14 = new Game( teamList.get(0), teamList.get(3), "Semis, 1v4" );
-        teamList.get(0).gameSchedule.add(semiG14);
-        teamList.get(3).gameSchedule.add(semiG14);
-
-        semiG23 = new Game( teamList.get(1), teamList.get(2), "Semis, 2v3" );
-        teamList.get(1).gameSchedule.add(semiG23);
-        teamList.get(2).gameSchedule.add(semiG23);
-
-        //other bowl games
-        //bowlNames = {"Lilac Bowl", "Apple Bowl", "Salty Bowl", "Salsa Bowl", "Mango Bowl",
-        //             "Patriot Bowl", "Salad Bowl", "Frost Bowl", "Tropical Bowl", "Music Bowl"};
-        bowlGames[0] = new Game( teamList.get(4), teamList.get(6), bowlNames[0] );
-        teamList.get(4).gameSchedule.add(bowlGames[0]);
-        teamList.get(6).gameSchedule.add(bowlGames[0]);
-
-        bowlGames[1] = new Game( teamList.get(5), teamList.get(7), bowlNames[1] );
-        teamList.get(5).gameSchedule.add(bowlGames[1]);
-        teamList.get(7).gameSchedule.add(bowlGames[1]);
-
-        bowlGames[2] = new Game( teamList.get(8), teamList.get(14), bowlNames[2] );
-        teamList.get(8).gameSchedule.add(bowlGames[2]);
-        teamList.get(14).gameSchedule.add(bowlGames[2]);
-
-        bowlGames[3] = new Game( teamList.get(9), teamList.get(15), bowlNames[3] );
-        teamList.get(9).gameSchedule.add(bowlGames[3]);
-        teamList.get(15).gameSchedule.add(bowlGames[3]);
-
-        bowlGames[4] = new Game( teamList.get(10), teamList.get(11), bowlNames[4] );
-        teamList.get(10).gameSchedule.add(bowlGames[4]);
-        teamList.get(11).gameSchedule.add(bowlGames[4]);
-
-        bowlGames[5] = new Game( teamList.get(12), teamList.get(13), bowlNames[5] );
-        teamList.get(12).gameSchedule.add(bowlGames[5]);
-        teamList.get(13).gameSchedule.add(bowlGames[5]);
-
-        bowlGames[6] = new Game( teamList.get(16), teamList.get(20), bowlNames[6] );
-        teamList.get(16).gameSchedule.add(bowlGames[6]);
-        teamList.get(20).gameSchedule.add(bowlGames[6]);
-
-        bowlGames[7] = new Game( teamList.get(17), teamList.get(21), bowlNames[7] );
-        teamList.get(17).gameSchedule.add(bowlGames[7]);
-        teamList.get(21).gameSchedule.add(bowlGames[7]);
-
-        bowlGames[8] = new Game( teamList.get(18), teamList.get(22), bowlNames[8] );
-        teamList.get(18).gameSchedule.add(bowlGames[8]);
-        teamList.get(22).gameSchedule.add(bowlGames[8]);
-
-        bowlGames[9] = new Game( teamList.get(19), teamList.get(23), bowlNames[9] );
-        teamList.get(19).gameSchedule.add(bowlGames[9]);
-        teamList.get(23).gameSchedule.add(bowlGames[9]);
-
+        Postseason.CfpSelection selection = Postseason.selectCfpField(teamList);
+        cfpField = new ArrayList<>(selection.field);
+        cfpAutoBids = new HashSet<>(selection.autoBids);
+        cfpFirstRound = Postseason.scheduleFirstRound(cfpField);
+        HashSet<Team> cfpSet = new HashSet<>(cfpField);
+        bowlGames = Postseason.matchBowls(teamList, cfpSet);
+        cfpQuarters = null;
+        cfpSemis = null;
+        ncg = null;
         hasScheduledBowls = true;
-
     }
 
-    /**
-     * Actually plays each bowl game.
-     */
+    /** Plays CFP first round + bowls; schedules quarterfinals. */
+    public void playCfpFirstRoundAndBowls() {
+        if (bowlGames != null) {
+            for (Game g : bowlGames) {
+                if (g != null) {
+                    Postseason.playBowl(g);
+                }
+            }
+        }
+        if (cfpFirstRound != null) {
+            for (Game g : cfpFirstRound) {
+                if (g != null) {
+                    Postseason.playCfpGame(g, "FRW", "FRL");
+                }
+            }
+        }
+        List<Team> alive = Postseason.byesPlusWinners(cfpField, cfpFirstRound);
+        cfpQuarters = Postseason.scheduleReseededRound(
+                alive, cfpField, Postseason.CFP_QUARTER_HOSTS, "CFP Quarter");
+    }
 
+    /** Plays CFP quarters; schedules semis. */
+    public void playCfpQuarters() {
+        if (cfpQuarters != null) {
+            for (Game g : cfpQuarters) {
+                if (g != null) {
+                    Postseason.playCfpGame(g, "QFW", "QFL");
+                }
+            }
+        }
+        List<Team> alive = Postseason.winnersOf(cfpQuarters);
+        cfpSemis = Postseason.scheduleReseededRound(
+                alive, cfpField, Postseason.CFP_SEMI_HOSTS, "CFP Semi");
+    }
+
+    /** Plays CFP semis; schedules NCG. */
+    public void playCfpSemis() {
+        if (cfpSemis != null) {
+            for (Game g : cfpSemis) {
+                if (g != null) {
+                    Postseason.playCfpGame(g, "SFW", "SFL");
+                }
+            }
+        }
+        List<Team> winners = Postseason.winnersOf(cfpSemis);
+        if (winners.size() >= 2) {
+            ncg = Postseason.scheduleNcg(winners.get(0), winners.get(1), cfpField);
+        }
+    }
+
+    /** Plays the national championship. */
+    public void playNationalChampionship() {
+        if (ncg == null) {
+            return;
+        }
+        ncg.playGame();
+        if (ncg.homeScore > ncg.awayScore) {
+            ncg.homeTeam.semiFinalWL = "";
+            ncg.awayTeam.semiFinalWL = "";
+            ncg.homeTeam.natChampWL = "NCW";
+            ncg.awayTeam.natChampWL = "NCL";
+            ncg.homeTeam.totalNCs++;
+            ncg.awayTeam.totalNCLosses++;
+        } else {
+            ncg.homeTeam.semiFinalWL = "";
+            ncg.awayTeam.semiFinalWL = "";
+            ncg.awayTeam.natChampWL = "NCW";
+            ncg.homeTeam.natChampWL = "NCL";
+            ncg.awayTeam.totalNCs++;
+            ncg.homeTeam.totalNCLosses++;
+        }
+    }
+
+    /** @deprecated use {@link #playCfpFirstRoundAndBowls()} */
+    @Deprecated
     public void playBowlGames() {
-        for (Game g : bowlGames) {
-            playBowl(g);
-        }
-
-        semiG14.playGame();
-        semiG23.playGame();
-        Team semi14winner;
-        Team semi23winner;
-        if ( semiG14.homeScore > semiG14.awayScore ) {
-            semiG14.homeTeam.semiFinalWL = "SFW";
-            semiG14.awayTeam.semiFinalWL = "SFL";
-            semiG14.awayTeam.totalBowlLosses++;
-            semiG14.homeTeam.totalBowls++;
-            semi14winner = semiG14.homeTeam;
-        } else {
-            semiG14.homeTeam.semiFinalWL = "SFL";
-            semiG14.awayTeam.semiFinalWL = "SFW";
-            semiG14.homeTeam.totalBowlLosses++;
-            semiG14.awayTeam.totalBowls++;
-            semi14winner = semiG14.awayTeam;
-        }
-        if ( semiG23.homeScore > semiG23.awayScore ) {
-            semiG23.homeTeam.semiFinalWL = "SFW";
-            semiG23.awayTeam.semiFinalWL = "SFL";
-            semiG23.homeTeam.totalBowls++;
-            semiG23.awayTeam.totalBowlLosses++;
-            semi23winner = semiG23.homeTeam;
-        } else {
-            semiG23.homeTeam.semiFinalWL = "SFL";
-            semiG23.awayTeam.semiFinalWL = "SFW";
-            semiG23.awayTeam.totalBowls++;
-            semiG23.homeTeam.totalBowlLosses++;
-            semi23winner = semiG23.awayTeam;
-        }
-
-        //schedule NCG
-        ncg = new Game( semi14winner, semi23winner, "NCG" );
-        semi14winner.gameSchedule.add( ncg );
-        semi23winner.gameSchedule.add(ncg);
-
-    }
-
-    /**
-     * Plays a particular bowl game
-     * @param g bowl game to be played
-     */
-    private void playBowl(Game g) {
-        g.playGame();
-        if ( g.homeScore > g.awayScore ) {
-            g.homeTeam.semiFinalWL = "BW";
-            g.awayTeam.semiFinalWL = "BL";
-            g.homeTeam.totalBowls++;
-            g.awayTeam.totalBowlLosses++;
-        } else {
-            g.homeTeam.semiFinalWL = "BL";
-            g.awayTeam.semiFinalWL = "BW";
-            g.homeTeam.totalBowlLosses++;
-            g.awayTeam.totalBowls++;
-        }
+        playCfpFirstRoundAndBowls();
     }
 
     /**
@@ -667,6 +658,13 @@ public class League {
         setUpSeasonSchedule();
 
         hasScheduledBowls = false;
+        cfpField = new ArrayList<>();
+        cfpAutoBids = new HashSet<>();
+        cfpFirstRound = null;
+        cfpQuarters = null;
+        cfpSemis = null;
+        ncg = null;
+        bowlGames = new Game[0];
     }
 
     /**
@@ -1422,83 +1420,74 @@ public class League {
      * @return string of all the bowls and their predictions
      */
     public String getBowlGameWatchStr() {
-        //if bowls arent scheduled yet, give predictions
+        StringBuilder sb = new StringBuilder();
         if (!hasScheduledBowls) {
-
             for (int i = 0; i < teamList.size(); ++i) {
                 teamList.get(i).updatePollScore();
             }
             Collections.sort(teamList, new TeamCompPoll());
-
-            StringBuilder sb = new StringBuilder();
-            Team t1;
-            Team t2;
-
-            sb.append("Semifinal 1v4:\n\t\t");
-            t1 = teamList.get(0);
-            t2 = teamList.get(3);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            sb.append("Semifinal 2v3:\n\t\t");
-            t1 = teamList.get(1);
-            t2 = teamList.get(2);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            sb.append(bowlNames[0]+":\n\t\t");
-            t1 = teamList.get(4);
-            t2 = teamList.get(6);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            sb.append(bowlNames[1]+":\n\t\t");
-            t1 = teamList.get(5);
-            t2 = teamList.get(7);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            sb.append(bowlNames[2]+":\n\t\t");
-            t1 = teamList.get(8);
-            t2 = teamList.get(14);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            sb.append(bowlNames[3]+":\n\t\t");
-            t1 = teamList.get(9);
-            t2 = teamList.get(15);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            sb.append(bowlNames[4]+":\n\t\t");
-            t1 = teamList.get(10);
-            t2 = teamList.get(11);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            sb.append(bowlNames[5]+":\n\t\t");
-            t1 = teamList.get(12);
-            t2 = teamList.get(13);
-            sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
-
-            for (int i = 6; i < 10; ++i) {
-                sb.append(bowlNames[i]+":\n\t\t");
-                t1 = teamList.get(10 + i);
-                t2 = teamList.get(14 + i);
-                sb.append(t1.strRep() + " vs " + t2.strRep() + "\n\n");
+            Postseason.CfpSelection projected = Postseason.selectCfpField(teamList);
+            sb.append("Projected 12-Team CFP:\n");
+            for (int i = 0; i < projected.field.size(); i++) {
+                Team t = projected.field.get(i);
+                String bid = projected.autoBids.contains(t) ? " (auto)" : " (at-large)";
+                sb.append("\t").append(i + 1).append(". ").append(t.strRep()).append(bid).append("\n");
             }
-
-            return sb.toString();
-
-        } else {
-            // Games have already been scheduled, give actual teams
-            StringBuilder sb = new StringBuilder();
-
-            sb.append("Semifinal 1v4:\n");
-            sb.append(getGameSummaryBowl(semiG14));
-
-            sb.append("\n\nSemifinal 2v3:\n");
-            sb.append(getGameSummaryBowl(semiG23));
-
-            for (int i = 0; i < bowlGames.length; ++i) {
-                sb.append("\n\n"+bowlNames[i]+":\n");
-                sb.append(getGameSummaryBowl(bowlGames[i]));
+            if (projected.field.size() >= Postseason.CFP_FIELD_SIZE) {
+                List<Team> seeds = projected.field;
+                sb.append("\nFirst Round:\n");
+                sb.append("\t5v12: ").append(seeds.get(4).strRep())
+                        .append(" vs ").append(seeds.get(11).strRep()).append("\n");
+                sb.append("\t6v11: ").append(seeds.get(5).strRep())
+                        .append(" vs ").append(seeds.get(10).strRep()).append("\n");
+                sb.append("\t7v10: ").append(seeds.get(6).strRep())
+                        .append(" vs ").append(seeds.get(9).strRep()).append("\n");
+                sb.append("\t8v9: ").append(seeds.get(7).strRep())
+                        .append(" vs ").append(seeds.get(8).strRep()).append("\n");
             }
-
             return sb.toString();
+        }
+
+        sb.append("12-Team CFP Field:\n");
+        if (cfpField != null) {
+            for (int i = 0; i < cfpField.size(); i++) {
+                Team t = cfpField.get(i);
+                boolean auto = cfpAutoBids != null && cfpAutoBids.contains(t);
+                String bid = auto ? " (auto)" : " (at-large)";
+                sb.append("\t").append(i + 1).append(". ").append(t.strRep()).append(bid).append("\n");
+            }
+        }
+        appendGameRound(sb, "CFP First Round", cfpFirstRound);
+        appendGameRound(sb, "CFP Quarters", cfpQuarters);
+        appendGameRound(sb, "CFP Semis", cfpSemis);
+        if (ncg != null) {
+            sb.append("\nNational Championship:\n");
+            sb.append(getGameSummaryBowl(ncg)).append("\n");
+        }
+        if (bowlGames != null && bowlGames.length > 0) {
+            sb.append("\nBowl Games:\n");
+            for (Game g : bowlGames) {
+                if (g == null) {
+                    continue;
+                }
+                sb.append("\n").append(g.gameName).append(":\n");
+                sb.append(getGameSummaryBowl(g));
+            }
+        }
+        return sb.toString();
+    }
+
+    private void appendGameRound(StringBuilder sb, String title, Game[] games) {
+        if (games == null || games.length == 0) {
+            return;
+        }
+        sb.append("\n").append(title).append(":\n");
+        for (Game g : games) {
+            if (g == null) {
+                continue;
+            }
+            sb.append(g.gameName).append("\n");
+            sb.append(getGameSummaryBowl(g)).append("\n");
         }
     }
 
@@ -1700,7 +1689,7 @@ public class League {
             sb.append(heismanHistory.get(i) + "\n");
         }
             sb.append("END_HEISMAN_HIST\n");
-        sb.append("SAVE_VERSION,6\n");
+        sb.append("SAVE_VERSION,8\n");
         sb.append("TEAM_COUNT," + teamList.size() + "\n");
 
         // Save information about each team like W-L records, as well as all the players
@@ -1760,7 +1749,9 @@ public class League {
             sb.append(s + "\n");
         }
         sb.append("END_HALL_OF_FAME\n");
+        appendSeasonProgressBlock(sb);
         appendScheduleBlock(sb);
+        appendTeamSeasonBlock(sb);
         if (oocContracts != null) {
             oocContracts.appendSave(sb);
         }
@@ -1779,6 +1770,37 @@ public class League {
         }
     }
 
+    private void appendSeasonProgressBlock(StringBuilder sb) {
+        sb.append("SEASON_PROGRESS\n");
+        sb.append("currentWeek,").append(currentWeek).append("\n");
+        sb.append("hasScheduledBowls,").append(hasScheduledBowls ? 1 : 0).append("\n");
+        sb.append("END_SEASON_PROGRESS\n");
+    }
+
+    private void restoreSeasonProgress(BufferedReader reader) throws IOException {
+        String line;
+        while ((line = reader.readLine()) != null && !line.equals("END_SEASON_PROGRESS")) {
+            if (line.startsWith("currentWeek,")) {
+                currentWeek = Integer.parseInt(line.substring("currentWeek,".length()).trim());
+            } else if (line.startsWith("hasScheduledBowls,")) {
+                hasScheduledBowls = "1".equals(line.substring("hasScheduledBowls,".length()).trim());
+            }
+        }
+    }
+
+    private void syncConferenceWeeksFromCurrentWeek() {
+        int confWeek = currentWeek;
+        if (confWeek > WEEK_CCG) {
+            confWeek = WEEK_CCG;
+        }
+        if (confWeek < 0) {
+            confWeek = 0;
+        }
+        for (Conference conference : conferences) {
+            conference.week = confWeek;
+        }
+    }
+
     private void appendScheduleBlock(StringBuilder sb) {
         sb.append("SCHEDULE\n");
         for (Team team : teamList) {
@@ -1793,14 +1815,44 @@ public class League {
                 if (game == null) {
                     sb.append("-");
                 } else if (game.homeTeam == team) {
-                    sb.append("H:").append(game.awayTeam.abbr);
+                    sb.append(encodeScheduleEntry(game, true));
                 } else {
-                    sb.append("A:").append(game.homeTeam.abbr);
+                    sb.append(encodeScheduleEntry(game, false));
                 }
             }
             sb.append("\n");
         }
         sb.append("END_SCHEDULE\n");
+    }
+
+    /** Matchup token; home side carries full result payload when the game is final. */
+    private static String encodeScheduleEntry(Game game, boolean homeSide) {
+        String opp = homeSide ? game.awayTeam.abbr : game.homeTeam.abbr;
+        String base = (homeSide ? "H:" : "A:") + opp;
+        if (!game.hasPlayed) {
+            return base;
+        }
+        if (!homeSide) {
+            return base + "|1";
+        }
+        StringBuilder sb = new StringBuilder(base);
+        sb.append("|1|").append(game.homeScore).append('|').append(game.awayScore)
+                .append('|').append(game.homeYards).append('|').append(game.awayYards)
+                .append('|').append(game.homeTOs).append('|').append(game.awayTOs)
+                .append('|').append(game.numOT)
+                .append('|').append(encodeQuarterScores(game.homeQScore))
+                .append('|').append(encodeQuarterScores(game.awayQScore));
+        return sb.toString();
+    }
+
+    private static String encodeQuarterScores(int[] q) {
+        StringBuilder sb = new StringBuilder();
+        int n = q == null ? 0 : Math.min(4, q.length);
+        for (int i = 0; i < 4; i++) {
+            if (i > 0) sb.append('#');
+            sb.append(i < n ? q[i] : 0);
+        }
+        return sb.toString();
     }
 
     private void restoreScheduleFromSave(BufferedReader reader) throws IOException {
@@ -1827,26 +1879,196 @@ public class League {
                 if (entry.equals("BYE") || entry.equals("-") || entry.isEmpty()) {
                     continue;
                 }
-                boolean home = entry.startsWith("H:");
-                String oppAbbr = entry.substring(2);
-                Team opponent = findTeamAbbr(oppAbbr);
-                if (opponent == null) {
-                    continue;
-                }
-                if (team.gameSchedule.get(week) != null) {
-                    continue;
-                }
-                boolean sameConf = team.conference.equals(opponent.conference);
-                String name = sameConf ? "In Conf" : "OOC";
-                Team homeTeam = home ? team : opponent;
-                Team awayTeam = home ? opponent : team;
-                Game game = new Game(homeTeam, awayTeam, name);
-                homeTeam.gameSchedule.set(week, game);
-                awayTeam.gameSchedule.set(week, game);
+                applyScheduleEntry(team, week, entry);
             }
         }
         for (Conference conference : conferences) {
             conference.resetSeason();
+        }
+    }
+
+    private void applyScheduleEntry(Team team, int week, String entry) {
+        String[] pipe = entry.split("\\|", -1);
+        String matchup = pipe[0];
+        if (!matchup.startsWith("H:") && !matchup.startsWith("A:")) {
+            return;
+        }
+        boolean home = matchup.startsWith("H:");
+        String oppAbbr = matchup.substring(2);
+        Team opponent = findTeamAbbr(oppAbbr);
+        if (opponent == null) {
+            return;
+        }
+        Game game = team.gameSchedule.get(week);
+        if (game == null) {
+            boolean sameConf = team.conference.equals(opponent.conference);
+            String name = sameConf ? "In Conf" : "OOC";
+            Team homeTeam = home ? team : opponent;
+            Team awayTeam = home ? opponent : team;
+            game = new Game(homeTeam, awayTeam, name);
+            homeTeam.gameSchedule.set(week, game);
+            awayTeam.gameSchedule.set(week, game);
+        }
+        if (pipe.length >= 10 && "1".equals(pipe[1]) && !game.hasPlayed) {
+            applySavedGameResult(game, pipe);
+        } else if (pipe.length >= 2 && "1".equals(pipe[1])) {
+            // Away-side marker only; result applied from home payload.
+            if (!game.hasPlayed && pipe.length >= 10) {
+                applySavedGameResult(game, pipe);
+            }
+        }
+    }
+
+    private static void applySavedGameResult(Game game, String[] pipe) {
+        try {
+            game.homeScore = Integer.parseInt(pipe[2]);
+            game.awayScore = Integer.parseInt(pipe[3]);
+            game.homeYards = Integer.parseInt(pipe[4]);
+            game.awayYards = Integer.parseInt(pipe[5]);
+            game.homeTOs = Integer.parseInt(pipe[6]);
+            game.awayTOs = Integer.parseInt(pipe[7]);
+            game.numOT = Integer.parseInt(pipe[8]);
+            decodeQuarterScores(game.homeQScore, pipe[9]);
+            decodeQuarterScores(game.awayQScore, pipe[10]);
+            game.hasPlayed = true;
+        } catch (Exception ignored) {
+            // Leave game unplayed if payload is corrupt.
+        }
+    }
+
+    private static void decodeQuarterScores(int[] q, String encoded) {
+        if (q == null || encoded == null) return;
+        String[] parts = encoded.split("#", -1);
+        for (int i = 0; i < q.length; i++) {
+            q[i] = 0;
+        }
+        for (int i = 0; i < parts.length && i < q.length; i++) {
+            try {
+                q[i] = Integer.parseInt(parts[i].trim());
+            } catch (Exception e) {
+                q[i] = 0;
+            }
+        }
+    }
+
+    private void appendTeamSeasonBlock(StringBuilder sb) {
+        sb.append("TEAM_SEASON\n");
+        for (Team t : teamList) {
+            sb.append(t.abbr).append('|')
+                    .append(t.wins).append('|').append(t.losses).append('|')
+                    .append(t.teamPoints).append('|').append(t.teamOppPoints).append('|')
+                    .append(t.teamYards).append('|').append(t.teamOppYards).append('|')
+                    .append(t.teamPassYards).append('|').append(t.teamRushYards).append('|')
+                    .append(t.teamOppPassYards).append('|').append(t.teamOppRushYards).append('|')
+                    .append(t.teamTODiff).append('|')
+                    .append(t.winStreak != null ? t.winStreak.getStreakCSV() : "0," + t.abbr + ",0,0")
+                    .append('|')
+                    .append(encodeGameWl(t)).append('|')
+                    .append(encodeWinsAgainst(t)).append('|')
+                    .append(encodeRivalryResults(t))
+                    .append('\n');
+        }
+        sb.append("END_TEAM_SEASON\n");
+    }
+
+    private static String encodeGameWl(Team t) {
+        if (t.gameWLSchedule == null || t.gameWLSchedule.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < t.gameWLSchedule.size(); i++) {
+            if (i > 0) sb.append(';');
+            sb.append(t.gameWLSchedule.get(i));
+        }
+        return sb.toString();
+    }
+
+    private static String encodeWinsAgainst(Team t) {
+        if (t.gameWinsAgainst == null || t.gameWinsAgainst.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < t.gameWinsAgainst.size(); i++) {
+            if (i > 0) sb.append(';');
+            Team opp = t.gameWinsAgainst.get(i);
+            sb.append(opp != null ? opp.abbr : "XXX");
+        }
+        return sb.toString();
+    }
+
+    private static String encodeRivalryResults(Team t) {
+        if (t.rivalryResults == null || t.rivalryResults.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (java.util.Map.Entry<String, Boolean> e : t.rivalryResults.entrySet()) {
+            if (!first) sb.append(';');
+            first = false;
+            sb.append(e.getKey()).append(':').append(Boolean.TRUE.equals(e.getValue()) ? 1 : 0);
+        }
+        return sb.toString();
+    }
+
+    private void restoreTeamSeasonBlock(BufferedReader reader) throws IOException {
+        String line;
+        while ((line = reader.readLine()) != null && !line.equals("END_TEAM_SEASON")) {
+            String[] parts = line.split("\\|", -1);
+            if (parts.length < 12) continue;
+            Team t = findTeamAbbr(parts[0]);
+            if (t == null) continue;
+            try {
+                int seasonWins = Integer.parseInt(parts[1]);
+                int seasonLosses = Integer.parseInt(parts[2]);
+                int careerWins = t.totalWins;
+                int careerLosses = t.totalLosses;
+                t.wins = seasonWins;
+                t.losses = seasonLosses;
+                t.totalWins = careerWins + seasonWins;
+                t.totalLosses = careerLosses + seasonLosses;
+                t.teamPoints = Integer.parseInt(parts[3]);
+                t.teamOppPoints = Integer.parseInt(parts[4]);
+                t.teamYards = Integer.parseInt(parts[5]);
+                t.teamOppYards = Integer.parseInt(parts[6]);
+                t.teamPassYards = Integer.parseInt(parts[7]);
+                t.teamRushYards = Integer.parseInt(parts[8]);
+                t.teamOppPassYards = Integer.parseInt(parts[9]);
+                t.teamOppRushYards = Integer.parseInt(parts[10]);
+                t.teamTODiff = Integer.parseInt(parts[11]);
+                if (parts.length > 12 && !parts[12].isEmpty()) {
+                    String[] streak = parts[12].split(",");
+                    if (streak.length >= 4) {
+                        t.winStreak = new TeamStreak(
+                                Integer.parseInt(streak[2]),
+                                Integer.parseInt(streak[3]),
+                                Integer.parseInt(streak[0]),
+                                streak[1]);
+                    }
+                }
+                t.gameWLSchedule.clear();
+                if (parts.length > 13 && !parts[13].isEmpty()) {
+                    for (String wl : parts[13].split(";", -1)) {
+                        if (!wl.isEmpty()) t.gameWLSchedule.add(wl);
+                    }
+                }
+                t.gameWinsAgainst.clear();
+                if (parts.length > 14 && !parts[14].isEmpty()) {
+                    for (String abbr : parts[14].split(";", -1)) {
+                        Team opp = findTeamAbbr(abbr);
+                        if (opp != null) t.gameWinsAgainst.add(opp);
+                    }
+                }
+                if (t.rivalryResults == null) {
+                    t.rivalryResults = new java.util.HashMap<>();
+                } else {
+                    t.rivalryResults.clear();
+                }
+                if (parts.length > 15 && !parts[15].isEmpty()) {
+                    for (String pair : parts[15].split(";", -1)) {
+                        int colon = pair.lastIndexOf(':');
+                        if (colon <= 0) continue;
+                        String abbr = pair.substring(0, colon);
+                        boolean won = "1".equals(pair.substring(colon + 1));
+                        t.rivalryResults.put(abbr, won);
+                    }
+                }
+            } catch (Exception ignored) {
+                // Skip corrupt team season rows.
+            }
         }
     }
 

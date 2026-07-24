@@ -90,15 +90,6 @@ public final class NilMoney {
         return roundToThousand(500_000 + Math.pow(normalized, 2.40) * 24_500_000);
     }
 
-    public static int scholarshipCoa(ProgramProfile profile) {
-        return scholarshipCoa(profile != null ? profile.revSharePool : 50);
-    }
-
-    public static int scholarshipCoa(int revShareScore) {
-        int score = clampScore(revShareScore);
-        return roundToThousand(30_000 + (score - 25) * 550.0);
-    }
-
     public static double positionPremium(String position) {
         if (position == null) return 1.0;
         switch (position) {
@@ -215,16 +206,17 @@ public final class NilMoney {
         return age;
     }
 
+    /** Purse cost of an offer: NIL only. Scholarships and PWOs are free. */
     public static int offerCashCost(RosterStatus status, int nilAmount, ProgramProfile profile) {
-        int coa = status != null && status.usesScholarship() ? scholarshipCoa(profile) : 0;
-        int nil = (status == RosterStatus.SCHOLARSHIP_PLUS_NIL) ? Math.max(0, nilAmount) : 0;
-        return coa + nil;
+        return offerCashCost(status, nilAmount);
     }
 
-    public static int offerCashCost(RosterStatus status, int nilAmount, int revShareScore) {
-        int coa = status != null && status.usesScholarship() ? scholarshipCoa(revShareScore) : 0;
-        int nil = status == RosterStatus.SCHOLARSHIP_PLUS_NIL ? Math.max(0, nilAmount) : 0;
-        return coa + nil;
+    public static int offerCashCost(RosterStatus status, int nilAmount, int ignoredScore) {
+        return offerCashCost(status, nilAmount);
+    }
+
+    public static int offerCashCost(RosterStatus status, int nilAmount) {
+        return status == RosterStatus.SCHOLARSHIP_PLUS_NIL ? Math.max(0, nilAmount) : 0;
     }
 
     public static int buyoutCost(Player p, ProgramProfile profile) {

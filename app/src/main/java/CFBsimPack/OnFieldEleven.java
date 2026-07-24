@@ -149,7 +149,7 @@ public final class OnFieldEleven {
         Player best = null;
         double bestScore = minOvr - 1;
         for (Player p : team.getAllPlayers()) {
-            if (p == null || p.isInjured || used.contains(p)) continue;
+            if (p == null || !isEligible(p) || used.contains(p)) continue;
             double o = PositionOvr.ovr(p, g) * factorOf(fatigue, p);
             if (o > bestScore) {
                 bestScore = o;
@@ -169,7 +169,7 @@ public final class OnFieldEleven {
         boolean hasFresh = false;
         if (fatigue != null) {
             for (Player p : primary) {
-                if (p == null || p.isInjured || used.contains(p)) continue;
+                if (p == null || !isEligible(p) || used.contains(p)) continue;
                 if (fatigue.energyOf(p) >= FatigueTracker.FRESH_ENERGY) {
                     hasFresh = true;
                     break;
@@ -184,7 +184,7 @@ public final class OnFieldEleven {
 
         for (int i = 0; i < primary.size(); i++) {
             Player p = primary.get(i);
-            if (p == null || p.isInjured || used.contains(p)) continue;
+            if (p == null || !isEligible(p) || used.contains(p)) continue;
             int e = energyOf(fatigue, p);
             if (e >= FatigueTracker.SIT_ENERGY) allBelowSit = false;
             if (leastTired == null || e > leastTiredEnergy
@@ -201,12 +201,17 @@ public final class OnFieldEleven {
 
         for (int i = 0; i < primary.size(); i++) {
             Player p = primary.get(i);
-            if (p == null || p.isInjured || used.contains(p)) continue;
+            if (p == null || !isEligible(p) || used.contains(p)) continue;
             int e = energyOf(fatigue, p);
             if (e < FatigueTracker.SIT_ENERGY && hasFresh) continue;
             return p;
         }
         return leastTired;
+    }
+
+    /** Healthy and not ejected for this game. */
+    private static boolean isEligible(Player p) {
+        return p != null && !p.isInjured && !p.isEjected;
     }
 
     private static int energyOf(FatigueTracker fatigue, Player p) {

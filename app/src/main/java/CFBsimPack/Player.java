@@ -25,11 +25,14 @@ public class Player {
 
     public int gamesPlayed;
     public int statsWins;
+    /** On-field snaps this season (offense or defense elevens). */
+    public int seasonSnaps;
     public boolean wonHeisman;
     public boolean wonAllAmerican;
     public boolean wonAllConference;
 
     public int careerGamesPlayed;
+    public int careerSnaps;
     public int careerHeismans;
     public int careerAllAmerican;
     public int careerAllConference;
@@ -59,6 +62,8 @@ public class Player {
 
     public boolean isInjured;
     public Injury injury;
+    /** Ejected for the remainder of the current game (targeting, etc.). */
+    public boolean isEjected;
 
     /**
      * When true, this player keeps their depth-chart slot through auto-sorts
@@ -148,7 +153,7 @@ public class Player {
         return NilMoney.offerCashCost(rosterStatus, nilDealAmount, profile);
     }
 
-    /** Future-year encumbrance from the recruiting purse (NIL only — COA is year-1). */
+    /** Future-year encumbrance from the recruiting purse (NIL only). */
     public int futureNilCommitment() {
         if (rosterStatus != RosterStatus.SCHOLARSHIP_PLUS_NIL) return 0;
         return Math.max(0, nilDealAmount);
@@ -344,14 +349,18 @@ public class Player {
     }
 
     public void advanceSeason() {
-        int gp = gamesPlayed;
         int bonus = 0;
         if (team != null && team.programProfile != null) {
             bonus = team.programProfile.developmentBonus();
         }
-        Random rng = new Random((long) name.hashCode() * 31L + year * 17L + gp);
-        DevelopmentCurve.advance(this, gp, bonus, rng);
+        Random rng = new Random((long) name.hashCode() * 31L + year * 17L + seasonSnaps);
+        DevelopmentCurve.advance(this, bonus, rng);
         bankPositionCareerStats();
+    }
+
+    /** Credit one on-field snap (offense or defense). */
+    public void recordSnap() {
+        seasonSnaps++;
     }
 
     /** Bank season skill stats into career and zero season counters / awards flags. */
@@ -359,11 +368,13 @@ public class Player {
         careerStats.addFrom(seasonStats);
         seasonStats.clear();
         careerGamesPlayed += gamesPlayed;
+        careerSnaps += seasonSnaps;
         careerWins += statsWins;
         if (wonHeisman) careerHeismans++;
         if (wonAllAmerican) careerAllAmerican++;
         if (wonAllConference) careerAllConference++;
         gamesPlayed = 0;
+        seasonSnaps = 0;
         statsWins = 0;
         wonHeisman = false;
         wonAllAmerican = false;

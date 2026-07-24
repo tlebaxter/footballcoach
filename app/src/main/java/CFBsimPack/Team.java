@@ -772,7 +772,7 @@ public class Team {
 
     public void grantYearlyBudget() {
         recruitMoney = NilMoney.yearlyBudget(programProfile);
-        // Pay remaining multi-year NIL only (COA was charged at sign/retain).
+        // Pay remaining multi-year NIL commitments.
         for (Player p : getAllPlayers()) {
             if (p.contractYearsRemaining <= 0) continue;
             if (playersLeaving != null && playersLeaving.contains(p)) continue;
@@ -807,7 +807,8 @@ public class Team {
     }
 
     /**
-     * Year-1 cost (COA+NIL) must fit the current purse; future years encumber NIL only.
+     * Year-1 NIL cost must fit the current purse; future years encumber NIL only.
+     * Scholarships have no purse cost.
      */
     public boolean canAffordContract(int yearOneCost, int futureAnnualNil, int years) {
         if (yearOneCost > recruitMoney) return false;
@@ -948,12 +949,8 @@ public class Team {
         return "Available " + NilMoney.format(recruitMoney);
     }
 
-    public String budgetRevShareLabel() {
-        return "Rev share " + NilMoney.format(NilMoney.yearlyRevShare(programProfile));
-    }
-
-    public String budgetCollectiveLabel() {
-        return "Collective " + NilMoney.format(NilMoney.yearlyCollective(programProfile));
+    public String budgetPurseLabel() {
+        return "Purse " + NilMoney.format(NilMoney.yearlyBudget(programProfile));
     }
 
     public String budgetY1FreeLabel() {
@@ -972,8 +969,6 @@ public class Team {
     public ArrayList<String> budgetLedgerRows() {
         ArrayList<String> rows = new ArrayList<>();
         rows.add("This year\nAvailable " + NilMoney.format(recruitMoney)
-                + "\nRev share " + NilMoney.format(NilMoney.yearlyRevShare(programProfile))
-                + " · collective " + NilMoney.format(NilMoney.yearlyCollective(programProfile))
                 + "\nTotal purse " + NilMoney.format(projectedBudget(0)));
         for (int y = 1; y <= 3; y++) {
             rows.add("Y+" + y
@@ -2037,10 +2032,16 @@ public class Team {
      */
     public Player parsePlayerSaveLine(String line, boolean isRedshirt, boolean addToRoster) {
         String histSuffix = "";
+        String seasonSuffix = "";
         int histIdx = line.indexOf("|HIST");
         if (histIdx >= 0) {
             histSuffix = line.substring(histIdx);
             line = line.substring(0, histIdx);
+        }
+        int seasonIdx = line.indexOf("|SEASON");
+        if (seasonIdx >= 0) {
+            seasonSuffix = line.substring(seasonIdx);
+            line = line.substring(0, seasonIdx);
         }
         String[] playerInfo = line.split(",");
         if (playerInfo.length > 2 && playerInfo[2].equals("0")) playerInfo[2] = "1";
@@ -2048,14 +2049,14 @@ public class Team {
         Player loaded = PlayerSaveCodec.fromFields(this, playerInfo, isRedshirt);
         if (loaded == null) return null;
         if (addToRoster) addPlayerToRoster(loaded);
-        applyLoadedPlayerExtras(loaded, playerInfo, histSuffix);
+        applyLoadedPlayerExtras(loaded, playerInfo, histSuffix, seasonSuffix);
         if (!addToRoster) {
             loaded.team = null;
         }
         return loaded;
     }
 
-    /** One CSV line for a player (no trailing newline). SAVE_VERSION 6 full ratings bag. */
+    /** One CSV line for a player (no trailing newline). SAVE_VERSION 8 may include |SEASON. */
     public String playerToSaveLine(Player p) {
         if (p == null) return "";
         return PlayerSaveCodec.toLine(p) + playerSaveExtras(p);
@@ -3055,10 +3056,8 @@ public class Team {
         ts0.append(programProfile.footprint + ",Recruiting Footprint,—%\n");
         ts0.append(programProfile.pipeline + ",NFL Pipeline,—%\n");
         ts0.append(programProfile.momentum + ",Momentum,—%\n");
-        ts0.append(NilMoney.format(NilMoney.yearlyRevShare(programProfile))
-                + ",Rev Share,—%\n");
-        ts0.append(NilMoney.format(NilMoney.yearlyCollective(programProfile))
-                + ",Collective,—%\n");
+        ts0.append(NilMoney.format(NilMoney.yearlyBudget(programProfile))
+                + ",Purse,—%\n");
 
         ts0.append(getRecruitingClassRat() + ",");
         ts0.append("Recruit Class" + ",");
@@ -3673,10 +3672,13 @@ public class Team {
     }
 
     private String playerSaveExtras(Player p) {
-        return "," + p.rosterStatusSave() + p.careerSeasonsSaveSuffix();
+        return "," + p.rosterStatusSave()
+                + PlayerSaveCodec.seasonSuffix(p)
+                + p.careerSeasonsSaveSuffix();
     }
 
-    private void applyLoadedPlayerExtras(Player p, String[] playerInfo, String histSuffix) {
+    private void applyLoadedPlayerExtras(
+            Player p, String[] playerInfo, String histSuffix, String seasonSuffix) {
         if (p == null) return;
         // Last CSV field may be rosterStatusSave()
         if (playerInfo.length > 0) {
@@ -3685,6 +3687,17 @@ public class Team {
                 p.loadRosterStatus(last);
             } else if (p.rosterStatus == null) {
                 p.applyOffer(RosterStatus.SCHOLARSHIP, 0);
+            }
+        }
+        if (seasonSuffix != null && !seasonSuffix.isEmpty()) {
+            PlayerSaveCodec.loadSeasonFromSuffix(p, seasonSuffix);
+            if (p.isInjured) {
+                if (playersInjuredAll == null) {
+                    playersInjuredAll = new ArrayList<>();
+                }
+                if (!playersInjuredAll.contains(p)) {
+                    playersInjuredAll.add(p);
+                }
             }
         }
         if (histSuffix != null && !histSuffix.isEmpty()) {

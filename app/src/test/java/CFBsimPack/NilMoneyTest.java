@@ -101,12 +101,23 @@ public class NilMoneyTest {
     }
 
     @Test
-    public void offerCashCostIncludesCoaAndNil() {
+    public void scholarshipOnlyBuyoutIsFree() {
+        Player p = player(2, 80, 88, "WR");
+        p.rosterStatus = RosterStatus.SCHOLARSHIP;
+        p.nilDealAmount = 0;
+        p.contractYearsRemaining = 3;
+        p.contractLength = 4;
+        assertEquals(0, NilMoney.buyoutCost(p, 80));
+        assertEquals(0, NilMoney.buyoutCost(p, (ProgramProfile) null));
+    }
+
+    @Test
+    public void offerCashCostIsNilOnly() {
         int scholly = NilMoney.offerCashCost(RosterStatus.SCHOLARSHIP, 100000, 80);
         int plusNil = NilMoney.offerCashCost(RosterStatus.SCHOLARSHIP_PLUS_NIL, 100000, 80);
         int pwo = NilMoney.offerCashCost(RosterStatus.PWO, 100000, 80);
-        assertTrue(scholly > 0);
-        assertEquals(scholly + 100000, plusNil);
+        assertEquals(0, scholly);
+        assertEquals(100000, plusNil);
         assertEquals(0, pwo);
     }
 

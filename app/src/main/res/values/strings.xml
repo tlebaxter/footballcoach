@@ -389,15 +389,15 @@
         Rivalries use a 0–100 strength score (Hot / Warm / Cold) that rises and falls with results and can form new over time. Same-conference rivals at 50+ strength are scheduled automatically; cross-conference rivals are not forced. Competitive Warm/Hot rivalry games affect program momentum. In Schedule &amp; Contracts (More menu, or the offseason scheduling phase) you can declare rivals and sign OOC deals — single games, buy-game series, and home-and-homes with fulfill-by windows. Guarantees move recruiting budget when games are played; cancelling early costs a buyout, and missing a fulfill-by deadline triggers a breach fine.
         At the end of the regular season, the Conference Championship is played between the two teams with the best in-conference record.
         If two teams have the same record, a head-to-head tiebreaker is used. If three or more teams have the same record, the one with the highest poll ranking is chosen.
-        After the Conference Championships, Bowl Games are played.\n\n
-        Only the top 24 teams get chosen for a bowl, with the most important being the National Semifinals between the #1 and #4 team, and the #2 and #3 team.
-        The winner of these two games advance to the National Championship where an undisputed champion is crowned.\n\n
-        After the season, results versus expectations update your program\'s momentum, donors, fanbase, tradition, and NFL pipeline before you move into recruiting. Player spending comes from separate revenue-share and collective pools.
+        After the Conference Championships, the 12-team College Football Playoff and bowl games are set.\n\n
+        The five highest-ranked conference champions earn automatic bids; seven at-large teams fill out the field. Seeds 1–4 get byes; seeds 5–12 play a first round (5v12, 6v11, 7v10, 8v9), then reseeded quarters, semis, and the National Championship.\n\n
+        Teams with 6+ wins outside the playoff can earn conference-tied bowls (Alamo, Citrus, Gator, and many more).\n\n
+        After the season, results versus expectations update your program\'s momentum, donors, fanbase, tradition, and NFL pipeline before you move into recruiting. Player spending comes from one recruiting purse.
     </string>
     <string name="tutRankings">
         As your team plays through the season, it will be evaluated by pollsters who determine how good (or bad) your team is compared to others.
         This "Poll Ranking" is determined by wins, margin of victory, strength of schedule, and more, and has a big impact on how your season will play out,
-        as it determines who gets into a bowl game and the semifinals.\n\nMany statistics are kept track of during the season, such as Yards Per Game, Opposing Points Per Game,
+        as it determines CFP seeding, automatic bids, at-large selection, and bowl invitations.\n\nMany statistics are kept track of during the season, such as Yards Per Game, Opposing Points Per Game,
         Pass Yards Per Game, Turnover Differential and more. You can view all these statistics, as well as your team\'s ranking in each one, by navigating to the "STATS" tab.
     </string>
     <string name="tutRoster">

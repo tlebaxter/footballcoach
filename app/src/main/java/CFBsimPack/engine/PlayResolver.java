@@ -108,6 +108,7 @@ public final class PlayResolver {
         int blockWins = countBlockWins(off, def, true);
         int pressure = (int) ((def.passRushComposite() * 2 - off.olPassComposite() - blockWins * 4)
                 * sys.passWeight * concept.sackRiskMod);
+        pressure += AtmosphereEngine.roadPressureAdd(state);
         int thv = rating(qb, x -> x.thv, 55);
         int effectivePressure = (int) (pressure * (1.0 - (thv - 50) / 250.0));
         if (effectivePressure < 0) effectivePressure = 0;
@@ -125,10 +126,16 @@ public final class PlayResolver {
             return sack(offense, state, call, qb);
         }
 
+        int yardsToGoal = Math.max(1, 100 - state.yardLine);
         double intChance = (pressure + def.coverageComposite()
                 - (rating(qb, x -> x.tha, 55) + qb.ratFootIQ + thv + 100) / 4.0) / 18.0;
         intChance *= cov.intMod;
-        if (concept.depth == DepthBand.DEEP) intChance *= 1.12;
+        if (concept.depth == DepthBand.DEEP) {
+            intChance *= 1.12;
+            if (state.gameTime <= 40 && yardsToGoal >= 35) {
+                intChance *= 1.25;
+            }
+        }
         if (intChance < 0.015) intChance = 0.015;
         if (100 * rng.nextDouble() < intChance) {
             r.turnover = true;
@@ -155,12 +162,14 @@ public final class PlayResolver {
         int cbCov = cb != null ? rating(cb, x -> x.pcv, 70) : 70;
         int cbSpd = cb != null ? rating(cb, x -> x.spd, 70) : 70;
 
+        r.passArriveYardLine = passArriveYardLine(state.yardLine, concept.depth);
+
         double completion = (normalize(rating(qb, x -> x.tha, 55)) + normalize(cat) - normalize(cbCov)) / 2.0
-                + 18.25 - pressure / 16.8 + homeField(offense, defense, state)
+                + 18.25 - pressure / 16.8 + AtmosphereEngine.offenseBonus(state)
                 + normalize(rtr) / 4.0;
         completion *= cov.completionMod * concept.completionMod;
         completion += cov.passFitBonus();
-        completion += concept.matchupBonus(cov);
+        completion += concept.matchupBonus(cov, state);
 
         qb.seasonStats.passAtt++;
         if (gameStats != null) gameStats.line(qb).passAtt++;
@@ -194,8 +203,13 @@ public final class PlayResolver {
 
         int yards = (int) ((normalize(rating(qb, x -> x.thp, 55)) + normalize(spd) - normalize(cbSpd)) * rng.nextDouble() / 3.7
                 * cov.yardsMod * concept.yardsMod);
-        if (concept.depth == DepthBand.DEEP) yards += (int) (4 + 8 * rng.nextDouble());
-        else if (concept.depth == DepthBand.SHORT) yards = (int) (yards * 0.85);
+        if (concept.depth == DepthBand.DEEP) {
+            int deepBonus = (int) (4 + 8 * rng.nextDouble());
+            deepBonus = Math.min(deepBonus, Math.max(0, yardsToGoal - 1));
+            yards += deepBonus;
+        } else if (concept.depth == DepthBand.SHORT) {
+            yards = (int) (yards * 0.85);
+        }
         if (yards < 0) yards = 0;
 
         Player s = onFieldS(def, defense);
@@ -223,11 +237,11 @@ public final class PlayResolver {
 
         int blockWins = countBlockWins(off, def, false);
         int blockAdv = (int) ((off.olRushComposite() - def.runStopComposite() * sys.runWeight)
-                + blockWins * 3 + cov.runFitBonus() + concept.matchupBonus(cov));
+                + blockWins * 3 + cov.runFitBonus() + concept.matchupBonus(cov, state));
         int rushSpd = carrierRushSpd(carrier);
         int rushPow = carrierRushPow(carrier);
         int rushEva = carrierRushEva(carrier);
-        int yards = (int) ((rushSpd + blockAdv + homeField(offense, defense, state))
+        int yards = (int) ((rushSpd + blockAdv + AtmosphereEngine.offenseBonus(state))
                 * rng.nextDouble() / 10.0 * concept.runYardsMod);
         if (yards < 2) {
             yards += rushPow / 20 - 3;
@@ -321,6 +335,7 @@ public final class PlayResolver {
         OffenseConcept concept = call.resolvedOffenseConcept();
         double tempo = call.tempo.clockMult * (1.0 + concept.clockMultExtra);
         r.playType = OffensePlay.PASS;
+        r.sack = true;
         r.yardsGained = -3;
         state.yardLine -= 3;
         state.yardsNeed += 3;
@@ -805,6 +820,23 @@ public final class PlayResolver {
         return offense.getQB(0);
     }
 
+    /** Intended catch spot for DPI: SHORT≈+6, MEDIUM≈+12, DEEP≈+22, ±2 jitter. */
+    int passArriveYardLine(int los, DepthBand depth) {
+        int base;
+        if (depth == DepthBand.DEEP) {
+            base = 22;
+        } else if (depth == DepthBand.MEDIUM) {
+            base = 12;
+        } else {
+            base = 6;
+        }
+        int jitter = rng != null ? rng.nextInt(5) - 2 : 0;
+        int spot = los + base + jitter;
+        if (spot < 1) spot = 1;
+        if (spot > 99) spot = 99;
+        return spot;
+    }
+
     private Player onFieldCb(OnFieldEleven def, Team defense) {
         Player p = def != null ? def.firstWithRole(RoleTag.CB) : null;
         if (p != null) return p;
@@ -893,20 +925,6 @@ public final class PlayResolver {
 
     private int defRun(Team defense) {
         return defense.getCompositeFrontRush();
-    }
-
-    private int homeField(Team offense, Team defense, GameState state) {
-        int bonus = state.possessionHome ? 2 : 0;
-        int rivalry = Team.strongestRivalryBetween(offense, defense);
-        if (rivalry >= 25) {
-            int intensity = rivalry / 50; // 0–2
-            if (state.possessionHome) {
-                bonus += intensity;
-            } else if (intensity > 0) {
-                bonus += intensity / 2;
-            }
-        }
-        return bonus;
     }
 
     private int normalize(int rating) {

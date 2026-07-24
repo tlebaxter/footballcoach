@@ -441,6 +441,13 @@ private fun SituationStrip(sit: GameSituation) {
             style = MaterialTheme.typography.titleMedium,
         )
         Text(
+            sit.crowdBand.uppercase(),
+            color = Color(0xFFCBD5E1),
+            fontWeight = FontWeight.SemiBold,
+            style = MaterialTheme.typography.labelMedium,
+            letterSpacing = 0.6.sp,
+        )
+        Text(
             if (sit.userOnOffense) "YOUR BALL" else "DEFENDING",
             color = if (sit.userOnOffense) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
             fontWeight = FontWeight.Bold,

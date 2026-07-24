@@ -105,9 +105,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             currentTeam = userTeam
             currentConference = l.findConference(userTeam!!.conference)
             rebuildSnapshot(ready = true)
-        } else if (lLoadedInOffseason()) {
-            navigateToOffseasonDestination()
+            return
         }
+        if (GameSession.isStayingOnMainDuringOffseason() && OffseasonSession.ready()) {
+            syncFromOffseasonSession()
+            return
+        }
+        if (lLoadedInOffseason()) {
+            navigateToOffseasonDestination()
+            return
+        }
+        val l = league ?: return
+        userTeam = l.userTeam
+        if (userTeam == null) return
+        currentTeam = currentTeam ?: userTeam
+        currentConference = l.findConference(userTeam!!.conference)
+        val coachSnack = handlePendingCoachResult()
+        rebuildSnapshot(ready = true, snackbar = coachSnack)
+    }
+
+    /** Autosaves (if a slot is known) and returns a snackbar for a finished coach game. */
+    private fun handlePendingCoachResult(): String? {
+        if (!GameSession.consumePendingCoachResultSave()) return null
+        val summary = GameSession.consumePendingCoachResultSummary()
+        val slot = GameSession.getActiveSaveSlot()
+        val l = league
+        if (slot != null && l != null) {
+            val ok = l.saveLeague(SaveSlots.file(getApplication(), slot))
+            return if (ok) {
+                if (summary != null) "Game saved · $summary" else "Game saved"
+            } else {
+                "Result applied — save failed"
+            }
+        }
+        return if (summary != null) {
+            "Result applied · $summary — save your career to keep it"
+        } else {
+            "Result applied — save your career to keep it"
+        }
+    }
+
+    /** Refreshes Main against the live offseason league after browsing away from Talent Hub. */
+    private fun syncFromOffseasonSession() {
+        league = OffseasonSession.league
+        val l = league ?: return
+        GameSession.setLeague(l)
+        userTeam = l.userTeam ?: return
+        currentTeam = userTeam
+        currentConference = l.findConference(userTeam!!.conference)
+        rebuildSnapshot(ready = true)
     }
 
     private fun lLoadedInOffseason(): Boolean {
@@ -123,8 +169,14 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         league = GameSession.getLeague()
         handlePendingOffseasonResult()
         val l = league ?: return
-        if (l.loadedInOffseason && OffseasonSession.ready()) {
+        if (l.loadedInOffseason && OffseasonSession.ready() &&
+            !GameSession.isStayingOnMainDuringOffseason()
+        ) {
             navigateToOffseasonDestination()
+            return
+        }
+        if (GameSession.isStayingOnMainDuringOffseason() && OffseasonSession.ready()) {
+            syncFromOffseasonSession()
             return
         }
         val needsPicker = GameSession.needsTeamPicker() || l.userTeam == null
@@ -246,6 +298,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun openScheduleScreen() {
         _uiState.update { it.copy(navigateToSchedule = true) }
+    }
+
+    fun openTalentHub() {
+        if (!OffseasonSession.ready()) return
+        GameSession.setStayingOnMainDuringOffseason(false)
+        _uiState.update { it.copy(navigateToTalentHub = true, showReturnToTalentHub = false) }
     }
 
     private fun navigateToOffseasonDestination() {
@@ -472,10 +530,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     }
                 } else when (l.currentWeek) {
                     League.WEEK_CCG -> if (showToasts) snack = "${user.name} was not invited to the Conference Championship."
-                    League.WEEK_BOWLS -> if (showToasts) snack = "${user.name} was not invited to a bowl game."
+                    League.WEEK_CFP_FIRST_ROUND -> if (showToasts) {
+                        snack = "${user.name} was not invited to the playoff or a bowl game."
+                    }
                 }
             }
-            if (l.currentWeek == League.WEEK_BOWLS) {
+            if (l.currentWeek == League.WEEK_CFP_FIRST_ROUND) {
                 switchToAwards = true
             }
             if (l.currentWeek >= League.WEEK_SEASON_END) {
@@ -484,6 +544,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             }
             if (_uiState.value.homeSegment == HomeSegment.GAMES && l.currentWeek > 2) {
                 scrollIndex = (user.numGames() - 3).coerceAtLeast(0)
+            }
+            if (GameSession.hasActiveSaveSlot()) {
+                val saved = autosaveIfPossible()
+                if (!saved && snack == null) {
+                    snack = "Week played — save failed"
+                }
             }
             rebuildSnapshot(
                 snackbar = snack,
@@ -780,8 +846,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val l = league ?: return
         val file = SaveSlots.file(getApplication(), index)
         l.saveLeague(file)
+        GameSession.setActiveSaveSlot(index)
         postSnackbar("Saved league!")
         _uiState.update { it.copy(showSaveDialog = false) }
+    }
+
+    /** Writes the live league to the active slot when one is known. */
+    private fun autosaveIfPossible(): Boolean {
+        val slot = GameSession.getActiveSaveSlot() ?: return false
+        val l = league ?: return false
+        return l.saveLeague(SaveSlots.file(getApplication(), slot))
     }
 
     fun openRankingsDialog(modeIndex: Int = 0) {
@@ -955,6 +1029,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun setInjuryReportEnabled(enabled: Boolean) {
         showInjuryReport = enabled
+        _uiState.update { state ->
+            state.copy(injuryReport = state.injuryReport?.copy(showReportsEnabled = enabled))
+        }
     }
 
     fun dismissRecruitingClassDialog() {
@@ -1131,7 +1208,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val playLabel = when {
             l.currentWeek < League.WEEK_CCG -> "Play Week"
             l.currentWeek == League.WEEK_CCG -> "Play Conf Championships"
-            l.currentWeek == League.WEEK_BOWLS -> "Play Bowl Games"
+            l.currentWeek == League.WEEK_CFP_FIRST_ROUND -> "Play CFP First Round & Bowls"
+            l.currentWeek == League.WEEK_CFP_QUARTERS -> "Play CFP Quarters"
+            l.currentWeek == League.WEEK_CFP_SEMIS -> "Play CFP Semis"
             l.currentWeek == League.WEEK_NCG -> "Play National Championship"
             else -> "Begin Recruiting"
         }
@@ -1169,9 +1248,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             )
         }
 
-        val injuryLines = if (showInjuryDialog) {
-            user.getInjuryReport()?.toList() ?: emptyList()
-        } else emptyList()
+        val injuryReport = if (showInjuryDialog) buildInjuryReport(user) else null
+
+        val showTalentHub = OffseasonSession.ready() &&
+            OffseasonSession.phase != OffseasonSession.Phase.SCHEDULE
 
         _uiState.update { state ->
             state.copy(
@@ -1179,6 +1259,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 selectedTab = tab,
                 awardsSegment = awardsSeg,
                 playWeekLabel = playLabel,
+                showReturnToTalentHub = showTalentHub,
                 homeStats = buildTeamStats(user),
                 homeRoster = buildRoster(user),
                 homeSchedule = buildSchedule(user),
@@ -1201,7 +1282,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 awardsBowlsUnlocked = l.currentWeek >= League.WEEK_CCG,
                 snackbarMessage = snackbar ?: state.snackbarMessage,
                 showInjuryDialog = showInjuryDialog || state.showInjuryDialog,
-                injuryLines = if (showInjuryDialog) injuryLines else state.injuryLines,
+                injuryReport = injuryReport ?: state.injuryReport,
                 showSeasonSummary = showSeasonSummary || state.showSeasonSummary,
                 seasonSummaryTitle = seasonSummaryTitle.ifEmpty { state.seasonSummaryTitle },
                 seasonSummaryMessage = seasonSummaryMessage.ifEmpty { state.seasonSummaryMessage },
@@ -1211,7 +1292,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun buildAwardsSnapshot(l: League, user: Team, state: MainUiState): MainUiState {
-        if (l.currentWeek < League.WEEK_BOWLS) {
+        if (l.currentWeek < League.WEEK_CFP_FIRST_ROUND) {
             val rows = if (l.heismanHistory.isNullOrEmpty()) {
                 listOf(AwardRowUi(listOf("Season awards unlock after conference championships."), false))
             } else {
@@ -1286,8 +1367,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (l.currentWeek < League.WEEK_CCG) return emptyList()
         val options = mutableListOf<String>()
         options.add("Conf Championships")
-        if (l.currentWeek >= League.WEEK_BOWLS || l.hasScheduledBowls) {
-            options.add("Bowl Games")
+        if (l.currentWeek >= League.WEEK_CFP_FIRST_ROUND || l.hasScheduledBowls) {
+            options.add("CFP & Bowls")
         }
         return options
     }
@@ -1298,7 +1379,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (options.isEmpty()) return emptyList()
         val selected = state.selectedBowlOption.coerceIn(options.indices)
         val label = options[selected]
-        val showBowls = label == "Bowl Games"
+        val showBowls = label == "CFP & Bowls"
         val rows = mutableListOf<BowlRowUi>()
         if (!showBowls) {
             for (c in l.conferences) {
@@ -1308,9 +1389,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 val detail = if (lines.size > 1) lines[1].trim() else s
                 rows.add(parseBowlDetail(c.confName + " CCG", detail))
             }
-        } else if (l.currentWeek >= League.WEEK_BOWLS || l.hasScheduledBowls) {
-            l.bowlGames?.forEach { g ->
-                if (g == null) return@forEach
+        } else if (l.currentWeek >= League.WEEK_CFP_FIRST_ROUND || l.hasScheduledBowls) {
+            fun addGame(g: Game?) {
+                if (g == null) return
                 rows.add(
                     BowlRowUi(
                         name = g.gameName ?: "Bowl",
@@ -1320,6 +1401,11 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ),
                 )
             }
+            l.cfpFirstRound?.forEach { addGame(it) }
+            l.cfpQuarters?.forEach { addGame(it) }
+            l.cfpSemis?.forEach { addGame(it) }
+            addGame(l.ncg)
+            l.bowlGames?.forEach { addGame(it) }
         }
         return rows
     }
@@ -1400,6 +1486,25 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         else -> null
     }
 
+    private fun buildInjuryReport(team: Team): InjuryReportUi {
+        fun rows(players: List<Player>?): List<InjuryReportPlayerUi> =
+            players.orEmpty().map { p ->
+                InjuryReportPlayerUi(
+                    name = p.name,
+                    pos = p.position,
+                    yearLabel = p.getYrStr(),
+                    ovr = p.ratOvr,
+                    potGrade = letterGrade(p.ratPot),
+                    injuryLabel = p.injury?.toString(),
+                )
+            }
+        return InjuryReportUi(
+            injured = rows(team.playersInjured),
+            recovered = rows(team.playersRecovered),
+            showReportsEnabled = showInjuryReport,
+        )
+    }
+
     private fun buildRoster(team: Team, filter: String = "ALL"): List<RosterRowUi> {
         return team.getRosterDisplayPlayers()
             .filter { filter == "ALL" || filter == it.player.position }
@@ -1441,6 +1546,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     scoreLine = summary[1],
                     played = played,
                     isHome = true,
+                    isBye = true,
                 )
             }
             if (game == null) {
@@ -1466,9 +1572,20 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             gameKey(game)
             val summary = team.getGameSummaryStr(index)
             val wl = team.gameWLSchedule
-            val played = index < wl.size && wl[index] != "BYE"
-            val isWin = if (played) wl[index] == "W" else null
-            val isLoss = if (played) wl[index] == "L" else null
+            // Prefer hasPlayed so a just-coached game shows after Main rebuilds,
+            // even if gameWLSchedule indexing is temporarily odd.
+            val played = game.hasPlayed || (index < wl.size && wl[index] != "BYE")
+            val isWin = when {
+                index < wl.size && wl[index] == "W" -> true
+                index < wl.size && wl[index] == "L" -> false
+                played && game.homeTeam == team -> game.homeScore > game.awayScore
+                played && game.awayTeam == team -> game.awayScore > game.homeScore
+                else -> null
+            }
+            val isLoss = when {
+                isWin == null -> null
+                else -> !isWin
+            }
             val isHome = game.homeTeam == team
             val oppTeam = if (isHome) game.awayTeam else game.homeTeam
             val homeAway = if (isHome) "vs" else "@"
@@ -1650,9 +1767,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         }
         val dealAmount = when {
             player.nilDealAmount > 0 -> "${NilMoney.format(player.nilDealAmount)}/yr"
-            player.rosterStatus == RosterStatus.SCHOLARSHIP -> {
-                NilMoney.format(NilMoney.scholarshipCoa(displayTeam.programProfile)) + " COA"
-            }
             else -> null
         }
         events.add(
@@ -1780,8 +1894,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                         footprint = team.programProfile.footprint,
                         pipeline = team.programProfile.pipeline,
                         momentum = team.programProfile.momentum,
-                        revShare = NilMoney.format(NilMoney.yearlyRevShare(team.programProfile)),
-                        collective = NilMoney.format(NilMoney.yearlyCollective(team.programProfile)),
+                        purse = NilMoney.format(NilMoney.yearlyBudget(team.programProfile)),
                         offTalent = team.getOffTalent(),
                         defTalent = team.getDefTalent(),
                         stTalent = team.getSTTalent(),

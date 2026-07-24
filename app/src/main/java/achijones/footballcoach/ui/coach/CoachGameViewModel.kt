@@ -314,7 +314,7 @@ class CoachGameViewModel : ViewModel() {
             if (!g.state.gameOver) g.autoSimUntil(AutoSimUntil.GAME)
             if (!g.hasPlayed) g.finalizeGame()
         }
-        GameSession.clearActiveCoachGame()
+        GameSession.finishCoachGame(g)
         _uiState.update { it.copy(finished = true) }
     }
 }

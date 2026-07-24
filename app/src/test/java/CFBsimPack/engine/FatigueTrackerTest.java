@@ -78,11 +78,82 @@ public class FatigueTrackerTest {
         ft.setEnergy(defStarter, 80);
         ft.setEnergy(benchRb, 50);
 
-        ft.afterSnap(off, def);
+        int offSnapsBefore = offStarter.seasonSnaps;
+        int defSnapsBefore = defStarter.seasonSnaps;
+        int benchSnapsBefore = benchRb.seasonSnaps;
+
+        ft.afterSnap(off, def, TempoCall.NORMAL);
 
         assertTrue("offense on-field should drain", ft.energyOf(offStarter) < 80);
         assertTrue("defense on-field should drain", ft.energyOf(defStarter) < 80);
         assertEquals("bench recovers +3", 53, ft.energyOf(benchRb));
+        assertEquals("offense on-field accrues a snap", offSnapsBefore + 1, offStarter.seasonSnaps);
+        assertEquals("defense on-field accrues a snap", defSnapsBefore + 1, defStarter.seasonSnaps);
+        assertEquals("bench does not accrue a snap", benchSnapsBefore, benchRb.seasonSnaps);
+    }
+
+    @Test
+    public void hurryUpDrainsHarderAndSkipsBenchRecover() throws Exception {
+        League league = createLeague();
+        Team offense = league.teamList.get(0);
+        Team defense = league.teamList.get(1);
+
+        FatigueTracker normalFt = new FatigueTracker();
+        FatigueTracker hurryFt = new FatigueTracker();
+        OnFieldEleven off = OnFieldEleven.forOffense(offense, "11", null);
+        OnFieldEleven def = OnFieldEleven.forDefense(defense, null);
+        Player starter = off.firstWithRole(RoleTag.RB);
+        Player benchRb = offense.getRB(1);
+        assertTrue(starter != null && benchRb != null && starter != benchRb);
+
+        normalFt.setEnergy(starter, 80);
+        hurryFt.setEnergy(starter, 80);
+        normalFt.setEnergy(benchRb, 50);
+        hurryFt.setEnergy(benchRb, 50);
+
+        normalFt.afterSnap(off, def, TempoCall.NORMAL);
+        hurryFt.afterSnap(off, def, TempoCall.HURRY_UP);
+
+        assertTrue("hurry should drain more than normal",
+                hurryFt.energyOf(starter) < normalFt.energyOf(starter));
+        assertEquals("hurry bench recover is 0", 50, hurryFt.energyOf(benchRb));
+        assertEquals("normal bench recovers +3", 53, normalFt.energyOf(benchRb));
+    }
+
+    @Test
+    public void chewClockGivesSlightlyMoreBenchRecover() throws Exception {
+        League league = createLeague();
+        Team offense = league.teamList.get(0);
+        Team defense = league.teamList.get(1);
+        FatigueTracker ft = new FatigueTracker();
+        OnFieldEleven off = OnFieldEleven.forOffense(offense, "11", null);
+        OnFieldEleven def = OnFieldEleven.forDefense(defense, null);
+        Player benchRb = offense.getRB(1);
+        assertTrue(benchRb != null);
+
+        ft.setEnergy(benchRb, 50);
+        ft.afterSnap(off, def, TempoCall.CHEW_CLOCK);
+        assertEquals("chew bench recovers +4", 54, ft.energyOf(benchRb));
+    }
+
+    @Test
+    public void periodSpikeDrainsRosterAndClampsFloor() throws Exception {
+        League league = createLeague();
+        Team home = league.teamList.get(0);
+        Team away = league.teamList.get(1);
+        FatigueTracker ft = new FatigueTracker();
+
+        Player qb = home.getQB(0);
+        Player awayRb = away.getRB(0);
+        assertTrue(qb != null && awayRb != null);
+        ft.setEnergy(qb, 40);
+        ft.setEnergy(awayRb, 20);
+
+        ft.periodSpike(home, away, FatigueTracker.OT_ENTRY_SPIKE);
+
+        assertEquals(40 - FatigueTracker.OT_ENTRY_SPIKE, ft.energyOf(qb));
+        assertEquals(15, ft.energyOf(awayRb));
+        assertEquals(100 - FatigueTracker.OT_ENTRY_SPIKE, ft.energyOf(home.getRB(0)));
     }
 
     @Test

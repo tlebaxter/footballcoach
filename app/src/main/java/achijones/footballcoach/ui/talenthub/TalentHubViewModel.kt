@@ -73,8 +73,7 @@ data class TalentHubUiState(
     val browsing: Boolean = false,
     val selectedTab: HubTab = HubTab.RETAIN,
     val cashLabel: String = "",
-    val revShareLabel: String = "",
-    val collectiveLabel: String = "",
+    val purseLabel: String = "",
     val y1Label: String = "",
     val schollyLabel: String = "",
     val rosterLabel: String = "",
@@ -92,7 +91,6 @@ data class TalentHubUiState(
     val showBuyoutConfirm: Boolean = false,
     val buyoutPlayerName: String? = null,
     val buyoutCostLabel: String? = null,
-    val showLeaveConfirm: Boolean = false,
     val navigateToMain: Boolean = false,
     val navigateHome: Boolean = false,
 )
@@ -120,6 +118,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             _uiState.update { it.copy(missingSession = true, ready = false) }
             return
         }
+        GameSession.setStayingOnMainDuringOffseason(false)
         league = OffseasonSession.league
         offseason = OffseasonSession.offseason
         user = league?.userTeam
@@ -171,18 +170,10 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update { it.copy(navigateHome = false) }
     }
 
-    fun requestLeave() {
-        _uiState.update { it.copy(showLeaveConfirm = true) }
-    }
-
-    fun dismissLeave() {
-        _uiState.update { it.copy(showLeaveConfirm = false) }
-    }
-
-    fun confirmLeave() {
-        GameSession.clearAll()
-        UserBrandTheme.clear()
-        _uiState.update { it.copy(showLeaveConfirm = false, navigateHome = true) }
+    /** Leaves for Main without discarding the live offseason session. */
+    fun requestBackToMain() {
+        GameSession.setStayingOnMainDuringOffseason(true)
+        _uiState.update { it.copy(navigateToMain = true) }
     }
 
     fun openSaveDialog() {
@@ -222,6 +213,9 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val l = league ?: return
         val file = SaveSlots.file(getApplication(), index)
         val ok = l.saveLeague(file)
+        if (ok) {
+            GameSession.setActiveSaveSlot(index)
+        }
         _uiState.update {
             it.copy(
                 showSaveDialog = false,
@@ -315,7 +309,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                         else -> "Sign"
                     },
                     showBuyout = retention && !draftStay,
-                    buyoutLabel = "Cut / Buy out (${NilMoney.format(u.buyoutCost(player))})",
+                    buyoutLabel = buyoutButtonLabel(u.buyoutCost(player)),
                     stayBonusLabel = NilMoney.format(stayBonus),
                     suggestionKey = row.suggestionKey,
                 ),
@@ -405,7 +399,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 showBuyoutConfirm = true,
                 buyoutPlayerName = player.name,
-                buyoutCostLabel = NilMoney.format(cost),
+                buyoutCostLabel = if (cost > 0) NilMoney.format(cost) else null,
             )
         }
         // keep player for confirm
@@ -429,7 +423,11 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                 showBuyoutConfirm = false,
                 buyoutPlayerName = null,
                 buyoutCostLabel = null,
-                message = if (ok) "Released ${player.name}" else "Cannot afford buyout.",
+                message = if (ok) {
+                    "Released ${player.name}"
+                } else {
+                    "Cannot afford buyout."
+                },
             )
         }
         reloadTab()
@@ -682,8 +680,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                 phaseLabel = OffseasonSession.phaseLabel(phase),
                 browsing = !canAct && tab != HubTab.MONEY,
                 cashLabel = u.budgetCashLabel(),
-                revShareLabel = u.budgetRevShareLabel(),
-                collectiveLabel = u.budgetCollectiveLabel(),
+                purseLabel = u.budgetPurseLabel(),
                 y1Label = u.budgetY1FreeLabel(),
                 schollyLabel = u.budgetSchollyLabel(),
                 rosterLabel = u.budgetRosterLabel(),
@@ -716,8 +713,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             it.copy(
                 rows = filtered,
                 cashLabel = u.budgetCashLabel(),
-                revShareLabel = u.budgetRevShareLabel(),
-                collectiveLabel = u.budgetCollectiveLabel(),
+                purseLabel = u.budgetPurseLabel(),
                 y1Label = u.budgetY1FreeLabel(),
                 schollyLabel = u.budgetSchollyLabel(),
                 rosterLabel = u.budgetRosterLabel(),
@@ -759,6 +755,14 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         return st.displayName() +
             (if (nil > 0) " ${NilMoney.format(nil)}/yr" else "") +
             " · ${y}yr · year-1 ${NilMoney.format(cost)}"
+    }
+
+    private fun buyoutButtonLabel(cost: Int): String {
+        return if (cost > 0) {
+            "Cut / Buy out (${NilMoney.format(cost)})"
+        } else {
+            "Cut"
+        }
     }
 
     /** Short key-attr preview for recruit cards (not full 3-skill legacy). */

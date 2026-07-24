@@ -3,45 +3,51 @@ package achijones.footballcoach.ui.talenthub
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Save
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ExposedDropdownMenuBox
 import androidx.compose.material3.ExposedDropdownMenuDefaults
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.OutlinedTextFieldDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -54,8 +60,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import CFBsimPack.RosterStatus
@@ -72,7 +81,9 @@ private val POSITIONS = listOf(
 )
 private val SORTS = listOf("OVR ↓", "Cost ↑", "Name")
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+private val CompactFieldContentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun TalentHubScreen(
     onNavigateToMain: () -> Unit,
@@ -82,7 +93,7 @@ fun TalentHubScreen(
     val state by viewModel.uiState.collectAsState()
     val snackbar = remember { SnackbarHostState() }
 
-    BackHandler { viewModel.requestLeave() }
+    BackHandler { viewModel.requestBackToMain() }
 
     LaunchedEffect(state.navigateToMain) {
         if (state.navigateToMain) {
@@ -110,17 +121,32 @@ fun TalentHubScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text("Talent Hub") },
-                actions = {
-                    IconButton(onClick = viewModel::openSaveDialog) {
-                        Icon(Icons.Default.Save, contentDescription = "Save League")
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.surface,
-                ),
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(MaterialTheme.colorScheme.surface)
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(onClick = viewModel::requestBackToMain) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back to team",
+                    )
+                }
+                Text(
+                    text = "${state.teamName} — ${state.phaseLabel}" +
+                        if (state.browsing) " (browsing)" else "",
+                    style = MaterialTheme.typography.titleMedium,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f),
+                )
+                IconButton(onClick = viewModel::openSaveDialog) {
+                    Icon(Icons.Default.Save, contentDescription = "Save League")
+                }
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
@@ -140,24 +166,19 @@ fun TalentHubScreen(
                 .padding(padding)
                 .padding(horizontal = 12.dp),
         ) {
-            Text(
-                text = "${state.teamName} — ${state.phaseLabel}" +
-                    if (state.browsing) " (browsing)" else "",
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(vertical = 8.dp),
-            )
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 BudgetChip(state.cashLabel)
-                BudgetChip(state.revShareLabel)
-                BudgetChip(state.collectiveLabel)
+                BudgetChip(state.purseLabel)
                 BudgetChip(state.y1Label)
                 BudgetChip(state.schollyLabel)
                 BudgetChip(state.rosterLabel)
             }
-            Spacer(Modifier.height(8.dp))
+            Spacer(Modifier.height(4.dp))
             SegmentedControl(
                 labels = listOf("Retain", "Portal", "HS", "Money"),
                 selected = state.selectedTab.ordinal,
@@ -175,7 +196,7 @@ fun TalentHubScreen(
                     }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         items(state.rows, key = { it.id }) { row ->
                             TalentRowCard(
@@ -242,10 +263,27 @@ fun TalentHubScreen(
     }
 
     if (state.showBuyoutConfirm) {
+        val hasBuyout = state.buyoutCostLabel != null
         AlertDialog(
             onDismissRequest = viewModel::dismissBuyout,
-            title = { Text("Cut / Buy out ${state.buyoutPlayerName}") },
-            text = { Text("Cost: ${state.buyoutCostLabel}") },
+            title = {
+                Text(
+                    if (hasBuyout) {
+                        "Cut / Buy out ${state.buyoutPlayerName}"
+                    } else {
+                        "Cut ${state.buyoutPlayerName}"
+                    },
+                )
+            },
+            text = {
+                Text(
+                    if (hasBuyout) {
+                        "Cost: ${state.buyoutCostLabel}"
+                    } else {
+                        "Release with no buyout."
+                    },
+                )
+            },
             confirmButton = {
                 TextButton(onClick = viewModel::confirmBuyout) { Text("Confirm") }
             },
@@ -255,21 +293,6 @@ fun TalentHubScreen(
         )
     }
 
-    if (state.showLeaveConfirm) {
-        AlertDialog(
-            onDismissRequest = viewModel::dismissLeave,
-            title = { Text("Leave Talent Hub?") },
-            text = {
-                Text("Leaving will discard the in-memory offseason session. Save first if you want to keep progress.")
-            },
-            confirmButton = {
-                TextButton(onClick = viewModel::confirmLeave) { Text("Leave") }
-            },
-            dismissButton = {
-                TextButton(onClick = viewModel::dismissLeave) { Text("Stay") }
-            },
-        )
-    }
 }
 
 @Composable
@@ -277,11 +300,55 @@ private fun BudgetChip(label: String) {
     Text(
         text = label,
         color = FcChipMoneyText,
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.labelSmall,
+        maxLines = 1,
         modifier = Modifier
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RoundedCornerShape(12.dp))
             .background(FcChipMoneyBg)
-            .padding(horizontal = 10.dp, vertical = 6.dp),
+            .padding(horizontal = 8.dp, vertical = 3.dp),
+    )
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun CompactOutlinedField(
+    value: String,
+    onValueChange: (String) -> Unit,
+    modifier: Modifier = Modifier,
+    placeholder: String? = null,
+    readOnly: Boolean = false,
+    leadingIcon: @Composable (() -> Unit)? = null,
+    trailingIcon: @Composable (() -> Unit)? = null,
+) {
+    val interactionSource = remember { MutableInteractionSource() }
+    val colors = OutlinedTextFieldDefaults.colors()
+    val textStyle = MaterialTheme.typography.bodyMedium.merge(
+        color = MaterialTheme.colorScheme.onSurface,
+    )
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        modifier = modifier.height(40.dp),
+        singleLine = true,
+        readOnly = readOnly,
+        textStyle = textStyle,
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        interactionSource = interactionSource,
+        decorationBox = { innerTextField ->
+            OutlinedTextFieldDefaults.DecorationBox(
+                value = value,
+                innerTextField = innerTextField,
+                enabled = true,
+                singleLine = true,
+                visualTransformation = VisualTransformation.None,
+                interactionSource = interactionSource,
+                placeholder = placeholder?.let { { Text(it, style = textStyle) } },
+                leadingIcon = leadingIcon,
+                trailingIcon = trailingIcon,
+                colors = colors,
+                contentPadding = CompactFieldContentPadding,
+            )
+        },
     )
 }
 
@@ -290,27 +357,41 @@ private fun BudgetChip(label: String) {
 private fun FiltersRow(state: TalentHubUiState, viewModel: TalentHubViewModel) {
     var posExpanded by remember { mutableStateOf(false) }
     var sortExpanded by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.padding(vertical = 8.dp)) {
-        OutlinedTextField(
+    Column(
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.padding(vertical = 4.dp),
+    ) {
+        CompactOutlinedField(
             value = state.search,
             onValueChange = viewModel::setSearch,
-            label = { Text("Search") },
-            singleLine = true,
+            placeholder = "Search",
+            leadingIcon = {
+                Icon(
+                    Icons.Default.Search,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+            },
             modifier = Modifier.fillMaxWidth(),
         )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
             ExposedDropdownMenuBox(
                 expanded = posExpanded,
                 onExpandedChange = { posExpanded = !posExpanded },
                 modifier = Modifier.weight(1f),
             ) {
-                OutlinedTextField(
+                CompactOutlinedField(
                     value = state.positionFilter,
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Pos") },
+                    placeholder = "Pos",
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(posExpanded) },
-                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
                 )
                 ExposedDropdownMenu(expanded = posExpanded, onDismissRequest = { posExpanded = false }) {
                     POSITIONS.forEach { pos ->
@@ -329,13 +410,15 @@ private fun FiltersRow(state: TalentHubUiState, viewModel: TalentHubViewModel) {
                 onExpandedChange = { sortExpanded = !sortExpanded },
                 modifier = Modifier.weight(1f),
             ) {
-                OutlinedTextField(
+                CompactOutlinedField(
                     value = SORTS.getOrElse(state.sortMode) { SORTS[0] },
                     onValueChange = {},
                     readOnly = true,
-                    label = { Text("Sort") },
+                    placeholder = "Sort",
                     trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(sortExpanded) },
-                    modifier = Modifier.menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable).fillMaxWidth(),
+                    modifier = Modifier
+                        .menuAnchor(ExposedDropdownMenuAnchorType.PrimaryNotEditable)
+                        .fillMaxWidth(),
                 )
                 ExposedDropdownMenu(expanded = sortExpanded, onDismissRequest = { sortExpanded = false }) {
                     SORTS.forEachIndexed { index, label ->
@@ -349,13 +432,11 @@ private fun FiltersRow(state: TalentHubUiState, viewModel: TalentHubViewModel) {
                     }
                 }
             }
-        }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Checkbox(
-                checked = state.affordableOnly,
-                onCheckedChange = viewModel::setAffordableOnly,
+            FilterChip(
+                selected = state.affordableOnly,
+                onClick = { viewModel.setAffordableOnly(!state.affordableOnly) },
+                label = { Text("Affordable") },
             )
-            Text("Affordable only")
         }
     }
 }

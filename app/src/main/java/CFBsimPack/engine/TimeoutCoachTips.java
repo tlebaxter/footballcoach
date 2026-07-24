@@ -7,6 +7,7 @@ package CFBsimPack.engine;
 public final class TimeoutCoachTips {
 
     public enum TipId {
+        TEN_SECOND_RUNOFF,
         RUNOFF_EXPIRES,
         END_OF_HALF,
         LATE_GAME_TRAILING,
@@ -32,6 +33,11 @@ public final class TimeoutCoachTips {
         if (!sit.canCallTimeout) return null;
         TempoCall t = tempo != null ? tempo : TempoCall.NORMAL;
         int runoff = t.runoffSeconds();
+
+        if (sit.pendingTenSecondRunoff) {
+            return new Tip(TipId.TEN_SECOND_RUNOFF,
+                    "10-second runoff pending — call timeout to avoid it.");
+        }
 
         if (sit.clockRunning && runoffWouldExpire(sit, runoff)) {
             return new Tip(TipId.RUNOFF_EXPIRES,

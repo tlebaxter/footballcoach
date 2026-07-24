@@ -51,6 +51,7 @@ data class ScheduleRowUi(
     val scoreLine: String,
     val played: Boolean,
     val isHome: Boolean,
+    val isBye: Boolean = false,
 )
 
 data class TeamPickerTeamUi(
@@ -63,8 +64,7 @@ data class TeamPickerTeamUi(
     val footprint: Int,
     val pipeline: Int,
     val momentum: Int,
-    val revShare: String,
-    val collective: String,
+    val purse: String,
     val offTalent: Int,
     val defTalent: Int,
     val stTalent: Int,
@@ -184,6 +184,22 @@ data class RenameDialogUi(
     val showInjuryReport: Boolean,
 )
 
+data class InjuryReportPlayerUi(
+    val name: String,
+    val pos: String,
+    val yearLabel: String,
+    val ovr: Int,
+    val potGrade: String,
+    /** Injury description plus duration, e.g. "Head (3 wk)"; null once recovered. */
+    val injuryLabel: String?,
+)
+
+data class InjuryReportUi(
+    val injured: List<InjuryReportPlayerUi>,
+    val recovered: List<InjuryReportPlayerUi>,
+    val showReportsEnabled: Boolean,
+)
+
 data class PlayersLeavingDialogUi(
     val title: String,
     val tab: PlayersLeavingTab,
@@ -196,6 +212,8 @@ data class MainUiState(
     val navigateHome: Boolean = false,
     val navigateToTalentHub: Boolean = false,
     val navigateToSchedule: Boolean = false,
+    /** True during Retention / Portal / HS so More can re-open Talent Hub. */
+    val showReturnToTalentHub: Boolean = false,
     val selectedTab: MainTab = MainTab.HOME,
     val homeSegment: HomeSegment = HomeSegment.ROSTER,
     val browseSegment: BrowseSegment = BrowseSegment.ROSTER,
@@ -251,7 +269,7 @@ data class MainUiState(
     val seasonSummaryTitle: String = "",
     val seasonSummaryMessage: String = "",
     val showInjuryDialog: Boolean = false,
-    val injuryLines: List<String> = emptyList(),
+    val injuryReport: InjuryReportUi? = null,
     val showRecruitingClassDialog: Boolean = false,
     val recruitingClassRows: List<RankingRowUi> = emptyList(),
     val showPlayersLeavingDialog: Boolean = false,

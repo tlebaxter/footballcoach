@@ -86,13 +86,7 @@ public final class AiPlayCaller {
         int time = state.gameTime;
         boolean trailing = trailing(offense, state);
         int deficit = scoreDeficit(offense, state);
-
-        if (!state.playingOT && time <= 30 && trailing) {
-            if (deficit <= 3 && yardLine > 60) {
-                return Playbook.offenseById("field_goal");
-            }
-            return weightedPick(scoreCandidates(offense, state, true), Playbook.offenseById("gun_four_verts"));
-        }
+        int yardsToGoal = Math.max(1, 100 - yardLine);
 
         if (state.pendingKickoff) {
             // Rare onside when trailing late
@@ -112,8 +106,42 @@ public final class AiPlayCaller {
             return Playbook.offenseById("kneel");
         }
 
+        // Spike to stop clock for FG setup / last-second play
+        if (shouldSpike(state, yardLine, down, time, trailing)) {
+            return Playbook.offenseById("spike");
+        }
+
+        // Late trailing: FG chip shot, hail mary, or force-pass verts
+        if (!state.playingOT && trailing) {
+            if (time <= 30 && deficit <= 3 && yardLine > 60) {
+                return Playbook.offenseById("field_goal");
+            }
+            if (shouldHailMary(yardLine, need, time, deficit, yardsToGoal)) {
+                // Prefer true deep shots; occasional empty verts look
+                return rng.nextDouble() < 0.35
+                        ? Playbook.offenseById("empty_four_verts")
+                        : Playbook.offenseById("gun_four_verts");
+            }
+            if (time <= 30) {
+                return weightedPick(scoreCandidates(offense, state, true),
+                        Playbook.offenseById("gun_four_verts"));
+            }
+        }
+
         List<Scored> scored = scoreCandidates(offense, state, false);
         return weightedPick(scored, Playbook.defaultOffense());
+    }
+
+    private boolean shouldSpike(GameState state, int yardLine, int down, int time, boolean trailing) {
+        if (state.playingOT || !trailing || state.pendingTry || state.pendingKickoff) return false;
+        if (time > 15 || down > 2 || state.yardsNeed < 1) return false;
+        return yardLine >= 55 || time <= 8;
+    }
+
+    private boolean shouldHailMary(int yardLine, int need, int time, int deficit, int yardsToGoal) {
+        if (time > 25 || yardLine > 70) return false;
+        if (deficit >= 4) return true;
+        return time <= 12 && need > yardsToGoal;
     }
 
     private OffenseConcept fourthDownCall(Team offense, GameState state, int yardLine, int need,
@@ -206,6 +234,7 @@ public final class AiPlayCaller {
         OffensivePhilosophy phil = offense.offPhilosophy != null ? offense.offPhilosophy : OffensivePhilosophy.MULTIPLE;
         List<OffenseConcept> pool = Playbook.situationalOffense(state, false);
         List<Scored> scored = new ArrayList<>();
+        boolean trailing = trailing(offense, state);
         for (OffenseConcept c : pool) {
             if (c.family == ConceptFamily.SPECIAL) continue;
             if (forcePass && c.offensePlay != OffensePlay.PASS && c.family != ConceptFamily.RPO) continue;
@@ -215,7 +244,6 @@ public final class AiPlayCaller {
                 if (state.down == 3 && state.yardsNeed > 4) score += 0.35;
                 if (c.depth == DepthBand.DEEP) {
                     score += state.yardsNeed >= 8 ? 0.25 : -0.35;
-                    if (state.yardLine > 85) score -= 0.4;
                 }
                 if (c.depth == DepthBand.SHORT && state.yardsNeed <= 4) score += 0.2;
             } else {
@@ -226,10 +254,76 @@ public final class AiPlayCaller {
             if (formationFitsPhilosophy(c.formation, phil)) score += 0.35;
             if (personnelFitsPhilosophy(c.personnel, phil)) score += 0.25;
             score += philosophyFamilyBonus(phil, c);
+            score += applySituationBias(c, state, trailing);
             if (score < 0.05) score = 0.05;
             scored.add(new Scored(c, score));
         }
         return scored;
+    }
+
+    /**
+     * Situation tables: red-zone, short-yardage, and 2-minute offense weights.
+     */
+    private double applySituationBias(OffenseConcept c, GameState state, boolean trailing) {
+        if (state.pendingTry) return 0;
+        double bias = 0;
+        int yardLine = state.yardLine;
+        int need = state.yardsNeed;
+        int down = state.down;
+        int time = state.gameTime;
+        boolean redZone = yardLine >= 80;
+        boolean shortYardage = need <= 2 && down >= 1 && down <= 3;
+        boolean powerId = isPowerShortId(c.id);
+        boolean heavyForm = c.formation == CFBsimPack.Formation.I_FORM
+                || c.formation == CFBsimPack.Formation.JUMBO;
+        boolean heavyPers = "21".equals(c.personnel) || "22".equals(c.personnel);
+
+        if (redZone) {
+            if (c.family == ConceptFamily.RUN || heavyForm || heavyPers) {
+                bias += 0.55;
+                if (yardLine >= 95) bias += 0.25;
+            }
+            if (c.family == ConceptFamily.PASS || c.family == ConceptFamily.RPO) {
+                if (c.depth == DepthBand.SHORT) bias += 0.15;
+                if (c.depth == DepthBand.DEEP) bias -= 0.75;
+            }
+            if (yardLine >= 90 && powerId) bias += 0.35;
+        }
+
+        if (shortYardage) {
+            if (c.family == ConceptFamily.RUN) bias += 0.45;
+            if (powerId) bias += 0.40;
+            if (c.depth == DepthBand.DEEP
+                    || "gun_four_verts".equals(c.id)
+                    || "empty_four_verts".equals(c.id)) {
+                bias -= 0.50;
+            }
+            if (c.depth == DepthBand.MEDIUM && need == 2 && down == 3) {
+                bias += 0.10;
+            }
+        }
+
+        if (!state.playingOT && trailing && time <= 120) {
+            if (c.family == ConceptFamily.PASS || c.family == ConceptFamily.RPO) {
+                // Final half-minute: prioritize deep shots over the quick game
+                if (time <= 30 && c.depth == DepthBand.DEEP) {
+                    bias += 0.55;
+                } else if (c.depth == DepthBand.SHORT || c.depth == DepthBand.MEDIUM) {
+                    bias += 0.35;
+                } else if (c.depth == DepthBand.DEEP && time <= 40 && need >= 15) {
+                    bias += 0.20;
+                }
+            } else if (c.family == ConceptFamily.RUN && need > 1) {
+                bias -= 0.25;
+            }
+        }
+
+        return bias;
+    }
+
+    private static boolean isPowerShortId(String id) {
+        return "jumbo_power".equals(id) || "jumbo_iso".equals(id)
+                || "i_dive".equals(id) || "i_power".equals(id) || "i_iso".equals(id);
     }
 
     private static double philosophyFamilyBonus(OffensivePhilosophy phil, OffenseConcept c) {
@@ -348,9 +442,23 @@ public final class AiPlayCaller {
         DefensiveSystem sys = defense.defSystem != null ? defense.defSystem : DefensiveSystem.BASE_4_3;
         double roll = rng.nextDouble();
 
+        // Short yardage: pack the box before prevent
         if (state.yardsNeed <= 2 && !state.pendingTry) {
             return Playbook.defenseFor(CoverageCall.STACK_BOX);
         }
+
+        // Late-lead prevent shell (no dedicated PREVENT enum)
+        if (!state.playingOT && state.gameTime < 120 && state.yardLine < 75 && !state.pendingTry) {
+            boolean defenseLeading = state.possessionHome
+                    ? state.awayScore > state.homeScore
+                    : state.homeScore > state.awayScore;
+            if (defenseLeading && roll < 0.70) {
+                if (roll < 0.28) return Playbook.defenseFor(CoverageCall.COVER_2);
+                if (roll < 0.50) return Playbook.defenseFor(CoverageCall.COVER_4);
+                return Playbook.defenseFor(CoverageCall.OFF_COVERAGE);
+            }
+        }
+
         if (state.down >= 3 && state.yardsNeed >= 7) {
             if (sys == DefensiveSystem.DIME || sys == DefensiveSystem.NICKEL || sys == DefensiveSystem.FOUR_TWO_FIVE) {
                 return Playbook.defenseFor(rng.nextBoolean() ? CoverageCall.COVER_2 : CoverageCall.COVER_4);
@@ -414,6 +522,7 @@ public final class AiPlayCaller {
 
     private TempoCall chooseTempo(Team offense, GameState state) {
         if (state.pendingTry) return TempoCall.NORMAL;
+        if (state.playingOT) return TempoCall.NORMAL;
         if (state.gameTime < 120 && trailing(offense, state)) return TempoCall.HURRY_UP;
         if (state.gameTime < 180 && !trailing(offense, state)) return TempoCall.CHEW_CLOCK;
         OffensivePhilosophy phil = offense.offPhilosophy;

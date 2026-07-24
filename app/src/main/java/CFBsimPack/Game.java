@@ -1,28 +1,28 @@
 package CFBsimPack;
 
 import CFBsimPack.engine.AiPlayCaller;
+import CFBsimPack.engine.AtmosphereEngine;
 import CFBsimPack.engine.AutoSimUntil;
 import CFBsimPack.engine.BoxScoreLine;
 import CFBsimPack.engine.DefenseConcept;
+import CFBsimPack.engine.FatigueTracker;
 import CFBsimPack.engine.GamePhase;
 import CFBsimPack.engine.GameSituation;
 import CFBsimPack.engine.GameState;
 import CFBsimPack.engine.OffenseConcept;
 import CFBsimPack.engine.OffensePlay;
-import CFBsimPack.engine.PlayCall;
-import CFBsimPack.engine.PlayLogEntry;
-import CFBsimPack.OnFieldEleven;
-import CFBsimPack.engine.FatigueTracker;
 import CFBsimPack.engine.PenaltyCatalog;
 import CFBsimPack.engine.PenaltyResolver;
 import CFBsimPack.engine.PendingPlay;
+import CFBsimPack.engine.PlayCall;
+import CFBsimPack.engine.PlayLogEntry;
 import CFBsimPack.engine.PlayResolver;
-import CFBsimPack.engine.PlayState;
-import CFBsimPack.engine.TempoCall;
 import CFBsimPack.engine.PlayResult;
+import CFBsimPack.engine.PlayState;
 import CFBsimPack.engine.Playbook;
 import CFBsimPack.engine.PlayerGameStats;
 import CFBsimPack.engine.TempoCall;
+import CFBsimPack.OnFieldEleven;
 
 import java.io.Serializable;
 import java.util.ArrayList;
@@ -109,6 +109,44 @@ public class Game implements Serializable {
         return Team.strongestRivalryBetween(homeTeam, awayTeam);
     }
 
+    private void seedAtmosphere() {
+        if (state == null) return;
+        AtmosphereEngine.seed(
+                state,
+                homeTeam != null ? homeTeam.programProfile : null,
+                awayTeam != null ? awayTeam.programProfile : null,
+                rivalryStrength(),
+                isBuyGameMatchup(),
+                AtmosphereEngine.isPostseason(gameName)
+        );
+    }
+
+    /** True when this game is a contracted buy game or a clear schedule-tier mismatch. */
+    private boolean isBuyGameMatchup() {
+        if (contractId != null && homeTeam != null && homeTeam.league != null
+                && homeTeam.league.oocContracts != null) {
+            OocContract c = homeTeam.league.oocContracts.findById(contractId);
+            if (c != null && c.type == OocContract.Type.BUY) {
+                return true;
+            }
+        }
+        if (homeTeam == null || awayTeam == null
+                || homeTeam.programProfile == null || awayTeam.programProfile == null) {
+            return false;
+        }
+        return homeTeam.programProfile.scheduleTier - awayTeam.programProfile.scheduleTier
+                >= AtmosphereEngine.BUY_GAME_TIER_GAP;
+    }
+
+    private void afterSnapAtmosphere(
+            PlayResult result,
+            boolean possessionHomeBefore,
+            int downBefore,
+            int yardsNeedBefore
+    ) {
+        AtmosphereEngine.afterSnap(state, result, possessionHomeBefore, downBefore, yardsNeedBefore);
+    }
+
     public void setRandom(Random random) {
         this.rng = random != null ? random : new Random();
         this.resolver = new PlayResolver(this.rng);
@@ -146,13 +184,26 @@ public class Game implements Serializable {
     }
 
     /**
-     * Apply deferred between-play runoff, then handle half/game expiry.
+     * Apply pending NCAA 10-second runoff or deferred tempo runoff, then half/game expiry.
      * @return true if the snap should continue; false if time expired (no play).
      */
     private boolean applyPendingRunoff(TempoCall tempo, int qBefore) {
-        if (state.playingOT || !state.clockRunning) return true;
-        int runoff = betweenPlayRunoff(tempo);
-        state.clockRunning = false;
+        if (state.playingOT) return true;
+
+        int runoff = 0;
+        if (state.pendingTenSecondRunoff) {
+            runoff = 10;
+            state.pendingTenSecondRunoff = false;
+            state.clockRunning = false;
+            state.lastPlayLog = "10-second runoff.";
+            gameEventLog += prefix() + state.lastPlayLog + "\n";
+        } else if (state.clockRunning) {
+            runoff = betweenPlayRunoff(tempo);
+            state.clockRunning = false;
+        } else {
+            return true;
+        }
+
         if (runoff > 0) {
             state.gameTime = Math.max(0, state.gameTime - runoff);
         }
@@ -176,16 +227,24 @@ public class Game implements Serializable {
     }
 
     /** Pre-snap delay of game based on tempo. Returns a result if DOG fired. */
-    private PlayResult rollDelayOfGame(PlayCall call) {
+    private PlayResult rollDelayOfGame(PlayCall call, boolean clockWasRunning) {
         if (state.playingOT || state.pendingKickoff || state.pendingTry) return null;
         TempoCall tempo = call != null && call.tempo != null ? call.tempo : TempoCall.NORMAL;
-        if (rng == null || rng.nextDouble() >= tempo.delayOfGameRate()) return null;
+        double dogRate = tempo.delayOfGameRate() * AtmosphereEngine.roadNoiseMult(state);
+        if (rng == null || rng.nextDouble() >= dogRate) return null;
 
         PenaltyCatalog.Foul dog = PenaltyCatalog.Foul.DELAY_OF_GAME;
-        state.yardLine = Math.max(1, state.yardLine - dog.yards);
-        state.yardsNeed = Math.min(99, state.yardsNeed + dog.yards);
+        int enforced = PenaltyResolver.yardsTowardOwnGoal(state.yardLine, dog.yards, dog.halfDistance);
+        state.yardLine = Math.max(1, state.yardLine - enforced);
+        state.yardsNeed = Math.min(99, state.yardsNeed + enforced);
         state.clockRunning = false;
-        String line = "PENALTY: DELAY OF GAME on offense, " + dog.yards + " yards.";
+        if (clockWasRunning && state.underOneMinuteInHalf() && dog.triggersTenSecondRunoff) {
+            state.pendingTenSecondRunoff = true;
+        }
+        String line = "PENALTY: DELAY OF GAME on offense, " + enforced + " yards.";
+        if (state.pendingTenSecondRunoff) {
+            line += " 10-second runoff pending.";
+        }
         state.lastPlayLog = line;
         gameEventLog += prefix() + line + "\n";
         state.halfUnderway = true;
@@ -203,7 +262,7 @@ public class Game implements Serializable {
                 ? call.resolvedOffenseConcept().personnel : null;
         OnFieldEleven off = OnFieldEleven.forOffense(offense, pers, fatigueTracker);
         OnFieldEleven def = OnFieldEleven.forDefense(defense, fatigueTracker);
-        fatigueTracker.afterSnap(off, def);
+        fatigueTracker.afterSnap(off, def, call.tempo);
     }
 
     public void startGame() {
@@ -226,6 +285,7 @@ public class Game implements Serializable {
         state.awaitingCoinToss = true;
         state.tossResolved = false;
         state.homeDefendsLeft = true;
+        seedAtmosphere();
         started = true;
         prevQuarter = 1;
         drivePath = new ArrayList<>();
@@ -343,7 +403,8 @@ public class Game implements Serializable {
                 state.awaitingCoinToss, state.homeWonToss, state.homeDefendsLeft, userWonCoinToss(),
                 state.pendingTry, state.tryAwaitingChoice, state.tryIsTwoPoint,
                 userChoosesTry, userDefendsTwoPoint,
-                canCallTimeout, state.clockRunning
+                canCallTimeout, state.clockRunning, state.pendingTenSecondRunoff,
+                state.crowdEnergy, AtmosphereEngine.band(state)
         );
     }
 
@@ -434,12 +495,13 @@ public class Game implements Serializable {
         }
 
         int qBefore = state.quarter();
+        boolean clockWasRunning = state.clockRunning;
         if (!applyPendingRunoff(call.tempo, qBefore)) {
             return PlayResult.logOnly(
                     state.lastPlayLog != null ? state.lastPlayLog : "Time expired.", 0);
         }
 
-        PlayResult dog = rollDelayOfGame(call);
+        PlayResult dog = rollDelayOfGame(call, clockWasRunning);
         if (dog != null) return dog;
 
         int yardBefore = state.yardLine;
@@ -448,6 +510,7 @@ public class Game implements Serializable {
         String clockBefore = state.clockDisplay();
         qBefore = state.quarter();
         boolean possBefore = state.possessionHome;
+        double roadNoise = AtmosphereEngine.roadNoiseMult(state);
 
         PlayState before = PlayState.from(state);
         PlayResult result = resolver.resolve(homeTeam, awayTeam, state, call);
@@ -455,27 +518,47 @@ public class Game implements Serializable {
         PlayState after = PlayState.from(state);
 
         PendingPlay pending = new PendingPlay(result, before, after);
-        pending.foul = PenaltyCatalog.roll(rng, call.offensePlay);
+        boolean contactPlay = !result.incomplete && !result.turnover && !result.touchdown
+                && result.playType != OffensePlay.SPIKE && result.playType != OffensePlay.KNEEL
+                && result.yardsGained > 0;
+        pending.foul = PenaltyCatalog.roll(rng, call.offensePlay, roadNoise, contactPlay);
         if (pending.foul != null) {
+            if (pending.foul == PenaltyCatalog.Foul.DPI) {
+                pending.foulSpotYardLine = result.passArriveYardLine > 0
+                        ? result.passArriveYardLine : before.yardLine;
+            }
+            if (pending.foul.ejects) {
+                pending.ejectedPlayer = pickTargetingEjectee(!possBefore);
+            }
             PenaltyResolver.resolve(pending);
         }
+        maybeRollInjuryStoppage(pending, call, possBefore);
 
         if (pending.foul != null && pending.foulAccepted) {
-            // Accepted foul: discard play outcome; keep penalty spot/down (dead ball — clock stops)
+            // Accepted foul: discard play outcome; dead ball — no nullified play clock burn
             writePlayState(state, pending.after);
             state.homeScore = before.homeScore;
             state.awayScore = before.awayScore;
             state.possessionHome = before.possessionHome;
             if (!state.playingOT) {
-                state.gameTime = Math.max(0, before.gameTime - Math.max(result.clockBurned, 0));
+                state.gameTime = before.gameTime;
             }
             state.clockRunning = false;
+            if (pending.ejectedPlayer != null) {
+                pending.ejectedPlayer.isEjected = true;
+            }
+            maybeArmTenSecondRunoff(clockWasRunning, pending);
+            if (state.pendingTenSecondRunoff && result.logLine != null
+                    && !result.logLine.contains("10-second runoff")) {
+                result.logLine = result.logLine + " 10-second runoff pending.";
+            }
             state.lastPlayLog = result.logLine != null ? result.logLine : "";
             if (result.logLine != null && !result.logLine.isEmpty()) {
                 gameEventLog += prefix() + result.logLine + "\n";
             }
             recordPlay(call, result, clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
             afterSnapFatigue(call, possBefore);
+            afterSnapAtmosphere(result, possBefore, downBefore, distBefore);
             state.halfUnderway = true;
             syncPublicFields();
             checkClockExpiryAfterPlay(qBefore);
@@ -483,15 +566,74 @@ public class Game implements Serializable {
         }
 
         // No foul or declined: keep resolved play situation, then score/flip via applyResult
+        if (pending.injuryStoppage) {
+            state.clockRunning = false;
+            maybeArmTenSecondRunoff(clockWasRunning, pending);
+            if (state.pendingTenSecondRunoff && result.logLine != null
+                    && !result.logLine.contains("10-second runoff")) {
+                result.logLine = result.logLine + " 10-second runoff pending.";
+            }
+        }
         writePlayState(state, pending.after);
         recordPlay(call, result, clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
         applyResult(result, call);
-        state.clockRunning = !state.playingOT && !result.stoppedClock;
+        if (pending.injuryStoppage) {
+            state.clockRunning = false;
+        } else {
+            state.clockRunning = !state.playingOT && !result.stoppedClock;
+        }
         afterSnapFatigue(call, possBefore);
+        afterSnapAtmosphere(result, possBefore, downBefore, distBefore);
         state.halfUnderway = true;
         syncPublicFields();
         checkClockExpiryAfterPlay(qBefore);
         return result;
+    }
+
+    private void maybeArmTenSecondRunoff(boolean clockWasRunning, PendingPlay pending) {
+        if (state.playingOT || !clockWasRunning || !state.underOneMinuteInHalf()) return;
+        boolean foulTrigger = pending.foul != null && pending.foulAccepted
+                && pending.foul.triggersTenSecondRunoff;
+        if (foulTrigger || pending.injuryStoppage) {
+            state.pendingTenSecondRunoff = true;
+            state.clockRunning = false;
+        }
+    }
+
+    /** Rare in-game injury stoppage (not week-long Injury) — sits player for this game. */
+    private void maybeRollInjuryStoppage(PendingPlay pending, PlayCall call, boolean possHome) {
+        if (pending == null || rng == null || state.playingOT) return;
+        if (pending.foul != null && pending.foulAccepted) return; // foul already dead-balls
+        if (rng.nextDouble() >= 0.008) return;
+        Team offense = possHome ? homeTeam : awayTeam;
+        Team defense = possHome ? awayTeam : homeTeam;
+        String pers = call != null && call.resolvedOffenseConcept() != null
+                ? call.resolvedOffenseConcept().personnel : null;
+        OnFieldEleven off = OnFieldEleven.forOffense(offense, pers, fatigueTracker);
+        OnFieldEleven def = OnFieldEleven.forDefense(defense, fatigueTracker);
+        List<Player> pool = new ArrayList<>();
+        pool.addAll(off.players);
+        pool.addAll(def.players);
+        if (pool.isEmpty()) return;
+        Player hurt = pool.get(rng.nextInt(pool.size()));
+        if (hurt == null || hurt.isInjured || hurt.isEjected) return;
+        hurt.isInjured = true;
+        pending.injuryStoppage = true;
+        if (pending.result != null) {
+            pending.result.stoppedClock = true;
+            String note = " Injury: " + hurt.name + " leaves the game.";
+            pending.result.logLine = (pending.result.logLine != null ? pending.result.logLine : "") + note;
+        }
+    }
+
+    private Player pickTargetingEjectee(boolean defenseIsHome) {
+        Team defense = defenseIsHome ? homeTeam : awayTeam;
+        OnFieldEleven def = OnFieldEleven.forDefense(defense, fatigueTracker);
+        Player p = def.firstOf(PositionGroup.CB);
+        if (p == null) p = def.firstOf(PositionGroup.S);
+        if (p == null) p = def.firstOf(PositionGroup.LB);
+        if (p == null && !def.players.isEmpty()) p = def.players.get(0);
+        return p;
     }
 
     /** Half/game end from in-play burn (runoff already applied at snap start). */
@@ -628,6 +770,7 @@ public class Game implements Serializable {
         int guard = 0;
         while (!state.gameOver && !hasPlayed && guard++ < 800) {
             autoResolveTryIfNeeded(true);
+            maybeAiAvoidTenSecondRunoff();
             Team offense = state.possessionHome ? homeTeam : awayTeam;
             Team defense = state.possessionHome ? awayTeam : homeTeam;
             PlayCall call = aiCaller.choose(offense, defense, state);
@@ -667,6 +810,7 @@ public class Game implements Serializable {
         while (!state.gameOver && guard++ < 900) {
             // Force: a user-controlled offense would otherwise leave the try pending forever.
             autoResolveTryIfNeeded(true);
+            maybeAiAvoidTenSecondRunoff();
             Team offense = state.possessionHome ? homeTeam : awayTeam;
             Team defense = state.possessionHome ? awayTeam : homeTeam;
             executeSnap(aiCaller.choose(offense, defense, state));
@@ -734,10 +878,47 @@ public class Game implements Serializable {
             homeTeam.league.oocContracts.settlePlayedGame(this);
         }
 
+        clearSnapInjuries(homeTeam);
+        clearSnapInjuries(awayTeam);
         homeTeam.checkForInjury();
         awayTeam.checkForInjury();
+        clearEjections(homeTeam);
+        clearEjections(awayTeam);
         hasPlayed = true;
         state.gameOver = true;
+    }
+
+    private static void clearEjections(Team team) {
+        if (team == null) return;
+        for (Player p : team.getAllPlayers()) {
+            if (p != null) p.isEjected = false;
+        }
+    }
+
+    /** Clears in-game injury stoppages that have no week-long {@link Injury}. */
+    private static void clearSnapInjuries(Team team) {
+        if (team == null) return;
+        for (Player p : team.getAllPlayers()) {
+            if (p != null && p.isInjured && p.injury == null) {
+                p.isInjured = false;
+            }
+        }
+    }
+
+    /**
+     * Under 1:00 with a pending 10-second runoff, AI offense burns a timeout when
+     * trailing or tied (preserve clock).
+     */
+    private void maybeAiAvoidTenSecondRunoff() {
+        if (state == null || !state.pendingTenSecondRunoff || state.playingOT) return;
+        Team offense = state.possessionHome ? homeTeam : awayTeam;
+        if (offense.userControlled) return;
+        boolean home = state.possessionHome;
+        if (!state.canCallTimeout(home)) return;
+        int offScore = home ? state.homeScore : state.awayScore;
+        int defScore = home ? state.awayScore : state.homeScore;
+        if (offScore > defScore) return; // leading — runoff is fine
+        callTimeout(home);
     }
 
     private void applyResult(PlayResult result, PlayCall call) {
@@ -1039,6 +1220,9 @@ public class Game implements Serializable {
         state.clockRunning = false;
         state.halfUnderway = true;
         resetDrive(75);
+        if (fatigueTracker != null) {
+            fatigueTracker.periodSpike(homeTeam, awayTeam, FatigueTracker.OT_ENTRY_SPIKE);
+        }
         gameEventLog += prefix() + "OVERTIME!\n";
     }
 
@@ -1053,6 +1237,9 @@ public class Game implements Serializable {
             state.resetTimeoutsForOt();
             state.clockRunning = false;
             resetDrive(75);
+            if (fatigueTracker != null) {
+                fatigueTracker.periodSpike(homeTeam, awayTeam, FatigueTracker.OT_PERIOD_SPIKE);
+            }
         } else if (!state.bottomOT) {
             state.possessionHome = !state.possessionHome;
             state.yardLine = 75;

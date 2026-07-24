@@ -3,6 +3,7 @@ package CFBsimPack.engine;
 import CFBsimPack.OnFieldEleven;
 import CFBsimPack.Player;
 import CFBsimPack.PlayerRatings;
+import CFBsimPack.Team;
 
 import java.util.HashMap;
 import java.util.HashSet;
@@ -18,6 +19,10 @@ public final class FatigueTracker {
     public static final int SIT_ENERGY = 40;
     /** Backup must be at least this fresh to replace a sitting starter. */
     public static final int FRESH_ENERGY = 55;
+    /** Flat roster drain when regulation ends in a tie and OT begins. */
+    public static final int OT_ENTRY_SPIKE = 12;
+    /** Flat roster drain when a new OT period starts after both possessions. */
+    public static final int OT_PERIOD_SPIKE = 8;
 
     private final Map<Player, Integer> energy = new HashMap<>();
 
@@ -41,28 +46,56 @@ public final class FatigueTracker {
     }
 
     public void afterSnap(OnFieldEleven onField, OnFieldEleven offField) {
+        afterSnap(onField, offField, TempoCall.NORMAL);
+    }
+
+    public void afterSnap(OnFieldEleven onField, OnFieldEleven offField, TempoCall tempo) {
+        TempoCall t = tempo != null ? tempo : TempoCall.NORMAL;
         Set<Player> played = new HashSet<>();
-        drainEleven(onField, played);
-        drainEleven(offField, played);
+        drainEleven(onField, played, t);
+        drainEleven(offField, played, t);
+        int recover = Math.max(0, t.benchRecover);
         for (Map.Entry<Player, Integer> e : energy.entrySet()) {
             Player p = e.getKey();
             if (played.contains(p)) continue;
-            energy.put(p, Math.min(100, e.getValue() + 3));
+            energy.put(p, Math.min(100, e.getValue() + recover));
         }
     }
 
-    private void drainEleven(OnFieldEleven eleven, Set<Player> played) {
+    /** One-shot flat drain across both full rosters (OT entry / new OT period). */
+    public void periodSpike(Team home, Team away, int amount) {
+        if (amount <= 0) return;
+        spikeTeam(home, amount);
+        spikeTeam(away, amount);
+    }
+
+    private void spikeTeam(Team team, int amount) {
+        if (team == null) return;
+        for (Player p : team.getAllPlayers()) {
+            if (p == null) continue;
+            drain(p, amount);
+        }
+    }
+
+    private void drainEleven(OnFieldEleven eleven, Set<Player> played, TempoCall tempo) {
         if (eleven == null) return;
         for (Player p : eleven.players) {
             if (p == null) continue;
             played.add(p);
-            drain(p, snapDrain(p));
+            p.recordSnap();
+            drain(p, scaledSnapDrain(p, tempo));
         }
     }
 
     private void drain(Player p, int amount) {
         int cur = energyOf(p);
         energy.put(p, Math.max(15, cur - amount));
+    }
+
+    private int scaledSnapDrain(Player p, TempoCall tempo) {
+        int base = snapDrain(p);
+        int scaled = (int) Math.round(base * tempo.fatigueDrainMult);
+        return Math.max(2, scaled);
     }
 
     private int snapDrain(Player p) {

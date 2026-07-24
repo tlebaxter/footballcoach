@@ -91,16 +91,37 @@ public final class OffenseConcept {
      * Soft capped matchup adjustment added to completion (pass) or block advantage (run).
      */
     public double matchupBonus(CoverageCall cov) {
+        return matchupBonus(cov, null);
+    }
+
+    /**
+     * Situation-aware matchup adjustment (red zone / short yardage / late deep).
+     */
+    public double matchupBonus(CoverageCall cov, GameState state) {
         if (cov == null) return 0;
+        boolean shortOrGoal = state != null
+                && (state.yardsNeed <= 2 || state.yardLine >= 95);
+        boolean redZoneDeep = state != null && state.yardLine >= 85;
+        boolean lateDeep = state != null && state.gameTime <= 40;
+
         double bonus = 0;
         if (family == ConceptFamily.RUN || offensePlay == OffensePlay.RUN) {
-            if (cov == CoverageCall.STACK_BOX) bonus -= 5;
+            if (cov == CoverageCall.STACK_BOX) bonus -= shortOrGoal ? 2 : 5;
             else if (cov == CoverageCall.COVER_4 || cov == CoverageCall.OFF_COVERAGE) bonus += 3.5;
             else if (cov == CoverageCall.COVER_0 || cov == CoverageCall.PRESS) bonus += 2;
         } else if (offensePlay == OffensePlay.PASS || family == ConceptFamily.RPO) {
             if (depth == DepthBand.DEEP) {
-                if (cov == CoverageCall.COVER_0 || cov == CoverageCall.MAN || cov == CoverageCall.PRESS) bonus += 4;
-                if (cov == CoverageCall.COVER_4 || cov == CoverageCall.COVER_2) bonus -= 3.5;
+                if (cov == CoverageCall.COVER_0 || cov == CoverageCall.MAN || cov == CoverageCall.PRESS) {
+                    if (redZoneDeep && (cov == CoverageCall.MAN || cov == CoverageCall.PRESS)) {
+                        bonus += 1.5;
+                    } else {
+                        bonus += lateDeep && (cov == CoverageCall.COVER_0 || cov == CoverageCall.MAN)
+                                ? 5 : 4;
+                    }
+                }
+                if (cov == CoverageCall.COVER_4 || cov == CoverageCall.COVER_2) {
+                    bonus -= lateDeep ? 5 : 3.5;
+                }
                 if (cov == CoverageCall.SPY) bonus -= 1.5;
             } else if (depth == DepthBand.MEDIUM) {
                 if (cov == CoverageCall.COVER_3 || cov == CoverageCall.ZONE) bonus += 1.5;

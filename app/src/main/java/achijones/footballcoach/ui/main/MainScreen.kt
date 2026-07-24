@@ -81,6 +81,7 @@ import androidx.compose.material3.ExposedDropdownMenuAnchorType
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -91,6 +92,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -116,6 +118,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import achijones.footballcoach.ui.components.ConferenceLogo
 import achijones.footballcoach.ui.components.SegmentedControl
@@ -128,6 +133,7 @@ import achijones.footballcoach.ui.components.rememberSheetFlingBlocker
 import achijones.footballcoach.ui.components.rememberTeamColors
 import achijones.footballcoach.ui.theme.FcChipPosBg
 import achijones.footballcoach.ui.theme.FcChipPosText
+import achijones.footballcoach.ui.theme.FcBye
 import achijones.footballcoach.ui.theme.FcLoss
 import achijones.footballcoach.ui.theme.FcOvrElite
 import achijones.footballcoach.ui.theme.FcOvrStarter
@@ -164,8 +170,16 @@ fun MainScreen(
 
     BackHandler { viewModel.requestExit() }
 
-    LaunchedEffect(Unit) {
-        viewModel.onScreenEntered()
+    // Resume (including return from coach) refreshes schedule / W-L snapshots.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                viewModel.onScreenEntered()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
     // Returning from Talent Hub / Schedule reuses this composition; clear the
@@ -273,36 +287,46 @@ fun MainScreen(
                         Text(state.playWeekLabel)
                     }
                 }
+                val navItemColors = NavigationBarItemDefaults.colors(
+                    selectedTextColor = MaterialTheme.colorScheme.onSurface,
+                    selectedIconColor = MaterialTheme.colorScheme.onSecondaryContainer,
+                    indicatorColor = MaterialTheme.colorScheme.secondaryContainer,
+                )
                 NavigationBar {
                     NavigationBarItem(
                         selected = state.selectedTab == MainTab.HOME,
                         onClick = { viewModel.selectTab(MainTab.HOME) },
                         icon = { androidx.compose.material3.Icon(Icons.Default.Home, null) },
                         label = { Text("Home") },
+                        colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = state.selectedTab == MainTab.TEAM,
                         onClick = { viewModel.selectTab(MainTab.TEAM) },
                         icon = { androidx.compose.material3.Icon(Icons.Default.Groups, null) },
                         label = { Text("Team") },
+                        colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = state.selectedTab == MainTab.LEAGUE,
                         onClick = { viewModel.selectTab(MainTab.LEAGUE) },
                         icon = { androidx.compose.material3.Icon(Icons.Default.Leaderboard, null) },
                         label = { Text("League") },
+                        colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = state.selectedTab == MainTab.AWARDS,
                         onClick = { viewModel.selectTab(MainTab.AWARDS) },
                         icon = { androidx.compose.material3.Icon(Icons.Default.EmojiEvents, null) },
                         label = { Text("Awards") },
+                        colors = navItemColors,
                     )
                     NavigationBarItem(
                         selected = state.selectedTab == MainTab.MORE,
                         onClick = { viewModel.selectTab(MainTab.MORE) },
                         icon = { androidx.compose.material3.Icon(Icons.Default.MoreHoriz, null) },
                         label = { Text("More") },
+                        colors = navItemColors,
                     )
                 }
             }
@@ -357,8 +381,8 @@ fun MainScreen(
             },
         )
     }
-    if (state.showInjuryDialog) {
-        InjuryDialog(state.injuryLines, viewModel)
+    if (state.showInjuryDialog && state.injuryReport != null) {
+        InjuryReportSheet(state.injuryReport!!, viewModel)
     }
     if (state.showPlayersLeavingDialog && state.playersLeavingDialog != null) {
         PlayersLeavingDialog(state.playersLeavingDialog!!, viewModel)
@@ -872,6 +896,9 @@ private fun MorePanel(state: MainUiState, viewModel: MainViewModel, modifier: Mo
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         MoreButton("Save League", viewModel::openSaveDialog)
+        if (state.showReturnToTalentHub) {
+            MoreButton("Talent Hub", viewModel::openTalentHub)
+        }
         MoreButton("Schedule & Contracts", viewModel::openScheduleScreen)
         MoreButton("League History / Records", viewModel::openLeagueHistoryDialog)
         MoreButton("Team History", viewModel::openTeamHistoryDialog)
@@ -1534,11 +1561,11 @@ private fun RosterInjuryChip(label: String) {
 
 @Composable
 private fun ScheduleSnapshotHero(schedule: List<ScheduleRowUi>) {
-    val playedRows = schedule.filter { it.played }
+    val playedRows = schedule.filter { it.played && !it.isBye }
     val wins = playedRows.count { it.isWin == true }
     val losses = playedRows.count { it.isLoss == true }
-    val remaining = schedule.count { !it.played }
-    val nextOpponent = schedule.firstOrNull { !it.played }?.opponentLabel ?: "Season done"
+    val remaining = schedule.count { !it.played && !it.isBye }
+    val nextOpponent = schedule.firstOrNull { !it.played && !it.isBye }?.opponentLabel ?: "Season done"
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -1588,6 +1615,10 @@ private fun ScheduleCard(
     onOpponentClick: (String?) -> Unit,
 ) {
     val cardShape = RoundedCornerShape(12.dp)
+    if (row.isBye) {
+        ByeWeekCard(row, cardShape)
+        return
+    }
     val opponentColors = rememberTeamColors(row.opponentTeamName, row.opponentAbbr)
     val opponentPrimary = if (row.opponentTeamName != null) opponentColors.primary else null
     val rowBrush = when {
@@ -1695,6 +1726,54 @@ private fun ScheduleCard(
 }
 
 @Composable
+private fun ByeWeekCard(row: ScheduleRowUi, cardShape: RoundedCornerShape) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(
+                Brush.horizontalGradient(
+                    listOf(
+                        FcBye.copy(alpha = 0.55f),
+                        FcBye.copy(alpha = 0.22f),
+                        MaterialTheme.colorScheme.surfaceVariant,
+                    ),
+                ),
+            )
+            .border(1.dp, FcBye.copy(alpha = 0.45f), cardShape)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Column(
+            modifier = Modifier.weight(1f),
+            verticalArrangement = Arrangement.spacedBy(2.dp),
+        ) {
+            Text(
+                text = row.weekLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+            )
+            Text(
+                text = if (row.played) "Bye week complete" else "Bye week",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            text = "REST",
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            maxLines = 1,
+        )
+    }
+}
+
+@Composable
 private fun AwardCard(row: AwardRowUi) {
     Column(
         modifier = Modifier
@@ -1795,8 +1874,7 @@ private fun TeamPickerProgramSheet(
         "Footprint" to team.footprint.toString(),
         "NFL Pipeline" to team.pipeline.toString(),
         "Momentum" to team.momentum.toString(),
-        "Rev Share" to team.revShare,
-        "Collective" to team.collective,
+        "Purse" to team.purse,
     )
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -2202,23 +2280,157 @@ private fun TeamPickerScreen(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun InjuryDialog(lines: List<String>, viewModel: MainViewModel) {
-    AlertDialog(
+private fun InjuryReportSheet(report: InjuryReportUi, viewModel: MainViewModel) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    ModalBottomSheet(
         onDismissRequest = viewModel::dismissInjuryDialog,
-        title = { Text("Injury Report") },
-        text = {
-            Column {
-                lines.forEach { Text(it) }
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Checkbox(checked = true, onCheckedChange = viewModel::setInjuryReportEnabled)
-                    Text("Show injury reports")
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 20.dp),
+        ) {
+            Text(
+                text = "Injury Report",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+            )
+            val subtitle = listOfNotNull(
+                report.injured.size.takeIf { it > 0 }?.let { "$it injured" },
+                report.recovered.size.takeIf { it > 0 }?.let { "$it recovered" },
+            ).joinToString(" \u00B7 ")
+            if (subtitle.isNotEmpty()) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Spacer(modifier = Modifier.height(12.dp))
+            Column(
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .fillMaxWidth()
+                    .nestedScroll(rememberSheetFlingBlocker())
+                    .verticalScroll(rememberScrollState()),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (report.injured.isEmpty() && report.recovered.isEmpty()) {
+                    Text(
+                        text = "No injuries this week.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                if (report.injured.isNotEmpty()) {
+                    InjuryReportSectionLabel("INJURED")
+                    report.injured.forEach { InjuryReportCard(it) }
+                }
+                if (report.recovered.isNotEmpty()) {
+                    if (report.injured.isNotEmpty()) Spacer(modifier = Modifier.height(4.dp))
+                    InjuryReportSectionLabel("RECOVERED")
+                    report.recovered.forEach { InjuryReportCard(it) }
                 }
             }
-        },
-        confirmButton = { TextButton(onClick = viewModel::dismissInjuryDialog) { Text("OK") } },
-        dismissButton = { TextButton(onClick = viewModel::goToLineupFromInjury) { Text("Set Lineup") } },
+            Spacer(modifier = Modifier.height(12.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Checkbox(
+                    checked = report.showReportsEnabled,
+                    onCheckedChange = viewModel::setInjuryReportEnabled,
+                )
+                Text(
+                    text = "Show injury reports",
+                    style = MaterialTheme.typography.bodyMedium,
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                OutlinedButton(
+                    onClick = viewModel::goToLineupFromInjury,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("Set Lineup")
+                }
+                Button(
+                    onClick = viewModel::dismissInjuryDialog,
+                    modifier = Modifier.weight(1f),
+                ) {
+                    Text("OK")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun InjuryReportSectionLabel(label: String) {
+    Text(
+        text = label,
+        style = MaterialTheme.typography.labelLarge,
+        fontWeight = FontWeight.Bold,
+        color = MaterialTheme.colorScheme.primary,
     )
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun InjuryReportCard(player: InjuryReportPlayerUi) {
+    val cardShape = RoundedCornerShape(12.dp)
+    val injured = player.injuryLabel != null
+    val borderColor = if (injured) {
+        MaterialTheme.colorScheme.error.copy(alpha = 0.55f)
+    } else {
+        MaterialTheme.colorScheme.outline.copy(alpha = 0.15f)
+    }
+    val surfaceColor = if (injured) {
+        MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f)
+    } else {
+        MaterialTheme.colorScheme.surfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(cardShape)
+            .background(surfaceColor)
+            .border(1.dp, borderColor, cardShape)
+            .padding(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = player.pos,
+            color = FcChipPosText,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            modifier = Modifier
+                .clip(RoundedCornerShape(8.dp))
+                .background(FcChipPosBg)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(
+                text = player.name,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                RosterMetaChip(player.yearLabel)
+                if (player.injuryLabel != null) {
+                    RosterInjuryChip(player.injuryLabel)
+                }
+            }
+        }
+        Spacer(modifier = Modifier.width(8.dp))
+        OvrPotBadge(ovr = player.ovr, potGrade = player.potGrade)
+    }
 }
 
 @Composable

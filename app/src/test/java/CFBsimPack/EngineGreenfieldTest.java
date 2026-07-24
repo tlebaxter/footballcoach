@@ -169,6 +169,86 @@ public class EngineGreenfieldTest {
     }
 
     @Test
+    public void acceptedFoulBurnsNoPlayClockAndStopsRunoff() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.setRandom(forceDpiOnSpikeRandom());
+        g.state.clockRunning = false;
+        g.state.yardLine = 40;
+        g.state.yardsNeed = 10;
+        g.state.down = 2;
+        int timeBefore = g.state.gameTime;
+
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertTrue(g.state.lastPlayLog.contains("PENALTY"));
+        assertTrue(g.state.lastPlayLog.contains("DPI") || g.state.lastPlayLog.contains("accepted"));
+        // Dead-ball foul: no spike 3s burn
+        assertEquals(timeBefore, g.state.gameTime);
+        assertFalse(g.state.clockRunning);
+    }
+
+    @Test
+    public void tenSecondRunoffAppliesUnlessTimeout() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.state.gameTime = 45; // Q4 under 1:00
+        g.state.halfUnderway = true;
+        g.state.pendingTenSecondRunoff = true;
+        g.state.clockRunning = false;
+        int before = g.state.gameTime;
+
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertEquals(before - 10 - 3, g.state.gameTime);
+        assertFalse(g.state.pendingTenSecondRunoff);
+
+        g.state.gameTime = 50;
+        g.state.pendingTenSecondRunoff = true;
+        g.state.homeTimeouts = 2;
+        assertTrue(g.callTimeout(true));
+        assertFalse(g.state.pendingTenSecondRunoff);
+        int afterTo = g.state.gameTime;
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertEquals(afterTo - 3, g.state.gameTime);
+    }
+
+    @Test
+    public void tenSecondRunoffTipIsHighestPriority() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.state.halfUnderway = true;
+        g.state.possessionHome = true;
+        g.state.homeTimeouts = 3;
+        g.state.gameTime = 20;
+        g.state.clockRunning = true;
+        g.state.pendingTenSecondRunoff = true;
+        TimeoutCoachTips.Tip tip = TimeoutCoachTips.suggest(g.getSituation(), TempoCall.NORMAL);
+        assertNotNull(tip);
+        assertEquals(TimeoutCoachTips.TipId.TEN_SECOND_RUNOFF, tip.id);
+        assertTrue(tip.message.contains("10-second"));
+    }
+
+    @Test
+    public void ejectedPlayerSkippedOnField() throws Exception {
+        League league = createLeague();
+        Team t = league.teamList.get(0);
+        OnFieldEleven before = OnFieldEleven.forDefense(t);
+        Player starter = before.players.get(0);
+        starter.isEjected = true;
+        OnFieldEleven after = OnFieldEleven.forDefense(t);
+        assertFalse(after.players.contains(starter));
+        starter.isEjected = false;
+    }
+
+    @Test
     public void timeoutTipsCoverLateGameAndEndOfHalf() throws Exception {
         League league = createLeague();
         Game g = new Game(league.teamList.get(0), league.teamList.get(1));
@@ -252,7 +332,9 @@ public class EngineGreenfieldTest {
         g.state.yardsNeed = 10;
         g.state.gameTime = 1805;
         assertEquals(2, g.state.quarter());
-        g.executeSnap(null);
+        g.state.clockRunning = true; // deferred runoff crosses into Q3
+        g.setRandom(noFoulRandom());
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
         assertTrue(g.state.quarter() >= 3);
         assertFalse(g.state.halfUnderway);
         assertEquals(3, g.state.homeTimeouts);
@@ -629,6 +711,22 @@ public class EngineGreenfieldTest {
             @Override
             public double nextDouble() {
                 return 0.0;
+            }
+        };
+    }
+
+    /**
+     * Spike uses no play RNG. Sequence: skip DOG, miss FS/offsides/holding, hit DPI, skip injury.
+     */
+    private static Random forceDpiOnSpikeRandom() {
+        final double[] seq = {0.99, 0.99, 0.99, 0.99, 0.0, 0.99};
+        return new Random() {
+            int i;
+
+            @Override
+            public double nextDouble() {
+                if (i < seq.length) return seq[i++];
+                return 0.99;
             }
         };
     }

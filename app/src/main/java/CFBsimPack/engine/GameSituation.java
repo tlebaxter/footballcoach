@@ -65,6 +65,12 @@ public final class GameSituation {
     public final boolean canCallTimeout;
     /** Game clock is running between plays (pending tempo runoff on next snap). */
     public final boolean clockRunning;
+    /** NCAA 10-second runoff pending; timeout avoids it. */
+    public final boolean pendingTenSecondRunoff;
+    /** Live home-crowd intensity (0–100). */
+    public final int crowdEnergy;
+    /** Quiet / Steady / Loud / Electric / Hostile. */
+    public final String crowdBand;
 
     public GameSituation(
             int homeScore, int awayScore, String homeAbbr, String awayAbbr,
@@ -84,7 +90,8 @@ public final class GameSituation {
             boolean awaitingCoinToss, boolean homeWonToss, boolean homeDefendsLeft, boolean userWonToss,
             boolean pendingTry, boolean tryAwaitingChoice, boolean tryIsTwoPoint,
             boolean userChoosesTry, boolean userDefendsTwoPoint,
-            boolean canCallTimeout, boolean clockRunning
+            boolean canCallTimeout, boolean clockRunning, boolean pendingTenSecondRunoff,
+            int crowdEnergy, String crowdBand
     ) {
         this.homeScore = homeScore;
         this.awayScore = awayScore;
@@ -142,5 +149,8 @@ public final class GameSituation {
         this.userDefendsTwoPoint = userDefendsTwoPoint;
         this.canCallTimeout = canCallTimeout;
         this.clockRunning = clockRunning;
+        this.pendingTenSecondRunoff = pendingTenSecondRunoff;
+        this.crowdEnergy = crowdEnergy;
+        this.crowdBand = crowdBand != null ? crowdBand : AtmosphereEngine.band(crowdEnergy);
     }
 }

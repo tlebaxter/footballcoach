@@ -41,6 +41,11 @@ public final class GameState {
      * Pending between-play runoff is applied at the start of the next snap.
      */
     public boolean clockRunning;
+    /**
+     * NCAA 10-second runoff pending under 1:00 of a half after injury / certain fouls.
+     * Cleared by timeout or applied at the start of the next snap.
+     */
+    public boolean pendingTenSecondRunoff;
 
     public String lastPlayLog = "";
     public boolean gameOver;
@@ -66,6 +71,13 @@ public final class GameState {
     /** Home team's end zone is on the left of the field display. */
     public boolean homeDefendsLeft = true;
     public boolean tossResolved;
+
+    /** Live home-crowd intensity (0–100), fluctuates during the game. */
+    public int crowdEnergy = 50;
+    /** Seeded atmosphere target for mean-reversion (set at kickoff). */
+    public int crowdBaseline = 50;
+    /** Rivalry strength used to amplify crowd spikes (0–100). */
+    public int crowdRivalry;
 
     public boolean isSpecialTeamsDown() {
         return pendingKickoff || (down >= 4 && !pendingTry);
@@ -121,7 +133,15 @@ public final class GameState {
             awayTimeouts--;
         }
         clockRunning = false;
+        pendingTenSecondRunoff = false;
         return true;
+    }
+
+    /** True in Q2/Q4 with ≤60 seconds left in the quarter (not OT). */
+    public boolean underOneMinuteInHalf() {
+        if (playingOT || phase == GamePhase.OT) return false;
+        int q = quarter();
+        return (q == 2 || q == 4) && clockInQuarter() <= 60;
     }
 
     public TeamSide offenseSide() {

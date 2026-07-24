@@ -38,7 +38,7 @@ Program Profile saves use format version 5. Older careers are intentionally inco
 - Conferences schedule up to nine conference games; OOC fills open weeks (Pac-12 plays a full round robin; independents are all OOC).
 - Before the season, a **Schedule** phase pre-fills a suggested OOC slate you can edit week-by-week (bye is fixed); the CPU fills other teams.
 - Use the **Games** tab for schedule, scouting, and game summaries. Rivalry results affect momentum.
-- After the regular season: conference championships, bowls, and a national title path for the top teams.
+- After the regular season: conference championships, a **12-team CFP** (5 auto-bid champs + 7 at-large; first round, quarters, semis, title), and conference-tied bowls for other 6-win teams.
 - Results versus expectations organically move momentum, donors, fanbase, tradition, recruiting reach, and the NFL pipeline.
 
 ### Rankings & stats
@@ -51,7 +51,7 @@ You inherit a full roster with overall/potential and position ratings. Manage de
 
 ### Recruiting & offseason
 
-After the season, eligibility attrition and transfers open spots. Player spending combines conference-influenced revenue share with donor-collective money. Market value is top-heavy, portal players command premiums, and offer acceptance weighs cash against brand, playing time, winning, and NFL development.
+After the season, eligibility attrition and transfers open spots. Player spending comes from one recruiting purse built from conference-influenced revenue share and donor-collective money. Market value is top-heavy, portal players command premiums, and offer acceptance weighs cash against brand, playing time, winning, and NFL development.
 
 ### Saving
 

@@ -75,6 +75,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     GameSession.setLeague(league)
                     GameSession.clearOffseason()
                     GameSession.setNeedsTeamPicker(true)
+                    GameSession.setActiveSaveSlot(null)
                 }
                 UserBrandTheme.clear()
                 _uiState.update { it.copy(loading = false, navigateToMain = true) }
@@ -105,6 +106,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     )
                     GameSession.setLeague(league)
                     GameSession.setNeedsTeamPicker(false)
+                    GameSession.setActiveSaveSlot(index)
                     // Mid-offseason restore already calls OffseasonSession.begin inside League.
                     league.userTeam
                 }
