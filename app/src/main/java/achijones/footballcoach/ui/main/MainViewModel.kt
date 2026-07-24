@@ -266,7 +266,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun selectTab(tab: MainTab) {
         _uiState.update { it.copy(selectedTab = tab) }
-        rebuildSnapshot()
     }
 
     fun selectHomeSegment(segment: HomeSegment) {

@@ -91,9 +91,32 @@ public final class OocContractBook {
     }
 
     /**
-     * Signs a one-year single-game contract (optional guarantee).
+     * True when {@code home} is far enough below {@code away} that hosting means
+     * buying the visit. Only the weaker school may propose that deal.
      */
-    public OocContract signSingleGame(Team home, Team away, int year, boolean withGuarantee) {
+    public static boolean isAppearanceMatchup(Team home, Team away) {
+        if (home == null || away == null) {
+            return false;
+        }
+        int tierGap = home.programProfile.scheduleTier - away.programProfile.scheduleTier;
+        return tierGap < -NilMoney.PEER_SERIES_TIER_GAP;
+    }
+
+    /**
+     * Signs a one-year single-game contract with automatic home→away fee.
+     * Appearance matchups (weaker host buying a bigger visitor) are rejected
+     * because only the smaller school may initiate one.
+     */
+    public OocContract signSingleGame(Team home, Team away, int year) {
+        return signSingleGame(home, away, year, false);
+    }
+
+    /**
+     * Signs a one-year single-game contract with automatic home→away fee.
+     *
+     * @param softInitiated the weaker host is choosing to buy the bigger visitor
+     */
+    public OocContract signSingleGame(Team home, Team away, int year, boolean softInitiated) {
         if (home == null || away == null || home == away) {
             return null;
         }
@@ -103,10 +126,12 @@ public final class OocContractBook {
         if (alreadyContracted(home, away, year)) {
             return null;
         }
-        int guarantee = 0;
+        if (isAppearanceMatchup(home, away) && !softInitiated) {
+            return null;
+        }
+        int guarantee = NilMoney.singleGameGuarantee(home.programProfile, away.programProfile);
         int winBonus = 0;
-        if (withGuarantee) {
-            guarantee = NilMoney.buyGameGuarantee(home.programProfile, away.programProfile);
+        if (guarantee > 0) {
             if (home.recruitMoney < guarantee) {
                 return null;
             }
@@ -114,11 +139,10 @@ public final class OocContractBook {
         }
         ArrayList<OocContractGame> games = new ArrayList<>();
         games.add(new OocContractGame(year, home.abbr, away.abbr, guarantee, winBonus));
-        int buyout = NilMoney.oocCancelBuyout(
-                withGuarantee ? OocContract.Type.BUY : OocContract.Type.SINGLE,
-                guarantee,
-                1);
-        OocContract.Type type = withGuarantee ? OocContract.Type.BUY : OocContract.Type.SINGLE;
+        int tierGap = home.programProfile.scheduleTier - away.programProfile.scheduleTier;
+        boolean nearPeer = Math.abs(tierGap) <= NilMoney.PEER_SERIES_TIER_GAP;
+        OocContract.Type type = nearPeer ? OocContract.Type.SINGLE : OocContract.Type.BUY;
+        int buyout = NilMoney.oocCancelBuyout(type, guarantee, 1, 1);
         OocContract contract = new OocContract(
                 "C" + (nextId++),
                 home.abbr,
@@ -159,7 +183,8 @@ public final class OocContractBook {
             games.add(new OocContractGame(
                     startYear + y, home.abbr, away.abbr, guarantee, winBonus));
         }
-        int buyout = NilMoney.oocCancelBuyout(OocContract.Type.BUY, guarantee * years, years);
+        int buyout = NilMoney.oocCancelBuyout(
+                OocContract.Type.BUY, guarantee * years, years, years);
         OocContract contract = new OocContract(
                 "C" + (nextId++),
                 home.abbr,
@@ -186,6 +211,23 @@ public final class OocContractBook {
      */
     public OocContract signHomeAndHome(
             Team teamA, Team teamB, int startYear, int returnYear, boolean aHomesFirst) {
+        return signHomeAndHome(teamA, teamB, startYear, returnYear, aHomesFirst, false);
+    }
+
+    /**
+     * Signs a home-and-home with a deferred return year (1–6 years after start).
+     * Peers swap home dates for free. Beyond the peer band the weaker school owes
+     * an appearance fee on its home date, so only it may propose the series.
+     *
+     * @param softInitiated the weaker school is choosing to buy its home date
+     */
+    public OocContract signHomeAndHome(
+            Team teamA,
+            Team teamB,
+            int startYear,
+            int returnYear,
+            boolean aHomesFirst,
+            boolean softInitiated) {
         if (teamA == null || teamB == null || teamA == teamB) {
             return null;
         }
@@ -204,13 +246,39 @@ public final class OocContractBook {
                 || alreadyContracted(teamA, teamB, returnYear)) {
             return null;
         }
+        int tierGap = Math.abs(
+                teamA.programProfile.scheduleTier - teamB.programProfile.scheduleTier);
+        if (tierGap > NilMoney.PEER_SERIES_TIER_GAP && !softInitiated) {
+            return null;
+        }
         Team firstHome = aHomesFirst ? teamA : teamB;
         Team firstAway = aHomesFirst ? teamB : teamA;
+        int firstFee = NilMoney.homeAndHomeLegFee(
+                firstHome.programProfile, firstAway.programProfile);
+        int returnFee = NilMoney.homeAndHomeLegFee(
+                firstAway.programProfile, firstHome.programProfile);
+        if (firstFee > 0 && firstHome.recruitMoney < firstFee) {
+            return null;
+        }
+        if (returnFee > 0 && firstAway.recruitMoney < returnFee) {
+            return null;
+        }
         ArrayList<OocContractGame> games = new ArrayList<>();
-        games.add(new OocContractGame(startYear, firstHome.abbr, firstAway.abbr, 0, 0));
-        games.add(new OocContractGame(returnYear, firstAway.abbr, firstHome.abbr, 0, 0));
+        games.add(new OocContractGame(
+                startYear,
+                firstHome.abbr,
+                firstAway.abbr,
+                firstFee,
+                NilMoney.buyGameWinBonus(firstFee)));
+        games.add(new OocContractGame(
+                returnYear,
+                firstAway.abbr,
+                firstHome.abbr,
+                returnFee,
+                NilMoney.buyGameWinBonus(returnFee)));
         int length = returnYear - startYear + 1;
-        int buyout = NilMoney.oocCancelBuyout(OocContract.Type.HOME_AND_HOME, 0, 2);
+        int buyout = NilMoney.oocCancelBuyout(
+                OocContract.Type.HOME_AND_HOME, firstFee + returnFee, 2, 2);
         OocContract contract = new OocContract(
                 "C" + (nextId++),
                 teamA.abbr,
@@ -219,6 +287,74 @@ public final class OocContractBook {
                 length,
                 OocContract.Type.HOME_AND_HOME,
                 returnYear,
+                buyout,
+                games);
+        contracts.add(contract);
+        return contract;
+    }
+
+    /**
+     * Signs a 2-for-1 series: power hosts twice, soft hosts once.
+     * Power pays {@link NilMoney#buyGameGuarantee} on each power-home date.
+     *
+     * @param aHomesFirst whether {@code teamA} hosts game one
+     * @param softHomeOffset years after start for the soft-home (or second) leg (1–6)
+     */
+    public OocContract signTwoForOne(
+            Team teamA, Team teamB, int startYear, int softHomeOffset, boolean aHomesFirst) {
+        if (teamA == null || teamB == null || teamA == teamB) {
+            return null;
+        }
+        if (teamA.conference.equals(teamB.conference)) {
+            return null;
+        }
+        int gap = Math.abs(teamA.programProfile.scheduleTier - teamB.programProfile.scheduleTier);
+        if (gap <= NilMoney.PEER_SERIES_TIER_GAP) {
+            return null;
+        }
+        int offset = Math.max(1, Math.min(6, softHomeOffset));
+        int midYear = startYear + offset;
+        int lastYear = midYear + 1;
+        if (alreadyContracted(teamA, teamB, startYear)
+                || alreadyContracted(teamA, teamB, midYear)
+                || alreadyContracted(teamA, teamB, lastYear)) {
+            return null;
+        }
+        Team power = teamA.programProfile.scheduleTier >= teamB.programProfile.scheduleTier
+                ? teamA : teamB;
+        Team soft = power == teamA ? teamB : teamA;
+        int guarantee = NilMoney.buyGameGuarantee(power.programProfile, soft.programProfile);
+        int winBonus = NilMoney.buyGameWinBonus(guarantee);
+        if (power.recruitMoney < guarantee * 2) {
+            return null;
+        }
+        Team firstHome = aHomesFirst ? teamA : teamB;
+        boolean powerHostsFirst = firstHome == power;
+        ArrayList<OocContractGame> games = new ArrayList<>();
+        if (powerHostsFirst) {
+            games.add(new OocContractGame(
+                    startYear, power.abbr, soft.abbr, guarantee, winBonus));
+            games.add(new OocContractGame(midYear, soft.abbr, power.abbr, 0, 0));
+            games.add(new OocContractGame(
+                    lastYear, power.abbr, soft.abbr, guarantee, winBonus));
+        } else {
+            games.add(new OocContractGame(startYear, soft.abbr, power.abbr, 0, 0));
+            games.add(new OocContractGame(
+                    midYear, power.abbr, soft.abbr, guarantee, winBonus));
+            games.add(new OocContractGame(
+                    lastYear, power.abbr, soft.abbr, guarantee, winBonus));
+        }
+        int length = lastYear - startYear + 1;
+        int buyout = NilMoney.oocCancelBuyout(
+                OocContract.Type.TWO_FOR_ONE, guarantee * 2, 3, 3);
+        OocContract contract = new OocContract(
+                "C" + (nextId++),
+                teamA.abbr,
+                teamB.abbr,
+                startYear,
+                length,
+                OocContract.Type.TWO_FOR_ONE,
+                lastYear,
                 buyout,
                 games);
         contracts.add(contract);
@@ -298,8 +434,12 @@ public final class OocContractBook {
     }
 
     private int refreshBuyout(OocContract c) {
-        int remaining = c.remainingGuaranteeTotal(league.getYear());
-        return Math.max(c.buyout, NilMoney.oocCancelBuyout(c.type, remaining, c.lengthYears));
+        int year = league.getYear();
+        int remaining = c.remainingGuaranteeTotal(year);
+        return Math.max(
+                c.buyout,
+                NilMoney.oocCancelBuyout(
+                        c.type, remaining, c.lengthYears, c.unsettledGameCount(year)));
     }
 
     private void chargeTeam(Team team, int amount, boolean donorHitIfShort) {
@@ -676,70 +816,77 @@ public final class OocContractBook {
         return true;
     }
 
+    /** Tier gap at which a program is clearly buying a lesser opponent. */
+    private static final int BUY_GAME_TIER_GAP = 12;
+    /** Tier distance from league average that marks a power / soft program. */
+    private static final int BAND_TIER_MARGIN = 8;
+    /** Ceiling on CPU deals per pass so scheduling stays fast. */
+    private static final int AUTO_DEAL_LIMIT = 45;
+    /** How often a program may be booked as someone's buy-game visitor per pass. */
+    private static final int MAX_SOFT_BOOKINGS = 2;
+
     /**
-     * AI: create short buy games / H&H for CPU teams only after user scheduling.
-     * Deferred until {@link League#userTeam} is set so a yet-to-be-picked team is not pre-loaded.
-     * Never signs deals involving the user / user-controlled team.
+     * AI: fill CPU out-of-conference slates with a realistic market mix — home buy
+     * games for the big programs, peer home-and-homes, and the occasional 2-for-1
+     * when a power wants a date at a smaller school.
+     *
+     * <p>Deferred until {@link League#userTeam} is set so a yet-to-be-picked team is
+     * not pre-loaded. Never signs deals involving the user / user-controlled team.</p>
      */
     public void autoSignFutureDeals(List<Team> teams) {
         if (league.userTeam == null || teams == null) {
             return;
         }
         int year = league.getYear();
-        ArrayList<Team> sorted = new ArrayList<>(teams);
-        Collections.sort(sorted, (a, b) -> Integer.compare(
-                b.programProfile.scheduleTier, a.programProfile.scheduleTier));
+        List<Team> sorted = byScheduleTierDesc(teams);
+        int averageTier = averageScheduleTier(sorted);
+        ArrayList<String> softBookings = new ArrayList<>();
         int signed = 0;
-        for (int i = 0; i < sorted.size() && signed < 25; i++) {
-            Team power = sorted.get(i);
-            if (isUserSide(power) || countOpenOoc(power) < 1) {
+
+        for (Team team : sorted) {
+            if (signed >= AUTO_DEAL_LIMIT) {
+                break;
+            }
+            if (isUserSide(team) || countOpenOoc(team) < 1) {
                 continue;
             }
-            for (int j = sorted.size() - 1; j > i && signed < 25; j--) {
-                Team soft = sorted.get(j);
-                if (isUserSide(soft) || power.conference.equals(soft.conference)) {
-                    continue;
-                }
-                if (power.programProfile.scheduleTier - soft.programProfile.scheduleTier < 12) {
-                    break;
-                }
-                if (alreadyContracted(power, soft, year + 1)) {
-                    continue;
-                }
-                if (power.recruitMoney < NilMoney.buyGameGuarantee(
-                        power.programProfile, soft.programProfile)) {
-                    continue;
-                }
-                if (signBuyGame(power, soft, year + 1, 1) != null) {
+            int tier = team.programProfile.scheduleTier;
+            boolean isPower = tier >= averageTier + BAND_TIER_MARGIN;
+            boolean isSoft = tier <= averageTier - BAND_TIER_MARGIN;
+
+            if (isPower) {
+                // A power's road date at a smaller school comes as a 2-for-1, never
+                // as a single the smaller school has to bankroll.
+                if (prefersTwoForOne(team)
+                        && signTwoForOneWith(team, sorted, year + 1, softBookings, null)) {
                     signed++;
                 }
-            }
-        }
-        // Peer H&H for mid-tier open teams
-        for (int i = 0; i < sorted.size() - 1 && signed < 40; i++) {
-            Team a = sorted.get(i);
-            Team b = sorted.get(i + 1);
-            if (isUserSide(a) || isUserSide(b)) {
-                continue;
-            }
-            if (a.conference.equals(b.conference)) {
-                continue;
-            }
-            if (Math.abs(a.programProfile.scheduleTier - b.programProfile.scheduleTier) > 8) {
-                continue;
-            }
-            if (alreadyContracted(a, b, year + 1) || alreadyContracted(a, b, year + 2)) {
-                continue;
-            }
-            if (signHomeAndHome(a, b, year + 1, true) != null) {
-                signed++;
+                for (int offset = 1; offset <= 2 && signed < AUTO_DEAL_LIMIT; offset++) {
+                    if (signBuyGameWith(team, sorted, year + offset, softBookings, null)) {
+                        signed++;
+                    }
+                }
+                if (signPeerSeriesWith(team, sorted, year + 2, null)) {
+                    signed++;
+                }
+            } else if (isSoft) {
+                if (signPeerSeriesWith(team, sorted, year + 1, null)) {
+                    signed++;
+                }
+            } else {
+                if (signBuyGameWith(team, sorted, year + 1, softBookings, null)) {
+                    signed++;
+                }
+                if (signPeerSeriesWith(team, sorted, year + 2, null)) {
+                    signed++;
+                }
             }
         }
     }
 
     /**
-     * Proposes a small future-contract slate for the user (buy games / peer H&H for year+1).
-     * Replaces any prior suggestion batch first (Resuggest-style).
+     * Proposes a small future-contract slate for the user using the same market mix
+     * the CPU teams follow. Replaces any prior suggestion batch first.
      *
      * @return number of contracts signed
      */
@@ -749,61 +896,205 @@ public final class OocContractBook {
         }
         revertSuggestedUserDeals();
         int year = league.getYear();
-        ArrayList<Team> sorted = new ArrayList<>(teams);
-        Collections.sort(sorted, (a, b) -> Integer.compare(
-                b.programProfile.scheduleTier, a.programProfile.scheduleTier));
+        List<Team> sorted = byScheduleTierDesc(teams);
+        int averageTier = averageScheduleTier(sorted);
+        ArrayList<String> softBookings = new ArrayList<>();
+        int tier = user.programProfile.scheduleTier;
         int signed = 0;
         final int maxDeals = 3;
 
-        // Buy games: user as power paying soft, or soft receiving from power
-        for (Team other : sorted) {
-            if (signed >= maxDeals || other == user || isUserSide(other)) {
-                continue;
-            }
-            if (user.conference.equals(other.conference)) {
-                continue;
-            }
-            int tierGap = user.programProfile.scheduleTier - other.programProfile.scheduleTier;
-            if (Math.abs(tierGap) < 12) {
-                continue;
-            }
-            if (alreadyContracted(user, other, year + 1)) {
-                continue;
-            }
-            Team power = tierGap > 0 ? user : other;
-            Team soft = tierGap > 0 ? other : user;
-            if (power.recruitMoney < NilMoney.buyGameGuarantee(
-                    power.programProfile, soft.programProfile)) {
-                continue;
-            }
-            OocContract buy = signBuyGame(power, soft, year + 1, 1);
-            if (buy != null) {
-                suggestedDealIds.add(buy.id);
+        if (tier >= averageTier + BAND_TIER_MARGIN) {
+            if (signBuyGameWith(user, sorted, year + 1, softBookings, suggestedDealIds)) {
                 signed++;
             }
+            if (signed < maxDeals
+                    && signTwoForOneWith(user, sorted, year + 2, softBookings, suggestedDealIds)) {
+                signed++;
+            }
+        } else if (tier <= averageTier - BAND_TIER_MARGIN) {
+            // Soft programs get paid to travel rather than buying a home marquee.
+            if (signRoadPaydayFor(user, sorted, year + 1, suggestedDealIds)) {
+                signed++;
+            }
+        } else if (signBuyGameWith(user, sorted, year + 1, softBookings, suggestedDealIds)) {
+            signed++;
         }
 
-        // Peer H&H for remaining slots
-        for (Team other : sorted) {
-            if (signed >= maxDeals || other == user || isUserSide(other)) {
-                continue;
-            }
-            if (user.conference.equals(other.conference)) {
-                continue;
-            }
-            if (Math.abs(user.programProfile.scheduleTier - other.programProfile.scheduleTier) > 8) {
-                continue;
-            }
-            if (alreadyContracted(user, other, year + 1) || alreadyContracted(user, other, year + 2)) {
-                continue;
-            }
-            OocContract hh = signHomeAndHome(user, other, year + 1, true);
-            if (hh != null) {
-                suggestedDealIds.add(hh.id);
+        for (int offset = 1; offset <= 2 && signed < maxDeals; offset++) {
+            if (signPeerSeriesWith(user, sorted, year + offset, suggestedDealIds)) {
                 signed++;
             }
         }
         return signed;
+    }
+
+    /** Books {@code power} a home buy game against the best available smaller program. */
+    private boolean signBuyGameWith(
+            Team power,
+            List<Team> candidates,
+            int year,
+            List<String> softBookings,
+            List<String> trackIds) {
+        for (int i = candidates.size() - 1; i >= 0; i--) {
+            Team soft = candidates.get(i);
+            if (!isTradePartner(power, soft, year)) {
+                continue;
+            }
+            if (power.programProfile.scheduleTier - soft.programProfile.scheduleTier
+                    < BUY_GAME_TIER_GAP) {
+                continue;
+            }
+            if (Collections.frequency(softBookings, soft.abbr) >= MAX_SOFT_BOOKINGS) {
+                continue;
+            }
+            if (power.recruitMoney < NilMoney.buyGameGuarantee(
+                    power.programProfile, soft.programProfile)) {
+                continue;
+            }
+            OocContract contract = signBuyGame(power, soft, year, 1);
+            if (contract != null) {
+                softBookings.add(soft.abbr);
+                if (trackIds != null) {
+                    trackIds.add(contract.id);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Books {@code soft} a road payday at the biggest program that can afford it. */
+    private boolean signRoadPaydayFor(
+            Team soft, List<Team> candidates, int year, List<String> trackIds) {
+        for (Team power : candidates) {
+            if (!isTradePartner(soft, power, year)) {
+                continue;
+            }
+            if (power.programProfile.scheduleTier - soft.programProfile.scheduleTier
+                    < BUY_GAME_TIER_GAP) {
+                continue;
+            }
+            if (power.recruitMoney < NilMoney.buyGameGuarantee(
+                    power.programProfile, soft.programProfile)) {
+                continue;
+            }
+            OocContract contract = signBuyGame(power, soft, year, 1);
+            if (contract != null) {
+                if (trackIds != null) {
+                    trackIds.add(contract.id);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** Books a free peer home-and-home, preferring a rivalry when one exists. */
+    private boolean signPeerSeriesWith(
+            Team team, List<Team> candidates, int startYear, List<String> trackIds) {
+        Team best = null;
+        int bestScore = Integer.MIN_VALUE;
+        for (Team other : candidates) {
+            if (!isTradePartner(team, other, startYear)) {
+                continue;
+            }
+            if (alreadyContracted(team, other, startYear + 1)) {
+                continue;
+            }
+            int gap = Math.abs(
+                    team.programProfile.scheduleTier - other.programProfile.scheduleTier);
+            if (gap > NilMoney.PEER_SERIES_TIER_GAP) {
+                continue;
+            }
+            int score = Team.strongestRivalryBetween(team, other) * 10 - gap;
+            if (score > bestScore) {
+                bestScore = score;
+                best = other;
+            }
+        }
+        if (best == null) {
+            return false;
+        }
+        OocContract contract = signHomeAndHome(team, best, startYear, startYear + 1, true);
+        if (contract == null) {
+            return false;
+        }
+        if (trackIds != null) {
+            trackIds.add(contract.id);
+        }
+        return true;
+    }
+
+    /** Books a 2-for-1 so a power can play at a smaller school without billing it. */
+    private boolean signTwoForOneWith(
+            Team power,
+            List<Team> candidates,
+            int startYear,
+            List<String> softBookings,
+            List<String> trackIds) {
+        int guaranteeBudget = power.recruitMoney;
+        for (int i = candidates.size() - 1; i >= 0; i--) {
+            Team soft = candidates.get(i);
+            if (!isTradePartner(power, soft, startYear)) {
+                continue;
+            }
+            int gap = power.programProfile.scheduleTier - soft.programProfile.scheduleTier;
+            if (gap <= NilMoney.PEER_SERIES_TIER_GAP) {
+                continue;
+            }
+            if (Collections.frequency(softBookings, soft.abbr) >= MAX_SOFT_BOOKINGS) {
+                continue;
+            }
+            if (guaranteeBudget < NilMoney.buyGameGuarantee(
+                    power.programProfile, soft.programProfile) * 2) {
+                continue;
+            }
+            OocContract contract = signTwoForOne(power, soft, startYear, 1, true);
+            if (contract != null) {
+                softBookings.add(soft.abbr);
+                if (trackIds != null) {
+                    trackIds.add(contract.id);
+                }
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private boolean isTradePartner(Team team, Team other, int year) {
+        if (other == null || other == team || isUserSide(other)) {
+            return false;
+        }
+        if (team.conference.equals(other.conference)) {
+            return false;
+        }
+        return !alreadyContracted(team, other, year);
+    }
+
+    /** Deterministic stand-in for "some powers prefer a 2-for-1 this cycle". */
+    private static boolean prefersTwoForOne(Team power) {
+        return Math.abs(power.abbr.hashCode()) % 5 == 0;
+    }
+
+    private static List<Team> byScheduleTierDesc(List<Team> teams) {
+        ArrayList<Team> sorted = new ArrayList<>(teams);
+        Collections.sort(sorted, (a, b) -> {
+            int cmp = Integer.compare(
+                    b.programProfile.scheduleTier, a.programProfile.scheduleTier);
+            return cmp != 0 ? cmp : a.abbr.compareTo(b.abbr);
+        });
+        return sorted;
+    }
+
+    private static int averageScheduleTier(List<Team> teams) {
+        if (teams.isEmpty()) {
+            return 50;
+        }
+        int sum = 0;
+        for (Team t : teams) {
+            sum += t.programProfile.scheduleTier;
+        }
+        return sum / teams.size();
     }
 
     /**

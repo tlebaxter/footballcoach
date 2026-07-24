@@ -2,12 +2,16 @@ package achijones.footballcoach.ui.main
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.SizeTransform
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.togetherWith
@@ -101,6 +105,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -114,10 +119,12 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import achijones.footballcoach.ui.components.ConferenceLogo
 import achijones.footballcoach.ui.components.SegmentedControl
+import achijones.footballcoach.ui.components.MainTabContentHost
 import achijones.footballcoach.ui.components.TabContentTransition
 import achijones.footballcoach.ui.components.TeamLogo
 import achijones.footballcoach.ui.components.TeamLogoResolver
 import achijones.footballcoach.ui.components.rememberLogoNeedsContrastBoost
+import achijones.footballcoach.ui.components.rememberSheetFlingBlocker
 import achijones.footballcoach.ui.components.rememberTeamColors
 import achijones.footballcoach.ui.theme.FcChipPosBg
 import achijones.footballcoach.ui.theme.FcChipPosText
@@ -234,7 +241,19 @@ fun MainScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         bottomBar = {
             Column {
-                if (state.selectedTab == MainTab.HOME) {
+                AnimatedVisibility(
+                    visible = state.selectedTab == MainTab.HOME,
+                    enter = expandVertically(
+                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    ) + fadeIn(
+                        animationSpec = tween(280, easing = FastOutSlowInEasing),
+                    ),
+                    exit = shrinkVertically(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    ) + fadeOut(
+                        animationSpec = tween(200, easing = FastOutSlowInEasing),
+                    ),
+                ) {
                     Button(
                         onClick = viewModel::playWeek,
                         enabled = state.playWeekEnabled && !state.playingWeek,
@@ -289,12 +308,11 @@ fun MainScreen(
             }
         },
     ) { padding ->
-        TabContentTransition(
-            targetState = state.selectedTab,
+        MainTabContentHost(
+            selectedTab = state.selectedTab,
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize(),
-            label = "mainTabContent",
         ) { tab ->
             when (tab) {
                 MainTab.HOME -> HomePanel(state, viewModel, Modifier.fillMaxSize())
@@ -1597,6 +1615,12 @@ private fun ScheduleCard(
         row.isLoss == true -> FcLoss.copy(alpha = 0.55f)
         else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.18f)
     }
+    val logoBackground = when {
+        row.isWin == true -> FcWin.copy(alpha = 0.72f)
+        row.isLoss == true -> FcLoss.copy(alpha = 0.72f)
+        else -> MaterialTheme.colorScheme.surface
+    }
+    val contrastBoost = rememberLogoNeedsContrastBoost(row.opponentTeamName, logoBackground)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -1645,6 +1669,8 @@ private fun ScheduleCard(
                 teamName = row.opponentTeamName,
                 abbr = row.opponentAbbr,
                 size = 44.dp,
+                framed = false,
+                contrastBoost = contrastBoost,
             )
             Text(
                 text = "#${row.opponentRank}",
@@ -2400,6 +2426,7 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxWidth()
+                    .nestedScroll(rememberSheetFlingBlocker())
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {

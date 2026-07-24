@@ -110,6 +110,63 @@ public class NilMoneyTest {
         assertEquals(0, pwo);
     }
 
+    @Test
+    public void appearanceFeeGrowsExponentiallyWithGap() {
+        ProgramProfile soft = new ProgramProfile(40, 40, 40, 40, 40, 40, 40);
+        ProgramProfile mid = new ProgramProfile(55, 55, 55, 55, 55, 55, 55);
+        ProgramProfile power = new ProgramProfile(90, 90, 90, 90, 90, 90, 90);
+
+        int smallGap = NilMoney.appearanceFee(soft, mid);
+        int largeGap = NilMoney.appearanceFee(soft, power);
+        assertTrue(smallGap > 0);
+        assertTrue(largeGap > smallGap * 2);
+        assertEquals(0, largeGap % 1000);
+        assertEquals(0, NilMoney.appearanceFee(power, soft));
+        assertEquals(0, NilMoney.appearanceFee(soft, soft));
+    }
+
+    @Test
+    public void singleGameGuaranteePicksBuyAppearanceOrVisitorFloor() {
+        ProgramProfile soft = new ProgramProfile(40, 40, 40, 40, 40, 40, 40);
+        ProgramProfile power = new ProgramProfile(90, 90, 90, 90, 90, 90, 90);
+
+        assertEquals(
+                NilMoney.buyGameGuarantee(power, soft),
+                NilMoney.singleGameGuarantee(power, soft));
+        assertEquals(
+                NilMoney.appearanceFee(soft, power),
+                NilMoney.singleGameGuarantee(soft, power));
+        assertEquals(
+                NilMoney.visitorFloorGuarantee(soft),
+                NilMoney.singleGameGuarantee(soft, soft));
+        assertTrue("Peers never travel for free", NilMoney.singleGameGuarantee(soft, soft) > 0);
+    }
+
+    @Test
+    public void homeAndHomeLegFeeOnlyChargesTheWeakerHost() {
+        ProgramProfile soft = new ProgramProfile(40, 40, 40, 40, 40, 40, 40);
+        ProgramProfile power = new ProgramProfile(90, 90, 90, 90, 90, 90, 90);
+
+        assertEquals(0, NilMoney.homeAndHomeLegFee(power, soft));
+        assertEquals(0, NilMoney.homeAndHomeLegFee(soft, soft));
+        assertEquals(
+                NilMoney.appearanceFee(soft, power),
+                NilMoney.homeAndHomeLegFee(soft, power));
+    }
+
+    @Test
+    public void cancelBuyoutTracksRemainingMoneyAndDealShape() {
+        int peerSeries = NilMoney.oocCancelBuyout(OocContract.Type.HOME_AND_HOME, 0, 2, 2);
+        int paidSeries = NilMoney.oocCancelBuyout(
+                OocContract.Type.HOME_AND_HOME, 4_000_000, 2, 2);
+        int twoForOne = NilMoney.oocCancelBuyout(OocContract.Type.TWO_FOR_ONE, 0, 3, 3);
+
+        assertEquals(400_000, peerSeries);
+        assertEquals(2_200_000, paidSeries);
+        assertEquals(450_000, twoForOne);
+        assertTrue(paidSeries > peerSeries);
+    }
+
     private static Player player(int year, int ovr, int pot, String pos) {
         Player p = new Player();
         p.year = year;

@@ -5,6 +5,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import achijones.footballcoach.ui.coach.CoachGameScreen
+import achijones.footballcoach.ui.components.HideSystemBarsWhileVisible
 import achijones.footballcoach.ui.home.HomeScreen
 import achijones.footballcoach.ui.main.MainScreen
 import achijones.footballcoach.ui.navigation.Routes
@@ -15,6 +16,7 @@ import achijones.footballcoach.ui.tutorial.TutorialScreen
 @Composable
 fun FootballCoachApp() {
     val navController = rememberNavController()
+    HideSystemBarsWhileVisible()
 
     NavHost(navController = navController, startDestination = Routes.HOME) {
         composable(Routes.HOME) {

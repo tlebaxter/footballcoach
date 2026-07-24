@@ -11,7 +11,8 @@ public final class OocContract {
     public enum Type {
         SINGLE,
         BUY,
-        HOME_AND_HOME;
+        HOME_AND_HOME,
+        TWO_FOR_ONE;
 
         static Type parse(String raw) {
             if (raw == null) {
@@ -25,6 +26,10 @@ public final class OocContract {
                 case "HH":
                 case "H":
                     return HOME_AND_HOME;
+                case "TWO_FOR_ONE":
+                case "T":
+                case "2":
+                    return TWO_FOR_ONE;
                 case "BUY":
                 case "B":
                 default:
@@ -38,6 +43,8 @@ public final class OocContract {
                     return "S";
                 case HOME_AND_HOME:
                     return "H";
+                case TWO_FOR_ONE:
+                    return "T";
                 case BUY:
                 default:
                     return "B";
@@ -109,6 +116,17 @@ public final class OocContract {
             }
         }
         return sum;
+    }
+
+    /** Games from {@code currentYear} onward that have not been played yet. */
+    public int unsettledGameCount(int currentYear) {
+        int count = 0;
+        for (OocContractGame g : games) {
+            if (g.year >= currentYear && !g.settled) {
+                count++;
+            }
+        }
+        return count;
     }
 
     public boolean isFullySettled() {
@@ -189,12 +207,14 @@ public final class OocContract {
             }
         }
         int remaining = 0;
+        int unsettled = 0;
         for (OocContractGame g : games) {
             if (!g.settled) {
                 remaining += g.guarantee;
+                unsettled++;
             }
         }
-        int buyout = NilMoney.oocCancelBuyout(inferred, remaining, len);
+        int buyout = NilMoney.oocCancelBuyout(inferred, remaining, len, unsettled);
         return new OocContract(
                 parts[0],
                 parts[1],

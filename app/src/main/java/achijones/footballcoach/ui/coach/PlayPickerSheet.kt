@@ -26,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import CFBsimPack.Formation
@@ -34,6 +35,7 @@ import CFBsimPack.engine.GameSituation
 import CFBsimPack.engine.GameState
 import CFBsimPack.engine.OffenseConcept
 import CFBsimPack.engine.Playbook
+import achijones.footballcoach.ui.components.rememberSheetFlingBlocker
 
 private val SheetBg = Color(0xFF121A14)
 private val ChipShape = RoundedCornerShape(10.dp)
@@ -54,6 +56,7 @@ fun PlayPickerSheet(
     onDismiss: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val sheetFlingBlocker = rememberSheetFlingBlocker()
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
@@ -121,7 +124,9 @@ fun PlayPickerSheet(
 
                     LazyColumn(
                         verticalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.height(420.dp),
+                        modifier = Modifier
+                            .height(420.dp)
+                            .nestedScroll(sheetFlingBlocker),
                     ) {
                         if (pool.isEmpty()) {
                             item {
@@ -142,7 +147,9 @@ fun PlayPickerSheet(
                 val pool = Playbook.situationalDefense(gs)
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.height(420.dp),
+                    modifier = Modifier
+                        .height(420.dp)
+                        .nestedScroll(sheetFlingBlocker),
                 ) {
                     items(pool, key = { it.id }) { concept ->
                         DefenseConceptRow(

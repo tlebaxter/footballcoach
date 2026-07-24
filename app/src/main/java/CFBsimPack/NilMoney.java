@@ -266,17 +266,16 @@ public final class NilMoney {
         return roundToThousand(annual * years * Math.max(0.25, Math.min(0.85, rate)));
     }
 
+    /** Max schedule-tier gap treated as a peer series (free home-and-home). */
+    public static final int PEER_SERIES_TIER_GAP = 8;
+
     /**
      * Guarantee paid by home to away for a buy game.
      * Higher when home is much stronger than the visitor.
      */
     public static int buyGameGuarantee(ProgramProfile home, ProgramProfile away) {
-        int homeTier = home != null
-                ? (int) Math.round(home.scheduleTier * 0.55 + home.capitalPool * 0.45)
-                : 50;
-        int awayTier = away != null
-                ? (int) Math.round(away.scheduleTier * 0.55 + away.capitalPool * 0.45)
-                : 50;
+        int homeTier = scheduleComposite(home);
+        int awayTier = scheduleComposite(away);
         int gap = Math.max(0, homeTier - awayTier);
         double base = 600_000 + gap * 30_000 + (100 - awayTier) * 8_000;
         return roundToThousand(base);
@@ -290,6 +289,64 @@ public final class NilMoney {
         return (int) Math.round(base / 1000.0) * 1000;
     }
 
+    /**
+     * Appearance fee paid by a weaker home to bring a stronger visitor.
+     * Grows exponentially with the composite gap so large mismatches are
+     * effectively unaffordable.
+     */
+    public static int appearanceFee(ProgramProfile home, ProgramProfile away) {
+        int homeTier = scheduleComposite(home);
+        int awayTier = scheduleComposite(away);
+        int gap = Math.max(0, awayTier - homeTier);
+        if (gap <= 0) {
+            return 0;
+        }
+        double fee = 250_000 * Math.pow(1.18, gap / 2.0) + gap * 50_000;
+        return roundToThousand(fee);
+    }
+
+    /**
+     * Nominal guarantee a near-peer visitor still collects. Real programs rarely
+     * travel for free, so this never returns zero.
+     */
+    public static int visitorFloorGuarantee(ProgramProfile away) {
+        return roundToThousand(150_000 + scheduleComposite(away) * 4_000.0);
+    }
+
+    /**
+     * Single-game fee paid by home to away. Near-peer matchups still pay a
+     * visitor floor; stronger home pays a buy-game guarantee; weaker home pays
+     * an appearance fee to bring the bigger visitor in.
+     */
+    public static int singleGameGuarantee(ProgramProfile home, ProgramProfile away) {
+        if (home == null || away == null) {
+            return 0;
+        }
+        int tierGap = home.scheduleTier - away.scheduleTier;
+        if (Math.abs(tierGap) <= PEER_SERIES_TIER_GAP) {
+            return visitorFloorGuarantee(away);
+        }
+        if (tierGap > 0) {
+            return buyGameGuarantee(home, away);
+        }
+        return appearanceFee(home, away);
+    }
+
+    /**
+     * Fee owed on one home-and-home leg. Peer series trade home dates for free;
+     * beyond the peer band only the weaker host owes an appearance fee.
+     */
+    public static int homeAndHomeLegFee(ProgramProfile home, ProgramProfile away) {
+        if (home == null || away == null) {
+            return 0;
+        }
+        int tierGap = home.scheduleTier - away.scheduleTier;
+        if (tierGap >= -PEER_SERIES_TIER_GAP) {
+            return 0;
+        }
+        return appearanceFee(home, away);
+    }
+
     /** Optional win bonus (~15% of guarantee) paid by home if away wins. */
     public static int buyGameWinBonus(int guarantee) {
         if (guarantee <= 0) {
@@ -299,20 +356,33 @@ public final class NilMoney {
     }
 
     /**
-     * Cancel fee for an OOC contract. Buy deals scale with remaining guarantees;
-     * H&amp;H / single use a flat program-tier floor.
+     * Cancel fee for an OOC contract: a share of the money still owed on
+     * unplayed dates, floored by deal type so free peer series still sting.
      */
-    public static int oocCancelBuyout(OocContract.Type type, int remainingGuarantees, int lengthYears) {
+    public static int oocCancelBuyout(
+            OocContract.Type type,
+            int remainingGuarantees,
+            int lengthYears,
+            int unsettledGameCount) {
         int years = Math.max(1, lengthYears);
-        if (type == OocContract.Type.BUY || remainingGuarantees > 0) {
-            int fromGuarantees = (int) Math.round(remainingGuarantees * 0.50 / 1000.0) * 1000;
-            int floor = 100_000 * years;
-            return Math.max(floor, fromGuarantees);
-        }
+        int games = Math.max(1, unsettledGameCount);
+        int fromGuarantees = roundToThousand(Math.max(0, remainingGuarantees) * 0.55);
+        int floor;
         if (type == OocContract.Type.HOME_AND_HOME) {
-            return 250_000 * years;
+            floor = 200_000 * games;
+        } else if (type == OocContract.Type.TWO_FOR_ONE) {
+            floor = 150_000 * games;
+        } else {
+            floor = 100_000 * years;
         }
-        return 75_000;
+        return Math.max(floor, fromGuarantees);
+    }
+
+    private static int scheduleComposite(ProgramProfile profile) {
+        if (profile == null) {
+            return 50;
+        }
+        return (int) Math.round(profile.scheduleTier * 0.55 + profile.capitalPool * 0.45);
     }
 
     /** Breach fine when a deal passes its fulfill-by year unsettled (~1.25× cancel buyout). */

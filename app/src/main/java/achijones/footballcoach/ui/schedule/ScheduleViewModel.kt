@@ -112,6 +112,11 @@ data class ScheduleUiState(
     val conferenceFilter: String? = null,
     val dealOpponentAbbr: String? = null,
     val dealQuote: String = "",
+    val singleGameAllowed: Boolean = true,
+    val hhQuote: String = "",
+    val hhAllowed: Boolean = true,
+    val twoForOneQuote: String = "",
+    val twoForOneAllowed: Boolean = false,
     val dealSite: DealSite = DealSite.HOME,
     val hhReturnOffset: Int = 1,
     val cancelConfirmId: String? = null,
@@ -248,6 +253,11 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 conferenceFilter = null,
                 dealOpponentAbbr = null,
                 dealQuote = "",
+                singleGameAllowed = true,
+                hhQuote = "",
+                hhAllowed = true,
+                twoForOneQuote = "",
+                twoForOneAllowed = false,
                 dealSite = DealSite.HOME,
             )
         }
@@ -264,27 +274,29 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             return
         }
         val site = defaultSiteFor(option.section)
+        val quotes = buildDealQuotes(abbr, site, _uiState.value.hhReturnOffset)
         _uiState.update {
             it.copy(
                 dealOpponentAbbr = abbr,
                 dealSite = site,
-                dealQuote = buildDealQuote(abbr, site),
-            )
+            ).withQuotes(quotes)
         }
     }
 
     fun setDealSite(site: DealSite) {
         val abbr = _uiState.value.dealOpponentAbbr ?: return
-        _uiState.update {
-            it.copy(
-                dealSite = site,
-                dealQuote = buildDealQuote(abbr, site),
-            )
-        }
+        val quotes = buildDealQuotes(abbr, site, _uiState.value.hhReturnOffset)
+        _uiState.update { it.copy(dealSite = site).withQuotes(quotes) }
     }
 
     fun setHhReturnOffset(offset: Int) {
-        _uiState.update { it.copy(hhReturnOffset = offset.coerceIn(1, 6)) }
+        val clamped = offset.coerceIn(1, 6)
+        val abbr = _uiState.value.dealOpponentAbbr
+        val quotes = abbr?.let { buildDealQuotes(it, _uiState.value.dealSite, clamped) }
+        _uiState.update {
+            val next = it.copy(hhReturnOffset = clamped)
+            if (quotes == null) next else next.withQuotes(quotes)
+        }
     }
 
     fun signSingleGame() {
@@ -297,17 +309,16 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val site = _uiState.value.dealSite
         val home = if (site == DealSite.HOME) u else opponent
         val away = if (site == DealSite.HOME) opponent else u
-        val withGuarantee =
-            home.programProfile.scheduleTier > away.programProfile.scheduleTier
-        val contract = book.signSingleGame(home, away, year, withGuarantee) ?: run {
+        if (!_uiState.value.singleGameAllowed) {
             _uiState.update {
-                it.copy(
-                    message = if (withGuarantee) {
-                        "Could not sign deal (home team may not afford the guarantee)."
-                    } else {
-                        "Could not sign single-game deal."
-                    },
-                )
+                it.copy(message = "${opponent.name} will not host you without a return series.")
+            }
+            return
+        }
+        val softInitiated = home.abbr == u.abbr
+        val contract = book.signSingleGame(home, away, year, softInitiated) ?: run {
+            _uiState.update {
+                it.copy(message = "Could not sign deal (host may not afford the guarantee).")
             }
             return
         }
@@ -321,20 +332,64 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val l = league ?: return
         val book = l.oocContracts ?: return
         val startYear = _uiState.value.dealTargetYear ?: l.year
-        val returnYear = startYear + _uiState.value.hhReturnOffset
+        val offset = _uiState.value.hhReturnOffset
         val oppAbbr = _uiState.value.dealOpponentAbbr ?: return
         val opponent = l.findTeamAbbr(oppAbbr) ?: return
+        if (!_uiState.value.hhAllowed) {
+            _uiState.update {
+                it.copy(message = "${opponent.name} will only visit as part of a 2-for-1.")
+            }
+            return
+        }
         val userHomesFirst = _uiState.value.dealSite == DealSite.HOME
-        val contract = book.signHomeAndHome(u, opponent, startYear, returnYear, userHomesFirst)
+        val softInitiated = u.programProfile.scheduleTier < opponent.programProfile.scheduleTier
+        val contract = book.signHomeAndHome(
+            u,
+            opponent,
+            startYear,
+            startYear + offset,
+            userHomesFirst,
+            softInitiated,
+        ) ?: run {
+            _uiState.update { it.copy(message = "Could not sign home-and-home.") }
+            return
+        }
+        finishSeriesSign(contract.id, startYear, u, opponent)
+    }
+
+    fun signTwoForOneDeal() {
+        val u = user ?: return
+        val l = league ?: return
+        val book = l.oocContracts ?: return
+        val startYear = _uiState.value.dealTargetYear ?: l.year
+        val offset = _uiState.value.hhReturnOffset
+        val oppAbbr = _uiState.value.dealOpponentAbbr ?: return
+        val opponent = l.findTeamAbbr(oppAbbr) ?: return
+        if (!_uiState.value.twoForOneAllowed) {
+            _uiState.update {
+                it.copy(message = "A 2-for-1 needs a clear gap between the programs.")
+            }
+            return
+        }
+        val userHomesFirst = _uiState.value.dealSite == DealSite.HOME
+        val contract = book.signTwoForOne(u, opponent, startYear, offset, userHomesFirst)
             ?: run {
-                _uiState.update { it.copy(message = "Could not sign home-and-home.") }
+                _uiState.update {
+                    it.copy(message = "Could not sign 2-for-1 (host may not afford guarantees).")
+                }
                 return
             }
-        val cg = contract.gameForYear(startYear)
+        finishSeriesSign(contract.id, startYear, u, opponent)
+    }
+
+    private fun finishSeriesSign(contractId: String, startYear: Int, u: Team, opponent: Team) {
+        val l = league ?: return
+        val contract = l.oocContracts?.findById(contractId)
+        val cg = contract?.gameForYear(startYear)
         if (cg != null) {
             val home = l.findTeamAbbr(cg.homeAbbr) ?: u
             val away = l.findTeamAbbr(cg.awayAbbr) ?: opponent
-            placeIfCurrentWeek(contract.id, home, away, startYear)
+            placeIfCurrentWeek(contractId, home, away, startYear)
         }
         dismissOpponentPicker()
         reload()
@@ -344,10 +399,12 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val book = league?.oocContracts ?: return
         val u = user ?: return
         val c = book.findById(contractId) ?: return
+        val year = league?.year ?: 0
         val fee = NilMoney.oocCancelBuyout(
             c.type,
-            c.remainingGuaranteeTotal(league?.year ?: 0),
+            c.remainingGuaranteeTotal(year),
             c.lengthYears,
+            c.unsettledGameCount(year),
         ).coerceAtLeast(c.buyout)
         _uiState.update {
             it.copy(
@@ -539,6 +596,11 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 conferenceFilter = null,
                 dealOpponentAbbr = null,
                 dealQuote = "",
+                singleGameAllowed = true,
+                hhQuote = "",
+                hhAllowed = true,
+                twoForOneQuote = "",
+                twoForOneAllowed = false,
                 dealSite = DealSite.HOME,
                 hhReturnOffset = 1,
             )
@@ -599,21 +661,24 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val oppTier = t.programProfile.scheduleTier
         val section = when {
             Team.strongestRivalryBetween(user, t) > 0 -> OpponentSection.RIVALRY
-            userTier > oppTier -> OpponentSection.BUY
-            userTier < oppTier -> OpponentSection.EARN
+            userTier - oppTier > NilMoney.PEER_SERIES_TIER_GAP -> OpponentSection.BUY
+            oppTier - userTier > NilMoney.PEER_SERIES_TIER_GAP -> OpponentSection.EARN
             else -> OpponentSection.PEER
         }
         // Default list money assumes the natural site for that section.
         val (kind, label) = when {
-            userTier > oppTier -> {
+            userTier - oppTier > NilMoney.PEER_SERIES_TIER_GAP -> {
                 val g = NilMoney.buyGameGuarantee(user.programProfile, t.programProfile)
                 OpponentMoneyKind.PAY to "Pay ${NilMoney.format(g)}"
             }
-            userTier < oppTier -> {
+            oppTier - userTier > NilMoney.PEER_SERIES_TIER_GAP -> {
                 val g = NilMoney.buyGameGuarantee(t.programProfile, user.programProfile)
                 OpponentMoneyKind.EARN to "Earn ${NilMoney.format(g)}"
             }
-            else -> OpponentMoneyKind.NONE to "No fee"
+            else -> {
+                val g = NilMoney.visitorFloorGuarantee(t.programProfile)
+                OpponentMoneyKind.PAY to "Pay ${NilMoney.format(g)}"
+            }
         }
         return OpponentOptionUi(
             abbr = t.abbr,
@@ -642,22 +707,113 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun buildDealQuote(oppAbbr: String, site: DealSite): String {
-        val u = user ?: return ""
-        val l = league ?: return ""
-        val opponent = l.findTeamAbbr(oppAbbr) ?: return ""
-        val year = _uiState.value.dealTargetYear ?: l.year
+    private data class DealQuotes(
+        val single: String,
+        val singleAllowed: Boolean,
+        val homeAndHome: String,
+        val homeAndHomeAllowed: Boolean,
+        val twoForOne: String,
+        val twoForOneAllowed: Boolean,
+    )
+
+    private fun ScheduleUiState.withQuotes(quotes: DealQuotes): ScheduleUiState {
+        return copy(
+            dealQuote = quotes.single,
+            singleGameAllowed = quotes.singleAllowed,
+            hhQuote = quotes.homeAndHome,
+            hhAllowed = quotes.homeAndHomeAllowed,
+            twoForOneQuote = quotes.twoForOne,
+            twoForOneAllowed = quotes.twoForOneAllowed,
+        )
+    }
+
+    private fun buildDealQuotes(oppAbbr: String, site: DealSite, offset: Int): DealQuotes {
+        val empty = DealQuotes("", false, "", false, "", false)
+        val u = user ?: return empty
+        val l = league ?: return empty
+        val opponent = l.findTeamAbbr(oppAbbr) ?: return empty
+        val startYear = _uiState.value.dealTargetYear ?: l.year
+        val clamped = offset.coerceIn(1, 6)
+        val tierGap = u.programProfile.scheduleTier - opponent.programProfile.scheduleTier
+        val userIsPower = tierGap > NilMoney.PEER_SERIES_TIER_GAP
+        val userIsSoft = tierGap < -NilMoney.PEER_SERIES_TIER_GAP
+        val mismatch = userIsPower || userIsSoft
         val home = if (site == DealSite.HOME) u else opponent
         val away = if (site == DealSite.HOME) opponent else u
-        val siteLabel = if (site == DealSite.HOME) "Home" else "Away"
-        if (home.programProfile.scheduleTier <= away.programProfile.scheduleTier) {
-            return "$year $siteLabel · No fee"
-        }
-        val guarantee = NilMoney.buyGameGuarantee(home.programProfile, away.programProfile)
-        return if (site == DealSite.HOME) {
-            "$year $siteLabel · Pay ${NilMoney.format(guarantee)}"
+
+        // A bigger program never bills a smaller host for a one-off visit; it has
+        // to give up two home dates instead.
+        val singleAllowed = !(userIsPower && site == DealSite.AWAY)
+        val singleQuote = if (singleAllowed) {
+            val fee = NilMoney.singleGameGuarantee(home.programProfile, away.programProfile)
+            "$startYear @${home.name} · ${moneyLabelFor(home.abbr == u.abbr, fee)}"
         } else {
-            "$year $siteLabel · Earn ${NilMoney.format(guarantee)}"
+            "${opponent.name} will not host a one-off — offer a 2-for-1"
+        }
+
+        val hhAllowed = !userIsPower
+        val returnYear = startYear + clamped
+        val hhFirstHome = if (site == DealSite.HOME) u else opponent
+        val hhSecondHome = if (site == DealSite.HOME) opponent else u
+        val hhQuote = if (!hhAllowed) {
+            "${opponent.name} only visits as part of a 2-for-1"
+        } else {
+            val firstFee = NilMoney.homeAndHomeLegFee(
+                hhFirstHome.programProfile,
+                hhSecondHome.programProfile,
+            )
+            val secondFee = NilMoney.homeAndHomeLegFee(
+                hhSecondHome.programProfile,
+                hhFirstHome.programProfile,
+            )
+            "$startYear @${hhFirstHome.name} · ${moneyLabelFor(hhFirstHome.abbr == u.abbr, firstFee)}" +
+                " · $returnYear @${hhSecondHome.name} · " +
+                moneyLabelFor(hhSecondHome.abbr == u.abbr, secondFee)
+        }
+
+        val twoForOneQuote = if (!mismatch) {
+            "Programs are too evenly matched for a 2-for-1"
+        } else {
+            val power = if (tierGap > 0) u else opponent
+            val soft = if (power.abbr == u.abbr) opponent else u
+            val guarantee = NilMoney.buyGameGuarantee(power.programProfile, soft.programProfile)
+            val powerMoney = moneyLabelFor(power.abbr == u.abbr, guarantee)
+            val midYear = startYear + clamped
+            val powerHostsFirst = home.abbr == power.abbr
+            val legs = if (powerHostsFirst) {
+                listOf(
+                    "$startYear @${power.name} · $powerMoney",
+                    "$midYear @${soft.name} · No fee",
+                    "${midYear + 1} @${power.name} · $powerMoney",
+                )
+            } else {
+                listOf(
+                    "$startYear @${soft.name} · No fee",
+                    "$midYear @${power.name} · $powerMoney",
+                    "${midYear + 1} @${power.name} · $powerMoney",
+                )
+            }
+            legs.joinToString(" · ")
+        }
+
+        return DealQuotes(
+            single = singleQuote,
+            singleAllowed = singleAllowed,
+            homeAndHome = hhQuote,
+            homeAndHomeAllowed = hhAllowed,
+            twoForOne = twoForOneQuote,
+            twoForOneAllowed = mismatch,
+        )
+    }
+
+    private fun moneyLabelFor(userIsHome: Boolean, fee: Int): String {
+        if (fee <= 0) {
+            return "No fee"
+        }
+        return if (userIsHome) {
+            "Pay ${NilMoney.format(fee)}"
+        } else {
+            "Earn ${NilMoney.format(fee)}"
         }
     }
 
@@ -781,6 +937,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 OocContract.Type.SINGLE -> "Single"
                 OocContract.Type.BUY -> "Buy"
                 OocContract.Type.HOME_AND_HOME -> "H&H"
+                OocContract.Type.TWO_FOR_ONE -> "2-for-1"
             }
             val status = when {
                 c.mustFulfillByYear == year -> "Due this year"
@@ -794,6 +951,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 c.type,
                 c.remainingGuaranteeTotal(year),
                 c.lengthYears,
+                c.unsettledGameCount(year),
             ).coerceAtLeast(c.buyout)
             ContractCardUi(
                 id = c.id,

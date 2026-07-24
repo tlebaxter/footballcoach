@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -60,6 +61,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import achijones.footballcoach.ui.components.SegmentedControl
 import achijones.footballcoach.ui.components.TeamLogo
 import achijones.footballcoach.ui.components.rememberLogoNeedsContrastBoost
+import achijones.footballcoach.ui.components.rememberSheetFlingBlocker
 import achijones.footballcoach.ui.components.rememberTeamColors
 import achijones.footballcoach.ui.theme.onColorFor
 
@@ -544,29 +546,6 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                 }
             }
 
-            if (state.availableConferences.isNotEmpty()) {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 12.dp)
-                        .horizontalScroll(rememberScrollState()),
-                    horizontalArrangement = Arrangement.spacedBy(6.dp),
-                ) {
-                    FilterChip(
-                        selected = state.conferenceFilter == null,
-                        onClick = { viewModel.setConferenceFilter(null) },
-                        label = { Text("All") },
-                    )
-                    state.availableConferences.forEach { conf ->
-                        FilterChip(
-                            selected = state.conferenceFilter == conf,
-                            onClick = { viewModel.setConferenceFilter(conf) },
-                            label = { Text(conf) },
-                        )
-                    }
-                }
-            }
-
             selected?.let { opt ->
                 val colors = rememberTeamColors(opt.name, opt.abbr)
                 val leftColor = colors.primary.copy(alpha = 0.45f)
@@ -574,9 +553,11 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                     listOf(leftColor, colors.secondary.copy(alpha = 0.28f)),
                 )
                 val contrastBoost = rememberLogoNeedsContrastBoost(opt.name, leftColor)
+                val twoForOneFulfillBy = fulfillByYear + 1
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .weight(1f, fill = false)
                         .padding(top = 16.dp)
                         .clip(RoundedCornerShape(12.dp))
                         .background(brush)
@@ -609,7 +590,7 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                         }
                     }
                     SegmentedControl(
-                        labels = listOf("Home", "Away"),
+                        labels = listOf("@${state.teamName}", "@${opt.name}"),
                         selected = if (state.dealSite == DealSite.HOME) 0 else 1,
                         onSelect = { index ->
                             viewModel.setDealSite(
@@ -618,21 +599,16 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                         },
                         modifier = Modifier.fillMaxWidth(),
                     )
-                    if (state.dealQuote.isNotBlank()) {
-                        Text(
-                            state.dealQuote,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
+                    DealQuoteText(state.dealQuote, state.singleGameAllowed)
                     Button(
                         onClick = viewModel::signSingleGame,
+                        enabled = state.singleGameAllowed,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
                         Text("Sign single game")
                     }
                     Text(
-                        "Home-and-home · return in +${state.hhReturnOffset} yr (by $fulfillByYear)",
+                        "Series · return in +${state.hhReturnOffset} yr",
                         style = MaterialTheme.typography.labelMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -650,56 +626,107 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                             )
                         }
                     }
+                    DealQuoteText(state.hhQuote, state.hhAllowed)
                     OutlinedButton(
                         onClick = viewModel::signHomeAndHomeDeal,
+                        enabled = state.hhAllowed,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text("Sign home-and-home")
+                        Text("Sign home-and-home (by $fulfillByYear)")
+                    }
+                    DealQuoteText(state.twoForOneQuote, state.twoForOneAllowed)
+                    OutlinedButton(
+                        onClick = viewModel::signTwoForOneDeal,
+                        enabled = state.twoForOneAllowed,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
+                        Text("Sign 2-for-1 (by $twoForOneFulfillBy)")
                     }
                 }
             }
 
-            Text(
-                if (selected == null) "Choose a team" else "Or choose a different team",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
-            )
-
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-            ) {
-                sectionOrder.forEach { section ->
-                    val sectionItems = filteredOptions.filter { it.section == section }
-                    if (sectionItems.isEmpty()) return@forEach
-                    item(key = "section-${section.name}") {
-                        Text(
-                            sectionTitle(section),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+            if (selected == null) {
+                if (state.availableConferences.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 12.dp)
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
+                        FilterChip(
+                            selected = state.conferenceFilter == null,
+                            onClick = { viewModel.setConferenceFilter(null) },
+                            label = { Text("All") },
                         )
+                        state.availableConferences.forEach { conf ->
+                            FilterChip(
+                                selected = state.conferenceFilter == conf,
+                                onClick = { viewModel.setConferenceFilter(conf) },
+                                label = { Text(conf) },
+                            )
+                        }
                     }
-                    items(
-                        sectionItems,
-                        key = { "${section.name}-${it.abbr}-${it.openContractId}" },
-                    ) { opt ->
-                        OpponentPickerRow(
-                            opt = opt,
-                            showConference = state.conferenceFilter == null,
-                            selected = opt.abbr == state.dealOpponentAbbr &&
-                                opt.openContractId == null,
-                            onClick = { viewModel.selectDealOpponent(opt.abbr) },
-                        )
+                }
+
+                Text(
+                    "Choose a team",
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+                )
+
+                LazyColumn(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .weight(1f)
+                        .nestedScroll(rememberSheetFlingBlocker()),
+                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                ) {
+                    sectionOrder.forEach { section ->
+                        val sectionItems = filteredOptions.filter { it.section == section }
+                        if (sectionItems.isEmpty()) return@forEach
+                        item(key = "section-${section.name}") {
+                            Text(
+                                sectionTitle(section),
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                            )
+                        }
+                        items(
+                            sectionItems,
+                            key = { "${section.name}-${it.abbr}-${it.openContractId}" },
+                        ) { opt ->
+                            OpponentPickerRow(
+                                opt = opt,
+                                showConference = state.conferenceFilter == null,
+                                selected = opt.abbr == state.dealOpponentAbbr &&
+                                    opt.openContractId == null,
+                                onClick = { viewModel.selectDealOpponent(opt.abbr) },
+                            )
+                        }
                     }
                 }
             }
         }
     }
+}
+
+@Composable
+private fun DealQuoteText(quote: String, available: Boolean) {
+    if (quote.isBlank()) return
+    Text(
+        quote,
+        style = MaterialTheme.typography.bodySmall,
+        fontWeight = if (available) FontWeight.SemiBold else FontWeight.Normal,
+        color = if (available) {
+            MaterialTheme.colorScheme.onSurface
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant
+        },
+    )
 }
 
 @Composable

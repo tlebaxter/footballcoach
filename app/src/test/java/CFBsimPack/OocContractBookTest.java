@@ -106,25 +106,151 @@ public class OocContractBookTest {
     @Test
     public void signSingleGameCreatesOneYearContract() throws Exception {
         League league = createOpenOocLeague();
-        Team home = league.findTeamAbbr("MIA");
-        Team away = league.findTeamAbbr("TOL");
-        assertNotNull(home);
-        assertNotNull(away);
-        OocContract peer = league.oocContracts.signSingleGame(home, away, league.getYear(), false);
+        Team peerHome = null;
+        Team peerAway = null;
+        for (Team a : league.teamList) {
+            for (Team b : league.teamList) {
+                if (a == b || a.conference.equals(b.conference)) {
+                    continue;
+                }
+                if (a.programProfile.scheduleTier == b.programProfile.scheduleTier) {
+                    peerHome = a;
+                    peerAway = b;
+                    break;
+                }
+            }
+            if (peerHome != null) {
+                break;
+            }
+        }
+        assertNotNull(peerHome);
+        assertNotNull(peerAway);
+        OocContract peer = league.oocContracts.signSingleGame(
+                peerHome, peerAway, league.getYear());
         assertNotNull(peer);
         assertEquals(OocContract.Type.SINGLE, peer.type);
         assertEquals(1, peer.games.size());
-        assertEquals(0, peer.games.get(0).guarantee);
+        assertTrue("Peer visitors still collect a floor guarantee",
+                peer.games.get(0).guarantee > 0);
         assertEquals(league.getYear(), peer.mustFulfillByYear);
 
         Team power = league.findTeamAbbr("ALA");
         Team soft = league.findTeamAbbr("AKR");
         assertNotNull(power);
         assertNotNull(soft);
-        OocContract buy = league.oocContracts.signSingleGame(power, soft, league.getYear() + 1, true);
+        OocContract buy = league.oocContracts.signSingleGame(power, soft, league.getYear() + 1);
         assertNotNull(buy);
         assertEquals(OocContract.Type.BUY, buy.type);
         assertTrue(buy.games.get(0).guarantee > 0);
+    }
+
+    @Test
+    public void softHostingPowerChargesAppearanceFeeOnlyWhenSoftInitiates() throws Exception {
+        League league = createOpenOocLeague();
+        Team power = league.findTeamAbbr("ALA");
+        Team soft = league.findTeamAbbr("AKR");
+        assertNotNull(power);
+        assertNotNull(soft);
+        soft.recruitMoney = 50_000_000;
+        int expected = NilMoney.singleGameGuarantee(soft.programProfile, power.programProfile);
+        assertTrue(expected > 0);
+
+        assertNull("A power cannot bill a smaller host for a one-off visit",
+                league.oocContracts.signSingleGame(soft, power, league.getYear() + 2));
+
+        OocContract contract = league.oocContracts.signSingleGame(
+                soft, power, league.getYear() + 2, true);
+        assertNotNull(contract);
+        assertEquals(OocContract.Type.BUY, contract.type);
+        assertEquals(expected, contract.games.get(0).guarantee);
+        assertEquals(soft.abbr, contract.games.get(0).homeAbbr);
+        assertEquals(power.abbr, contract.games.get(0).awayAbbr);
+    }
+
+    @Test
+    public void unequalHomeAndHomeNeedsSoftToInitiateAndBuysItsHomeDate() throws Exception {
+        League league = createOpenOocLeague();
+        Team power = league.findTeamAbbr("ALA");
+        Team soft = league.findTeamAbbr("AKR");
+        assertNotNull(power);
+        assertNotNull(soft);
+        soft.recruitMoney = 50_000_000;
+        int start = league.getYear() + 1;
+
+        assertNull("Unequal series must come from the smaller school",
+                league.oocContracts.signHomeAndHome(power, soft, start, start + 1, true));
+
+        OocContract contract = league.oocContracts.signHomeAndHome(
+                soft, power, start, start + 1, true, true);
+        assertNotNull(contract);
+        int appearance = NilMoney.appearanceFee(soft.programProfile, power.programProfile);
+        assertEquals(soft.abbr, contract.games.get(0).homeAbbr);
+        assertEquals(appearance, contract.games.get(0).guarantee);
+        assertEquals(power.abbr, contract.games.get(1).homeAbbr);
+        assertEquals(0, contract.games.get(1).guarantee);
+        assertTrue(contract.buyout >= NilMoney.oocCancelBuyout(
+                OocContract.Type.HOME_AND_HOME, appearance, 2, 2));
+    }
+
+    @Test
+    public void twoForOnePowerHostsTwiceWithGuarantees() throws Exception {
+        League league = createOpenOocLeague();
+        Team power = league.findTeamAbbr("ALA");
+        Team soft = league.findTeamAbbr("AKR");
+        assertNotNull(power);
+        assertNotNull(soft);
+        assertTrue(
+                Math.abs(power.programProfile.scheduleTier - soft.programProfile.scheduleTier)
+                        > NilMoney.PEER_SERIES_TIER_GAP);
+        power.recruitMoney = 50_000_000;
+        int start = league.getYear() + 1;
+        int guarantee = NilMoney.buyGameGuarantee(power.programProfile, soft.programProfile);
+        OocContract contract = league.oocContracts.signTwoForOne(
+                power, soft, start, 2, true);
+        assertNotNull(contract);
+        assertEquals(OocContract.Type.TWO_FOR_ONE, contract.type);
+        assertEquals(3, contract.games.size());
+        assertEquals(power.abbr, contract.games.get(0).homeAbbr);
+        assertEquals(guarantee, contract.games.get(0).guarantee);
+        assertEquals(soft.abbr, contract.games.get(1).homeAbbr);
+        assertEquals(0, contract.games.get(1).guarantee);
+        assertEquals(power.abbr, contract.games.get(2).homeAbbr);
+        assertEquals(guarantee, contract.games.get(2).guarantee);
+        assertEquals(start + 3, contract.mustFulfillByYear);
+
+        OocContract softFirst = league.oocContracts.signTwoForOne(
+                soft, power, start + 4, 1, true);
+        assertNotNull(softFirst);
+        assertEquals(soft.abbr, softFirst.games.get(0).homeAbbr);
+        assertEquals(0, softFirst.games.get(0).guarantee);
+        assertEquals(power.abbr, softFirst.games.get(1).homeAbbr);
+        assertEquals(power.abbr, softFirst.games.get(2).homeAbbr);
+    }
+
+    @Test
+    public void twoForOneRejectedForPeerGap() throws Exception {
+        League league = createOpenOocLeague();
+        Team a = null;
+        Team b = null;
+        for (Team x : league.teamList) {
+            for (Team y : league.teamList) {
+                if (x == y || x.conference.equals(y.conference)) {
+                    continue;
+                }
+                int gap = Math.abs(x.programProfile.scheduleTier - y.programProfile.scheduleTier);
+                if (gap > 0 && gap <= NilMoney.PEER_SERIES_TIER_GAP) {
+                    a = x;
+                    b = y;
+                    break;
+                }
+            }
+            if (a != null) {
+                break;
+            }
+        }
+        assertNotNull(a);
+        assertNotNull(b);
+        assertNull(league.oocContracts.signTwoForOne(a, b, league.getYear() + 1, 1, true));
     }
 
     @Test
@@ -149,10 +275,9 @@ public class OocContractBookTest {
     @Test
     public void cancelChargesBuyout() throws Exception {
         League league = createOpenOocLeague();
-        Team a = league.findTeamAbbr("UGA");
-        Team b = league.findTeamAbbr("CLE");
-        assertNotNull(a);
-        assertNotNull(b);
+        Team[] peers = findPeerPair(league);
+        Team a = peers[0];
+        Team b = peers[1];
         OocContract contract = league.oocContracts.signHomeAndHome(a, b, league.getYear(), true);
         assertNotNull(contract);
         int before = a.recruitMoney;
@@ -244,10 +369,9 @@ public class OocContractBookTest {
     @Test
     public void rescheduleYearWithinFulfillBy() throws Exception {
         League league = createOpenOocLeague();
-        Team home = league.findTeamAbbr("ALA");
-        Team away = league.findTeamAbbr("UMA");
-        assertNotNull(home);
-        assertNotNull(away);
+        Team[] peers = findPeerPair(league);
+        Team home = peers[0];
+        Team away = peers[1];
         int year = league.getYear();
         OocContract contract = league.oocContracts.signHomeAndHome(home, away, year, year + 3, true);
         assertNotNull(contract);
@@ -392,6 +516,120 @@ public class OocContractBookTest {
         }
         assertTrue(league.oocContracts.hasSuggestedUserDeals());
         assertEquals(second, league.oocContracts.forTeam(user.abbr).size());
+    }
+
+    @Test
+    public void autoSignFutureDealsProducesRealisticMarketMix() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("ALA");
+        assertNotNull(user);
+        league.userTeam = user;
+        user.userControlled = true;
+
+        league.oocContracts.autoSignFutureDeals(league.teamList);
+
+        int buys = 0;
+        int series = 0;
+        int twoForOnes = 0;
+        for (OocContract c : league.oocContracts.all()) {
+            Team a = league.findTeamAbbr(c.teamA);
+            Team b = league.findTeamAbbr(c.teamB);
+            assertNotNull(a);
+            assertNotNull(b);
+            for (OocContractGame g : c.games) {
+                Team home = league.findTeamAbbr(g.homeAbbr);
+                Team away = league.findTeamAbbr(g.awayAbbr);
+                assertNotNull(home);
+                assertNotNull(away);
+                if (c.type == OocContract.Type.BUY || c.type == OocContract.Type.SINGLE) {
+                    assertFalse(
+                            "AI must never bill a smaller host for a one-off visit",
+                            home.programProfile.scheduleTier - away.programProfile.scheduleTier
+                                    < -NilMoney.PEER_SERIES_TIER_GAP);
+                }
+            }
+            if (c.type == OocContract.Type.BUY) {
+                buys++;
+            } else if (c.type == OocContract.Type.HOME_AND_HOME) {
+                series++;
+                assertTrue(
+                        "AI home-and-homes stay inside the peer band",
+                        Math.abs(a.programProfile.scheduleTier - b.programProfile.scheduleTier)
+                                <= NilMoney.PEER_SERIES_TIER_GAP);
+            } else if (c.type == OocContract.Type.TWO_FOR_ONE) {
+                twoForOnes++;
+            }
+        }
+        assertTrue("Powers should buy home games", buys > 0);
+        assertTrue("Peers should trade home-and-homes", series > 0);
+        assertTrue("Some powers should buy a road date with a 2-for-1", twoForOnes > 0);
+    }
+
+    @Test
+    public void autoSignFutureDealsSpreadsAcrossMultipleFutureYears() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("ALA");
+        assertNotNull(user);
+        league.userTeam = user;
+        user.userControlled = true;
+
+        league.oocContracts.autoSignFutureDeals(league.teamList);
+
+        boolean nextYear = false;
+        boolean laterYear = false;
+        for (OocContract c : league.oocContracts.all()) {
+            for (OocContractGame g : c.games) {
+                if (g.year == league.getYear() + 1) {
+                    nextYear = true;
+                } else if (g.year > league.getYear() + 1) {
+                    laterYear = true;
+                }
+            }
+        }
+        assertTrue(nextYear);
+        assertTrue(laterYear);
+    }
+
+    @Test
+    public void suggestedUserDealsNeverMakeAPowerBillASmallHost() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("ALA");
+        assertNotNull(user);
+        league.userTeam = user;
+        user.userControlled = true;
+
+        assertTrue(league.oocContracts.suggestUserFutureDeals(user, league.teamList) > 0);
+        for (OocContract c : league.oocContracts.forTeam(user.abbr)) {
+            if (c.type != OocContract.Type.BUY && c.type != OocContract.Type.SINGLE) {
+                continue;
+            }
+            for (OocContractGame g : c.games) {
+                Team home = league.findTeamAbbr(g.homeAbbr);
+                Team away = league.findTeamAbbr(g.awayAbbr);
+                assertNotNull(home);
+                assertNotNull(away);
+                assertFalse(
+                        home.programProfile.scheduleTier - away.programProfile.scheduleTier
+                                < -NilMoney.PEER_SERIES_TIER_GAP);
+            }
+        }
+    }
+
+    /** @return a cross-conference pair inside the peer band */
+    private static Team[] findPeerPair(League league) {
+        for (Team a : league.teamList) {
+            for (Team b : league.teamList) {
+                if (a == b || a.conference.equals(b.conference)) {
+                    continue;
+                }
+                int gap = Math.abs(
+                        a.programProfile.scheduleTier - b.programProfile.scheduleTier);
+                if (gap <= NilMoney.PEER_SERIES_TIER_GAP) {
+                    return new Team[] {a, b};
+                }
+            }
+        }
+        throw new AssertionError("No peer pair in league");
     }
 
     private static League createOpenOocLeague() throws Exception {

@@ -36,11 +36,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import achijones.footballcoach.ui.components.SegmentedControl
+import achijones.footballcoach.ui.components.rememberSheetFlingBlocker
 import achijones.footballcoach.ui.theme.FcChipMoneyBg
 import achijones.footballcoach.ui.theme.FcChipMoneyText
 import achijones.footballcoach.ui.theme.FcChipPosBg
@@ -88,7 +90,8 @@ fun PlayerCareerSheet(
             Box(
                 modifier = Modifier
                     .weight(1f)
-                    .fillMaxWidth(),
+                    .fillMaxWidth()
+                    .nestedScroll(rememberSheetFlingBlocker()),
             ) {
                 Column(
                     modifier = Modifier
