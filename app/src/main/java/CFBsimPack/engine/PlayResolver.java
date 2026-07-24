@@ -18,6 +18,7 @@ public final class PlayResolver {
 
     private final Random rng;
     private PlayerGameStats gameStats;
+    private FatigueTracker fatigue;
 
     public PlayResolver(Random rng) {
         this.rng = rng != null ? rng : new Random();
@@ -27,14 +28,18 @@ public final class PlayResolver {
         this.gameStats = gameStats;
     }
 
+    public void setFatigueTracker(FatigueTracker fatigue) {
+        this.fatigue = fatigue;
+    }
+
     public PlayResult resolve(Team home, Team away, GameState state, PlayCall call) {
         Team offense = state.possessionHome ? home : away;
         Team defense = state.possessionHome ? away : home;
         String personnel = call.resolvedOffenseConcept() != null
                 ? call.resolvedOffenseConcept().personnel
                 : null;
-        OnFieldEleven offEleven = OnFieldEleven.forOffense(offense, personnel);
-        OnFieldEleven defEleven = OnFieldEleven.forDefense(defense);
+        OnFieldEleven offEleven = OnFieldEleven.forOffense(offense, personnel, fatigue);
+        OnFieldEleven defEleven = OnFieldEleven.forDefense(defense, fatigue);
 
         if (call.offensePlay == OffensePlay.SPIKE) {
             return spike(state, offense, call);
@@ -103,11 +108,17 @@ public final class PlayResolver {
         int blockWins = countBlockWins(off, def, true);
         int pressure = (int) ((def.passRushComposite() * 2 - off.olPassComposite() - blockWins * 4)
                 * sys.passWeight * concept.sackRiskMod);
-        if (rng.nextDouble() * 100 < pressure / 8.0) {
+        int thv = rating(qb, x -> x.thv, 55);
+        int effectivePressure = (int) (pressure * (1.0 - (thv - 50) / 250.0));
+        if (effectivePressure < 0) effectivePressure = 0;
+        if (rng.nextDouble() * 100 < effectivePressure / 8.0) {
             // Designed scramble / escape before sack
             int qbSpd = rating(qb, x -> x.spd, 55);
-            if (rng.nextDouble() < 0.22 + qbSpd / 500.0) {
-                int scrambleYds = (int) ((qbSpd + rating(qb, x -> x.elu, 55)) / 18.0 * rng.nextDouble());
+            double escapeChance = (0.22 + qbSpd / 500.0 + (thv - 50) / 400.0) * cov.scrambleMod;
+            if (escapeChance < 0.05) escapeChance = 0.05;
+            if (rng.nextDouble() < escapeChance) {
+                int scrambleYds = (int) ((qbSpd + rating(qb, x -> x.elu, 55)) / 18.0
+                        * rng.nextDouble() * cov.scrambleMod);
                 if (scrambleYds < 1) scrambleYds = 1;
                 return applyGain(offense, defense, state, call, r, null, qb, scrambleYds, false);
             }
@@ -115,7 +126,7 @@ public final class PlayResolver {
         }
 
         double intChance = (pressure + def.coverageComposite()
-                - (rating(qb, x -> x.tha, 55) + qb.ratFootIQ + 100) / 3.0) / 18.0;
+                - (rating(qb, x -> x.tha, 55) + qb.ratFootIQ + thv + 100) / 4.0) / 18.0;
         intChance *= cov.intMod;
         if (concept.depth == DepthBand.DEEP) intChance *= 1.12;
         if (intChance < 0.015) intChance = 0.015;
@@ -140,11 +151,13 @@ public final class PlayResolver {
         Player cb = onFieldCb(def, defense);
         int cat = recvCatch(target);
         int spd = recvSpeed(target);
+        int rtr = rating(target, x -> x.rtr, 60);
         int cbCov = cb != null ? rating(cb, x -> x.pcv, 70) : 70;
         int cbSpd = cb != null ? rating(cb, x -> x.spd, 70) : 70;
 
         double completion = (normalize(rating(qb, x -> x.tha, 55)) + normalize(cat) - normalize(cbCov)) / 2.0
-                + 18.25 - pressure / 16.8 + homeField(offense, defense, state);
+                + 18.25 - pressure / 16.8 + homeField(offense, defense, state)
+                + normalize(rtr) / 4.0;
         completion *= cov.completionMod * concept.completionMod;
         completion += cov.passFitBonus();
         completion += concept.matchupBonus(cov);
@@ -186,7 +199,8 @@ public final class PlayResolver {
         if (yards < 0) yards = 0;
 
         Player s = onFieldS(def, defense);
-        double escape = (normalize(recvEva(target)) * 3 - (cb != null ? rating(cb, x -> x.tck, 70) : 70)
+        double escape = (normalize(recvEva(target)) * 3 + normalize(rtr)
+                - (cb != null ? rating(cb, x -> x.tck, 70) : 70)
                 - (s != null ? s.ratOvr : 70)) * rng.nextDouble();
         if (escape > 92 || rng.nextDouble() > 0.95) {
             yards += (int) (3 + spd * rng.nextDouble() / 3);
@@ -220,8 +234,8 @@ public final class PlayResolver {
         } else if (rng.nextDouble() < 0.28) {
             yards += (int) (rushEva / 5.0 * rng.nextDouble());
         }
-        if (call.coverage == CoverageCall.SPY) {
-            yards = (int) (yards * 0.95);
+        if (isPos(carrier, PositionGroup.QB)) {
+            yards = (int) (yards * cov.scrambleMod);
         }
 
         return applyGain(offense, defense, state, call, r, null, carrier, yards, false);
@@ -266,18 +280,26 @@ public final class PlayResolver {
 
         creditYards(offense, state, qb, ballCarrier, yards, wasPass);
 
-        // Fumble check
+        // Fumble check — ball security lowers forced-fumble chance
         Player safety = defense.getS(0);
         int sTkl = safety != null ? rating(safety, x -> x.tck, 70) : 70;
         double fum = isPos(ballCarrier, PositionGroup.RB)
                 ? (sTkl + defRun(defense)) / 2.0
                 : sTkl / 2.0;
         fum *= concept.fumbleMod;
+        int bsc = rating(ballCarrier, x -> x.bsc, 70);
+        double bscScale = (120.0 - bsc) / 50.0;
+        if (bscScale < 0.2) bscScale = 0.2;
+        fum *= bscScale;
         if (100 * rng.nextDouble() < fum / 50.0) {
             r.turnover = true;
             r.possessionChanged = true;
             r.clockBurned = (int) (12 + 10 * rng.nextDouble() * tempo);
-            if (isPos(ballCarrier, PositionGroup.RB)) ballCarrier.seasonStats.fumbles++;
+            if (isPos(ballCarrier, PositionGroup.RB) || isPos(ballCarrier, PositionGroup.QB)
+                    || isPos(ballCarrier, PositionGroup.FB)) {
+                ballCarrier.seasonStats.fumbles++;
+                if (gameStats != null) gameStats.line(ballCarrier).fumbles++;
+            }
             if (isPos(ballCarrier, PositionGroup.WR) || isPos(ballCarrier, PositionGroup.TE)) {
                 ballCarrier.seasonStats.recFumbles++;
             }
@@ -357,7 +379,7 @@ public final class PlayResolver {
             double blockChance = 0.08 + (defense.getEDGE(0) != null ? defense.getEDGE(0).ratOvr : 70) / 800.0;
             Player ls = offense.getLongSnapper();
             if (ls != null) blockChance -= ls.ratOvr / 1200.0;
-            int fum = punter != null && punter.ratings != null ? (100 - punter.ratings.bsc) : 50;
+            int fum = 100 - rating(punter, x -> x.bsc, 50);
             blockChance -= fum / 2000.0;
             if (rng.nextDouble() < Math.max(0.03, Math.min(0.22, blockChance))) {
                 r.puntBlocked = true;
@@ -379,8 +401,8 @@ public final class PlayResolver {
             power = rating(punter, x -> x.ppw, 70);
         } else if (isPos(punter, PositionGroup.K)) {
             power = rating(punter, x -> x.kpw, 70);
-        } else if (punter != null && punter.ratings != null) {
-            power = punter.ratings.ppw;
+        } else if (punter != null) {
+            power = rating(punter, x -> x.ppw, 70);
         }
         int puntYards = 32 + (int) ((power - 50) * 0.35) + (int) (18 * rng.nextDouble());
         if (puntYards < 28) puntYards = 28;
@@ -802,7 +824,7 @@ public final class PlayResolver {
     private Player pickCarrier(OnFieldEleven off, Team offense, OffenseConcept concept) {
         // Designed QB keep / option: athletic QBs occasionally keep
         Player qb = onFieldQb(off, offense);
-        int qbSpd = qb != null && qb.ratings != null ? qb.ratings.spd : 55;
+        int qbSpd = rating(qb, x -> x.spd, 55);
         if (qb != null && concept != null && concept.family == ConceptFamily.RUN
                 && rng.nextDouble() < 0.08 + qbSpd / 900.0) {
             return qb;
@@ -899,8 +921,10 @@ public final class PlayResolver {
         int get(PlayerRatings r);
     }
 
-    private static int rating(Player p, RatingGetter getter, int fallback) {
+    private int rating(Player p, RatingGetter getter, int fallback) {
         if (p == null || p.ratings == null) return fallback;
-        return getter.get(p.ratings);
+        int raw = getter.get(p.ratings);
+        if (fatigue == null) return raw;
+        return (int) Math.round(raw * fatigue.factor(p));
     }
 }

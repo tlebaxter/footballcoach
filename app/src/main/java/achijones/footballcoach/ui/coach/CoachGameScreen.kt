@@ -524,6 +524,59 @@ private fun ControlCard(
                 selected = tempos.indexOf(state.selectedTempo).coerceAtLeast(0),
                 onSelect = { viewModel.selectTempo(tempos[it]) },
             )
+            if (sit.clockRunning) {
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    "Clock running · −${state.selectedTempo.runoffSeconds()}s on snap",
+                    color = BallOrange,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (sit.userOnOffense
+                && (state.selectedTempo == TempoCall.CHEW_CLOCK || state.selectedTempo == TempoCall.NORMAL)
+                && !sit.pendingKickoff
+                && !sit.playingOT
+            ) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    if (state.selectedTempo == TempoCall.CHEW_CLOCK) {
+                        "DOG risk on snap (chew)"
+                    } else {
+                        "DOG risk on snap"
+                    },
+                    color = MutedText,
+                    style = MaterialTheme.typography.labelSmall,
+                )
+            }
+            Spacer(Modifier.height(10.dp))
+        }
+
+        val tip = state.timeoutTip
+        if (tip != null) {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(10.dp))
+                    .background(Color(0xFF1A2E1C))
+                    .border(1.dp, BallOrange.copy(alpha = 0.45f), RoundedCornerShape(10.dp))
+                    .padding(10.dp),
+            ) {
+                Text(tip.message, color = Color(0xFFE5E7EB), style = MaterialTheme.typography.bodySmall)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    TextButton(onClick = viewModel::dismissTimeoutTip) {
+                        Text("Dismiss", color = MutedText)
+                    }
+                    if (sit.canCallTimeout) {
+                        TextButton(onClick = viewModel::requestTimeout) {
+                            Text("Call timeout", color = BallOrange, fontWeight = FontWeight.SemiBold)
+                        }
+                    }
+                }
+            }
             Spacer(Modifier.height(10.dp))
         }
 

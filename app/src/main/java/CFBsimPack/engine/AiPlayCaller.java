@@ -28,7 +28,7 @@ public final class AiPlayCaller {
     /** Public suggestion API for coach UI. */
     public PlayCall suggest(Team offense, Team defense, GameState state) {
         OffenseConcept offConcept = chooseOffenseConcept(offense, defense, state);
-        DefenseConcept defConcept = chooseDefenseConcept(defense, state, offConcept);
+        DefenseConcept defConcept = chooseDefenseConcept(offense, defense, state, offConcept);
         TempoCall tempo = chooseTempo(offense, state);
         return PlayCall.fromConcepts(offConcept, defConcept, tempo);
     }
@@ -39,12 +39,18 @@ public final class AiPlayCaller {
     }
 
     public DefenseConcept suggestDefense(Team defense, GameState state) {
-        return chooseDefenseConcept(defense, state, null);
+        return chooseDefenseConcept(null, defense, state, null);
     }
 
     /** Defense suggestion that can react to a known offense concept (4th down / try). */
     public DefenseConcept suggestDefense(Team defense, GameState state, OffenseConcept offenseConcept) {
-        return chooseDefenseConcept(defense, state, offenseConcept);
+        return chooseDefenseConcept(null, defense, state, offenseConcept);
+    }
+
+    /** Defense suggestion with offense context (Spy vs mobile QBs). */
+    public DefenseConcept suggestDefense(Team offense, Team defense, GameState state,
+                                         OffenseConcept offenseConcept) {
+        return chooseDefenseConcept(offense, defense, state, offenseConcept);
     }
 
     /**
@@ -285,7 +291,14 @@ public final class AiPlayCaller {
         return scored.get(0).concept;
     }
 
+    /** Prefer {@link #chooseDefenseConcept(Team, Team, GameState, OffenseConcept)} when offense is known. */
+    @Deprecated
     public DefenseConcept chooseDefenseConcept(Team defense, GameState state, OffenseConcept offenseConcept) {
+        return chooseDefenseConcept(null, defense, state, offenseConcept);
+    }
+
+    public DefenseConcept chooseDefenseConcept(Team offense, Team defense, GameState state,
+                                               OffenseConcept offenseConcept) {
         if (state.pendingKickoff) {
             return rng.nextDouble() < 0.2
                     ? Playbook.defenseById("kick_fair_catch")
@@ -293,7 +306,7 @@ public final class AiPlayCaller {
         }
 
         if (state.pendingTry && state.tryIsTwoPoint) {
-            return chooseCoverageBySystem(defense, state);
+            return chooseCoverageBySystem(offense, defense, state);
         }
 
         if (state.down >= 4 || (offenseConcept != null && isSpecialTeamsOffense(offenseConcept))) {
@@ -318,10 +331,10 @@ public final class AiPlayCaller {
                 return Playbook.defenseById("punt_return");
             }
             // Go-for-it / other scrimmage 4th
-            return chooseCoverageBySystem(defense, state);
+            return chooseCoverageBySystem(offense, defense, state);
         }
 
-        return chooseCoverageBySystem(defense, state);
+        return chooseCoverageBySystem(offense, defense, state);
     }
 
     private static boolean isSpecialTeamsOffense(OffenseConcept c) {
@@ -331,7 +344,7 @@ public final class AiPlayCaller {
                 || p == OffensePlay.KICKOFF;
     }
 
-    private DefenseConcept chooseCoverageBySystem(Team defense, GameState state) {
+    private DefenseConcept chooseCoverageBySystem(Team offense, Team defense, GameState state) {
         DefensiveSystem sys = defense.defSystem != null ? defense.defSystem : DefensiveSystem.BASE_4_3;
         double roll = rng.nextDouble();
 
@@ -343,6 +356,15 @@ public final class AiPlayCaller {
                 return Playbook.defenseFor(rng.nextBoolean() ? CoverageCall.COVER_2 : CoverageCall.COVER_4);
             }
             return Playbook.defenseFor(CoverageCall.COVER_3);
+        }
+
+        // Contain dual-threat QBs on early downs
+        if (offense != null && state.down <= 2 && !state.pendingTry) {
+            Player qb = offense.getQB(0);
+            int qbSpd = qb != null && qb.ratings != null ? qb.ratings.spd : 55;
+            if (qbSpd >= 78 && rng.nextDouble() < 0.15) {
+                return Playbook.defenseFor(CoverageCall.SPY);
+            }
         }
 
         // Run-heavy packages sell out vs run more often

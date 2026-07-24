@@ -1,5 +1,7 @@
 package CFBsimPack;
 
+import CFBsimPack.engine.FatigueTracker;
+
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -15,18 +17,26 @@ public final class OnFieldEleven {
     public final List<Player> players = new ArrayList<>(11);
     public final List<RoleTag> roles = new ArrayList<>(11);
 
+    /** Optional fatigue for composites; set when elevens are built with a tracker. */
+    private FatigueTracker fatigue;
+
     public static OnFieldEleven forDefense(Team team) {
+        return forDefense(team, null);
+    }
+
+    public static OnFieldEleven forDefense(Team team, FatigueTracker fatigue) {
         OnFieldEleven eleven = new OnFieldEleven();
+        eleven.fatigue = fatigue;
         DefensiveSystem sys = team.defSystem != null ? team.defSystem : DefensiveSystem.BASE_4_3;
         Set<Player> used = new HashSet<>();
         for (RoleTag slot : sys.slots) {
-            Player p = pickBestForRole(team, slot.preferredGroup(), used, 35);
+            Player p = pickBestForRole(team, slot.preferredGroup(), used, 35, fatigue);
             if (p == null) {
-                p = pickBestForRole(team, PositionGroup.LB, used, 30);
-                if (p == null) p = pickBestForRole(team, PositionGroup.DL, used, 30);
-                if (p == null) p = pickBestForRole(team, PositionGroup.EDGE, used, 30);
-                if (p == null) p = pickBestForRole(team, PositionGroup.CB, used, 30);
-                if (p == null) p = pickBestForRole(team, PositionGroup.S, used, 30);
+                p = pickBestForRole(team, PositionGroup.LB, used, 30, fatigue);
+                if (p == null) p = pickBestForRole(team, PositionGroup.DL, used, 30, fatigue);
+                if (p == null) p = pickBestForRole(team, PositionGroup.EDGE, used, 30, fatigue);
+                if (p == null) p = pickBestForRole(team, PositionGroup.CB, used, 30, fatigue);
+                if (p == null) p = pickBestForRole(team, PositionGroup.S, used, 30, fatigue);
             }
             if (p != null) {
                 used.add(p);
@@ -40,17 +50,22 @@ public final class OnFieldEleven {
     /** Philosophy default package (AI / legacy). */
     public static OnFieldEleven forOffense(Team team) {
         OffensivePhilosophy phil = team.offPhilosophy != null ? team.offPhilosophy : OffensivePhilosophy.MULTIPLE;
-        return forOffense(team, phil.defaultPersonnel);
+        return forOffense(team, phil.defaultPersonnel, null);
     }
 
     /** Concept personnel string ("11", "21", …) drives package. */
     public static OnFieldEleven forOffense(Team team, String personnel) {
+        return forOffense(team, personnel, null);
+    }
+
+    public static OnFieldEleven forOffense(Team team, String personnel, FatigueTracker fatigue) {
         OnFieldEleven eleven = new OnFieldEleven();
+        eleven.fatigue = fatigue;
         Set<Player> used = new HashSet<>();
         String pers = personnel != null ? personnel : "11";
 
-        add(eleven, used, team, PositionGroup.QB, RoleTag.QB, 1);
-        add(eleven, used, team, PositionGroup.OL, RoleTag.OL, 5);
+        add(eleven, used, team, PositionGroup.QB, RoleTag.QB, 1, fatigue);
+        add(eleven, used, team, PositionGroup.OL, RoleTag.OL, 5, fatigue);
 
         int wrTarget = 3;
         int rbTarget = 1;
@@ -84,16 +99,16 @@ public final class OnFieldEleven {
             fbTarget = 0;
         }
 
-        add(eleven, used, team, PositionGroup.RB, RoleTag.RB, rbTarget);
-        add(eleven, used, team, PositionGroup.FB, RoleTag.FB, fbTarget);
-        add(eleven, used, team, PositionGroup.TE, RoleTag.TE, teTarget);
-        add(eleven, used, team, PositionGroup.WR, RoleTag.WR, wrTarget);
+        add(eleven, used, team, PositionGroup.RB, RoleTag.RB, rbTarget, fatigue);
+        add(eleven, used, team, PositionGroup.FB, RoleTag.FB, fbTarget, fatigue);
+        add(eleven, used, team, PositionGroup.TE, RoleTag.TE, teTarget, fatigue);
+        add(eleven, used, team, PositionGroup.WR, RoleTag.WR, wrTarget, fatigue);
 
         while (eleven.players.size() < 11) {
-            Player p = pickBestForRole(team, PositionGroup.WR, used, 35);
-            if (p == null) p = pickBestForRole(team, PositionGroup.TE, used, 35);
-            if (p == null) p = pickBestForRole(team, PositionGroup.RB, used, 35);
-            if (p == null) p = pickBestForRole(team, PositionGroup.FB, used, 35);
+            Player p = pickBestForRole(team, PositionGroup.WR, used, 35, fatigue);
+            if (p == null) p = pickBestForRole(team, PositionGroup.TE, used, 35, fatigue);
+            if (p == null) p = pickBestForRole(team, PositionGroup.RB, used, 35, fatigue);
+            if (p == null) p = pickBestForRole(team, PositionGroup.FB, used, 35, fatigue);
             if (p == null) break;
             used.add(p);
             eleven.players.add(p);
@@ -103,9 +118,9 @@ public final class OnFieldEleven {
     }
 
     private static void add(OnFieldEleven eleven, Set<Player> used, Team team,
-                            PositionGroup g, RoleTag role, int count) {
+                            PositionGroup g, RoleTag role, int count, FatigueTracker fatigue) {
         for (int i = 0; i < count; i++) {
-            Player p = pickBestForRole(team, g, used, 35);
+            Player p = pickBestForRole(team, g, used, 35, fatigue);
             if (p == null) return;
             used.add(p);
             eleven.players.add(p);
@@ -115,28 +130,91 @@ public final class OnFieldEleven {
 
     /**
      * Prefer depth-chart order for primary group; allow cross-pos if ovr(pos) clears cutoff.
+     * With fatigue: skip energy &lt; {@link FatigueTracker#SIT_ENERGY} when a fresher backup exists.
      */
     static Player pickBestForRole(Team team, PositionGroup g, Set<Player> used, int minOvr) {
+        return pickBestForRole(team, g, used, minOvr, null);
+    }
+
+    static Player pickBestForRole(Team team, PositionGroup g, Set<Player> used, int minOvr,
+                                  FatigueTracker fatigue) {
         if (team == null || g == null) return null;
-        // 1) Primary depth chart order
+        // 1) Primary depth chart with fatigue auto-sub
         List<? extends Player> primary = team.playersForGroup(g);
         if (primary != null) {
-            for (Player p : primary) {
-                if (p != null && !p.isInjured && !used.contains(p)) return p;
-            }
+            Player picked = pickFromPrimary(primary, used, fatigue);
+            if (picked != null) return picked;
         }
-        // 2) Cross-position: best ovr(g) on roster above cutoff
+        // 2) Cross-position: best effective ovr(g) on roster above cutoff
         Player best = null;
-        int bestOvr = minOvr - 1;
+        double bestScore = minOvr - 1;
         for (Player p : team.getAllPlayers()) {
             if (p == null || p.isInjured || used.contains(p)) continue;
-            int o = PositionOvr.ovr(p, g);
-            if (o > bestOvr) {
-                bestOvr = o;
+            double o = PositionOvr.ovr(p, g) * factorOf(fatigue, p);
+            if (o > bestScore) {
+                bestScore = o;
                 best = p;
             }
         }
         return best;
+    }
+
+    /**
+     * Walk depth order; sit energy &lt; {@link FatigueTracker#SIT_ENERGY} only when a
+     * later unused healthy option has energy &gt;= {@link FatigueTracker#FRESH_ENERGY}.
+     * If every candidate is below sit energy, take least tired (then depth order).
+     */
+    private static Player pickFromPrimary(List<? extends Player> primary, Set<Player> used,
+                                          FatigueTracker fatigue) {
+        boolean hasFresh = false;
+        if (fatigue != null) {
+            for (Player p : primary) {
+                if (p == null || p.isInjured || used.contains(p)) continue;
+                if (fatigue.energyOf(p) >= FatigueTracker.FRESH_ENERGY) {
+                    hasFresh = true;
+                    break;
+                }
+            }
+        }
+
+        Player leastTired = null;
+        int leastTiredEnergy = -1;
+        int leastTiredIndex = Integer.MAX_VALUE;
+        boolean allBelowSit = true;
+
+        for (int i = 0; i < primary.size(); i++) {
+            Player p = primary.get(i);
+            if (p == null || p.isInjured || used.contains(p)) continue;
+            int e = energyOf(fatigue, p);
+            if (e >= FatigueTracker.SIT_ENERGY) allBelowSit = false;
+            if (leastTired == null || e > leastTiredEnergy
+                    || (e == leastTiredEnergy && i < leastTiredIndex)) {
+                leastTired = p;
+                leastTiredEnergy = e;
+                leastTiredIndex = i;
+            }
+        }
+
+        if (fatigue != null && allBelowSit) {
+            return leastTired;
+        }
+
+        for (int i = 0; i < primary.size(); i++) {
+            Player p = primary.get(i);
+            if (p == null || p.isInjured || used.contains(p)) continue;
+            int e = energyOf(fatigue, p);
+            if (e < FatigueTracker.SIT_ENERGY && hasFresh) continue;
+            return p;
+        }
+        return leastTired;
+    }
+
+    private static int energyOf(FatigueTracker fatigue, Player p) {
+        return fatigue != null ? fatigue.energyOf(p) : 100;
+    }
+
+    private static double factorOf(FatigueTracker fatigue, Player p) {
+        return fatigue != null ? fatigue.factor(p) : 1.0;
     }
 
     public int avgAttr(AttrGetter getter) {
@@ -155,14 +233,15 @@ public final class OnFieldEleven {
         List<PlayerScore> scores = new ArrayList<>();
         for (Player p : players) {
             if (p == null || p.ratings == null) continue;
-            double c = CompositeWeights.composite(p.ratings, compositeName);
+            PlayerRatings ratings = fatigue != null ? fatigue.fatiguedCopy(p) : p.ratings;
+            double c = CompositeWeights.composite(ratings, compositeName);
             int ovrBoost = 0;
             if (preferGroups != null) {
                 for (PositionGroup g : preferGroups) {
                     ovrBoost = Math.max(ovrBoost, PositionOvr.ovr(p, g));
                 }
             }
-            double val = (ovrBoost / 100.0 + c) / 2.0;
+            double val = (ovrBoost / 100.0 * factorOf(fatigue, p) + c) / 2.0;
             scores.add(new PlayerScore(p, val));
         }
         scores.sort(Comparator.comparingDouble((PlayerScore s) -> s.val).reversed());

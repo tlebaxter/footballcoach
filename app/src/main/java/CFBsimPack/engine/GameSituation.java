@@ -18,6 +18,10 @@ public final class GameSituation {
     public final int awayRank;
     public final int quarter;
     public final String clock;
+    /** Seconds remaining in regulation (OT uses -1). */
+    public final int gameTime;
+    /** Seconds remaining in the current quarter (0 in OT). */
+    public final int clockInQuarter;
     public final int down;
     public final int distance;
     public final int yardLine;
@@ -59,12 +63,15 @@ public final class GameSituation {
     public final boolean userDefendsTwoPoint;
     /** User team may call a timeout under NCAA-style rules. */
     public final boolean canCallTimeout;
+    /** Game clock is running between plays (pending tempo runoff on next snap). */
+    public final boolean clockRunning;
 
     public GameSituation(
             int homeScore, int awayScore, String homeAbbr, String awayAbbr,
             String homeName, String awayName,
             int homeRank, int awayRank,
-            int quarter, String clock, int down, int distance, int yardLine,
+            int quarter, String clock, int gameTime, int clockInQuarter,
+            int down, int distance, int yardLine,
             boolean possessionHome, int homeTimeouts, int awayTimeouts,
             boolean playingOT, boolean gameOver, boolean userOnOffense,
             String lastPlay, String downDistanceLabel,
@@ -77,7 +84,7 @@ public final class GameSituation {
             boolean awaitingCoinToss, boolean homeWonToss, boolean homeDefendsLeft, boolean userWonToss,
             boolean pendingTry, boolean tryAwaitingChoice, boolean tryIsTwoPoint,
             boolean userChoosesTry, boolean userDefendsTwoPoint,
-            boolean canCallTimeout
+            boolean canCallTimeout, boolean clockRunning
     ) {
         this.homeScore = homeScore;
         this.awayScore = awayScore;
@@ -89,6 +96,8 @@ public final class GameSituation {
         this.awayRank = awayRank;
         this.quarter = quarter;
         this.clock = clock;
+        this.gameTime = gameTime;
+        this.clockInQuarter = clockInQuarter;
         this.down = down;
         this.distance = distance;
         this.yardLine = yardLine;
@@ -132,5 +141,6 @@ public final class GameSituation {
         this.userChoosesTry = userChoosesTry;
         this.userDefendsTwoPoint = userDefendsTwoPoint;
         this.canCallTimeout = canCallTimeout;
+        this.clockRunning = clockRunning;
     }
 }

@@ -35,6 +35,12 @@ public final class GameState {
      * Timeouts cannot be called until the half is underway.
      */
     public boolean halfUnderway;
+    /**
+     * True after a live-ball play while regulation clock should keep running
+     * between snaps. Cleared by timeout, stopped-clock plays, DOG, half/OT reset.
+     * Pending between-play runoff is applied at the start of the next snap.
+     */
+    public boolean clockRunning;
 
     public String lastPlayLog = "";
     public boolean gameOver;
@@ -111,9 +117,10 @@ public final class GameState {
         if (!canCallTimeout(home)) return false;
         if (home) {
             homeTimeouts--;
-            return true;
+        } else {
+            awayTimeouts--;
         }
-        awayTimeouts--;
+        clockRunning = false;
         return true;
     }
 

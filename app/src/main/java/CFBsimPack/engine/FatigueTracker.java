@@ -5,12 +5,19 @@ import CFBsimPack.Player;
 import CFBsimPack.PlayerRatings;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * Per-game energy (100 = fresh). Multiplies ratings for on-field selection softness.
  */
 public final class FatigueTracker {
+
+    /** Sit when below this if a fresher backup is available. */
+    public static final int SIT_ENERGY = 40;
+    /** Backup must be at least this fresh to replace a sitting starter. */
+    public static final int FRESH_ENERGY = 55;
 
     private final Map<Player, Integer> energy = new HashMap<>();
 
@@ -18,6 +25,12 @@ public final class FatigueTracker {
         if (p == null) return 100;
         Integer e = energy.get(p);
         return e != null ? e : 100;
+    }
+
+    /** Test / setup helper: set absolute energy (clamped 15–100). */
+    public void setEnergy(Player p, int value) {
+        if (p == null) return;
+        energy.put(p, Math.max(15, Math.min(100, value)));
     }
 
     public double factor(Player p) {
@@ -28,16 +41,22 @@ public final class FatigueTracker {
     }
 
     public void afterSnap(OnFieldEleven onField, OnFieldEleven offField) {
-        if (onField != null) {
-            for (Player p : onField.players) {
-                drain(p, snapDrain(p));
-            }
-        }
-        // Mild recovery for everyone else tracked
+        Set<Player> played = new HashSet<>();
+        drainEleven(onField, played);
+        drainEleven(offField, played);
         for (Map.Entry<Player, Integer> e : energy.entrySet()) {
             Player p = e.getKey();
-            if (onField != null && onField.players.contains(p)) continue;
+            if (played.contains(p)) continue;
             energy.put(p, Math.min(100, e.getValue() + 3));
+        }
+    }
+
+    private void drainEleven(OnFieldEleven eleven, Set<Player> played) {
+        if (eleven == null) return;
+        for (Player p : eleven.players) {
+            if (p == null) continue;
+            played.add(p);
+            drain(p, snapDrain(p));
         }
     }
 
@@ -49,8 +68,12 @@ public final class FatigueTracker {
     private int snapDrain(Player p) {
         int endu = p != null && p.ratings != null ? p.ratings.endu : 60;
         int base = 6;
-        if ("RB".equals(p.position) || "WR".equals(p.position) || "EDGE".equals(p.position)) base = 8;
-        if ("QB".equals(p.position) || "K".equals(p.position) || "P".equals(p.position)) base = 3;
+        if (p != null && ("RB".equals(p.position) || "WR".equals(p.position) || "EDGE".equals(p.position))) {
+            base = 8;
+        }
+        if (p != null && ("QB".equals(p.position) || "K".equals(p.position) || "P".equals(p.position))) {
+            base = 3;
+        }
         return Math.max(2, base - (endu - 50) / 20);
     }
 

@@ -3,12 +3,14 @@ package CFBsimPack;
 import CFBsimPack.engine.AutoSimUntil;
 import CFBsimPack.engine.CoverageCall;
 import CFBsimPack.engine.GamePhase;
+import CFBsimPack.engine.GameSituation;
 import CFBsimPack.engine.OffenseConcept;
 import CFBsimPack.engine.OffensePlay;
 import CFBsimPack.engine.PlayCall;
 import CFBsimPack.engine.AiPlayCaller;
 import CFBsimPack.engine.Playbook;
 import CFBsimPack.engine.TempoCall;
+import CFBsimPack.engine.TimeoutCoachTips;
 
 import org.junit.Test;
 
@@ -71,7 +73,7 @@ public class EngineGreenfieldTest {
     public void spikeBurnsClockAndAdvancesDown() throws Exception {
         League league = createLeague();
         Game g = new Game(league.teamList.get(0), league.teamList.get(1));
-        g.setRandom(new Random(7L));
+        g.setRandom(noFoulRandom());
         g.startGame();
         settleOpeningKickoff(g);
         int timeBefore = g.state.gameTime;
@@ -79,6 +81,129 @@ public class EngineGreenfieldTest {
         g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
         assertTrue(g.state.gameTime < timeBefore);
         assertEquals(downBefore + 1, g.state.down);
+        assertFalse(g.state.clockRunning);
+    }
+
+    @Test
+    public void liveBallDefersRunoffUntilNextSnap() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.executeSnap(new PlayCall(OffensePlay.KNEEL, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertTrue(g.state.clockRunning);
+        int afterKneel = g.state.gameTime;
+
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertEquals(afterKneel - TempoCall.NORMAL.runoffSeconds() - 3, g.state.gameTime);
+        assertFalse(g.state.clockRunning);
+    }
+
+    @Test
+    public void timeoutCancelsPendingRunoff() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.executeSnap(new PlayCall(OffensePlay.KNEEL, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertTrue(g.state.clockRunning);
+        assertTrue(g.callTimeout(true));
+        assertFalse(g.state.clockRunning);
+        int afterTimeout = g.state.gameTime;
+
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertEquals(afterTimeout - 3, g.state.gameTime);
+    }
+
+    @Test
+    public void stoppedClockSkipsRunoffOnNextSnap() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertFalse(g.state.clockRunning);
+        int afterSpike = g.state.gameTime;
+
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        assertEquals(afterSpike - 3, g.state.gameTime);
+    }
+
+    @Test
+    public void hurryUpUsesShorterDeferredRunoff() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.executeSnap(new PlayCall(OffensePlay.KNEEL, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
+        int afterKneel = g.state.gameTime;
+
+        g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.HURRY_UP));
+        assertEquals(afterKneel - TempoCall.HURRY_UP.runoffSeconds() - 3, g.state.gameTime);
+    }
+
+    @Test
+    public void delayOfGameIsPreSnapDeadBall() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.setRandom(alwaysFoulRandom());
+        g.state.clockRunning = false; // no runoff before DOG
+        g.state.yardLine = 40;
+        g.state.yardsNeed = 10;
+        g.state.down = 2;
+        int yardBefore = g.state.yardLine;
+        int downBefore = g.state.down;
+
+        g.executeSnap(new PlayCall(OffensePlay.KNEEL, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.CHEW_CLOCK));
+        assertEquals(yardBefore - 5, g.state.yardLine);
+        assertEquals(downBefore, g.state.down);
+        assertFalse(g.state.clockRunning);
+        assertTrue(g.state.lastPlayLog.toUpperCase().contains("DELAY OF GAME"));
+    }
+
+    @Test
+    public void timeoutTipsCoverLateGameAndEndOfHalf() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(noFoulRandom());
+        g.startGame();
+        settleOpeningKickoff(g);
+        g.state.halfUnderway = true;
+        g.state.possessionHome = true;
+        g.state.homeTimeouts = 3;
+        g.state.homeScore = 10;
+        g.state.awayScore = 17;
+
+        g.state.gameTime = 20;
+        g.state.clockRunning = true;
+        GameSituation sit = g.getSituation();
+        TimeoutCoachTips.Tip tip = TimeoutCoachTips.suggest(sit, TempoCall.NORMAL);
+        assertNotNull(tip);
+        assertEquals(TimeoutCoachTips.TipId.RUNOFF_EXPIRES, tip.id);
+
+        g.state.gameTime = 1830; // Q2 ~0:30
+        g.state.clockRunning = true;
+        tip = TimeoutCoachTips.suggest(g.getSituation(), TempoCall.NORMAL);
+        assertNotNull(tip);
+        assertEquals(TimeoutCoachTips.TipId.END_OF_HALF, tip.id);
+
+        g.state.gameTime = 90;
+        g.state.clockRunning = true;
+        tip = TimeoutCoachTips.suggest(g.getSituation(), TempoCall.NORMAL);
+        assertNotNull(tip);
+        assertEquals(TimeoutCoachTips.TipId.LATE_GAME_TRAILING, tip.id);
+
+        g.state.clockRunning = false;
+        g.state.homeTimeouts = 0;
+        assertFalse(g.getSituation().canCallTimeout);
+        assertEquals(null, TimeoutCoachTips.suggest(g.getSituation(), TempoCall.CHEW_CLOCK));
     }
 
     @Test
@@ -460,6 +585,26 @@ public class EngineGreenfieldTest {
             g.executeSnap(null);
         }
         assertTrue(g.state != null && !g.state.pendingKickoff);
+    }
+
+    /** Avoids DOG and random play fouls so clock tests stay deterministic. */
+    private static Random noFoulRandom() {
+        return new Random() {
+            @Override
+            public double nextDouble() {
+                return 0.99;
+            }
+        };
+    }
+
+    /** Forces the first nextDouble check (DOG) to fire. */
+    private static Random alwaysFoulRandom() {
+        return new Random() {
+            @Override
+            public double nextDouble() {
+                return 0.0;
+            }
+        };
     }
 
     @Test

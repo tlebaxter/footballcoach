@@ -16,6 +16,25 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
+enum class DealSite {
+    HOME,
+    AWAY,
+}
+
+enum class OpponentMoneyKind {
+    PAY,
+    EARN,
+    NONE,
+}
+
+enum class OpponentSection {
+    OPEN_CONTRACT,
+    RIVALRY,
+    BUY,
+    EARN,
+    PEER,
+}
+
 data class ScheduleWeekUi(
     val week: Int,
     val weekLabel: String,
@@ -63,7 +82,10 @@ data class OpponentOptionUi(
     val name: String,
     val conference: String,
     val rivalryLabel: String?,
-    val buyHint: String,
+    val moneyKind: OpponentMoneyKind,
+    val moneyLabel: String,
+    val section: OpponentSection,
+    val openContractId: String? = null,
 )
 
 data class ScheduleUiState(
@@ -86,8 +108,11 @@ data class ScheduleUiState(
     /** When non-null and week is null, signing future deals for this year only. */
     val dealTargetYear: Int? = null,
     val opponentOptions: List<OpponentOptionUi> = emptyList(),
+    val availableConferences: List<String> = emptyList(),
+    val conferenceFilter: String? = null,
     val dealOpponentAbbr: String? = null,
     val dealQuote: String = "",
+    val dealSite: DealSite = DealSite.HOME,
     val hhReturnOffset: Int = 1,
     val cancelConfirmId: String? = null,
     val cancelConfirmLabel: String? = null,
@@ -100,7 +125,6 @@ data class ScheduleUiState(
     val rescheduleFulfillByYear: Int? = null,
     val rescheduleOpponentLabel: String = "",
     val primaryLabel: String? = null,
-    val canRevertSuggestedDeals: Boolean = false,
     val message: String? = null,
     val navigateToMain: Boolean = false,
 )
@@ -160,14 +184,6 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
 
     fun onPrimary() {
         if (!schedulingActive()) return
-        val u = user ?: return
-        val openLeft = (0 until League.REGULAR_SEASON_WEEKS).count { u.isOpenOocWeek(it) }
-        if (openLeft > 0) {
-            _uiState.update {
-                it.copy(message = "Schedule all $openLeft remaining OOC weeks before continuing.")
-            }
-            return
-        }
         GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_SCHEDULE)
         _uiState.update { it.copy(navigateToMain = true) }
     }
@@ -175,7 +191,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
     fun requestBack() {
         if (schedulingActive()) {
             _uiState.update {
-                it.copy(message = "Finish the OOC slate (or fill open weeks) before leaving.")
+                it.copy(message = "Finish scheduling (Done) before leaving, or keep editing your slate.")
             }
             return
         }
@@ -206,16 +222,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             OocScheduleBuilder.clearUserOocGame(u, week)
         }
         val eligible = OocScheduleBuilder.eligibleOpponents(u, week, l.teamList)
-        _uiState.update {
-            it.copy(
-                opponentPickerWeek = week,
-                dealTargetYear = l.year,
-                opponentOptions = eligible.map { t -> formatOpponent(u, t) },
-                dealOpponentAbbr = null,
-                dealQuote = "",
-                hhReturnOffset = 1,
-            )
-        }
+        publishPicker(week, l.year, eligible)
     }
 
     fun openFutureDealPicker() {
@@ -228,17 +235,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             .filter { it != u && it.conference != u.conference }
             .filter { !book.alreadyContracted(u, it, year) }
             .sortedByDescending { it.programProfile.scheduleTier }
-            .map { formatOpponent(u, it) }
-        _uiState.update {
-            it.copy(
-                opponentPickerWeek = null,
-                dealTargetYear = year,
-                opponentOptions = options,
-                dealOpponentAbbr = null,
-                dealQuote = "",
-                hhReturnOffset = 1,
-            )
-        }
+        publishPicker(null, year, options)
     }
 
     fun dismissOpponentPicker() {
@@ -247,78 +244,70 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 opponentPickerWeek = null,
                 dealTargetYear = null,
                 opponentOptions = emptyList(),
+                availableConferences = emptyList(),
+                conferenceFilter = null,
                 dealOpponentAbbr = null,
                 dealQuote = "",
+                dealSite = DealSite.HOME,
             )
         }
     }
 
+    fun setConferenceFilter(conference: String?) {
+        _uiState.update { it.copy(conferenceFilter = conference) }
+    }
+
     fun selectDealOpponent(abbr: String) {
-        val u = user ?: return
-        val l = league ?: return
-        val opponent = l.findTeamAbbr(abbr) ?: return
-        val book = l.oocContracts ?: return
-        val quote = if (u.programProfile.scheduleTier >= opponent.programProfile.scheduleTier) {
-            book.quoteBuyGame(u, opponent) + " · Or H&H / single game."
-        } else {
-            book.quoteReceiveBuyGame(opponent, u) + " · Or H&H / single game."
+        val option = _uiState.value.opponentOptions.find { it.abbr == abbr } ?: return
+        if (option.openContractId != null) {
+            assignOpenContract(option.openContractId)
+            return
         }
-        _uiState.update { it.copy(dealOpponentAbbr = opponent.abbr, dealQuote = quote) }
+        val site = defaultSiteFor(option.section)
+        _uiState.update {
+            it.copy(
+                dealOpponentAbbr = abbr,
+                dealSite = site,
+                dealQuote = buildDealQuote(abbr, site),
+            )
+        }
+    }
+
+    fun setDealSite(site: DealSite) {
+        val abbr = _uiState.value.dealOpponentAbbr ?: return
+        _uiState.update {
+            it.copy(
+                dealSite = site,
+                dealQuote = buildDealQuote(abbr, site),
+            )
+        }
     }
 
     fun setHhReturnOffset(offset: Int) {
         _uiState.update { it.copy(hhReturnOffset = offset.coerceIn(1, 6)) }
     }
 
-    fun signSingleGame(withGuarantee: Boolean) {
+    fun signSingleGame() {
         val u = user ?: return
         val l = league ?: return
         val book = l.oocContracts ?: return
         val year = _uiState.value.dealTargetYear ?: l.year
         val oppAbbr = _uiState.value.dealOpponentAbbr ?: return
         val opponent = l.findTeamAbbr(oppAbbr) ?: return
-        val home: Team
-        val away: Team
-        if (withGuarantee) {
-            if (u.programProfile.scheduleTier >= opponent.programProfile.scheduleTier) {
-                home = u
-                away = opponent
-            } else {
-                home = opponent
-                away = u
-            }
-        } else {
-            home = u
-            away = opponent
-        }
+        val site = _uiState.value.dealSite
+        val home = if (site == DealSite.HOME) u else opponent
+        val away = if (site == DealSite.HOME) opponent else u
+        val withGuarantee =
+            home.programProfile.scheduleTier > away.programProfile.scheduleTier
         val contract = book.signSingleGame(home, away, year, withGuarantee) ?: run {
-            _uiState.update { it.copy(message = "Could not sign single-game deal.") }
-            return
-        }
-        placeIfCurrentWeek(contract.id, home, away, year)
-        dismissOpponentPicker()
-        reload()
-    }
-
-    fun signBuyGameYears(years: Int) {
-        val u = user ?: return
-        val l = league ?: return
-        val book = l.oocContracts ?: return
-        val year = _uiState.value.dealTargetYear ?: l.year
-        val oppAbbr = _uiState.value.dealOpponentAbbr ?: return
-        val opponent = l.findTeamAbbr(oppAbbr) ?: return
-        val home: Team
-        val away: Team
-        if (u.programProfile.scheduleTier >= opponent.programProfile.scheduleTier) {
-            home = u
-            away = opponent
-        } else {
-            home = opponent
-            away = u
-        }
-        val contract = book.signBuyGame(home, away, year, years) ?: run {
             _uiState.update {
-                it.copy(message = "Could not sign buy game (affordability or conflict).")
+                it.copy(
+                    message = if (withGuarantee) {
+                        "Could not sign deal (home team may not afford the guarantee)."
+                    } else {
+                        "Could not sign single-game deal."
+                    },
+                )
             }
             return
         }
@@ -335,10 +324,12 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val returnYear = startYear + _uiState.value.hhReturnOffset
         val oppAbbr = _uiState.value.dealOpponentAbbr ?: return
         val opponent = l.findTeamAbbr(oppAbbr) ?: return
-        val contract = book.signHomeAndHome(u, opponent, startYear, returnYear, true) ?: run {
-            _uiState.update { it.copy(message = "Could not sign home-and-home.") }
-            return
-        }
+        val userHomesFirst = _uiState.value.dealSite == DealSite.HOME
+        val contract = book.signHomeAndHome(u, opponent, startYear, returnYear, userHomesFirst)
+            ?: run {
+                _uiState.update { it.copy(message = "Could not sign home-and-home.") }
+                return
+            }
         val cg = contract.gameForYear(startYear)
         if (cg != null) {
             val home = l.findTeamAbbr(cg.homeAbbr) ?: u
@@ -507,45 +498,177 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    fun resuggestOocSchedule() {
-        if (!schedulingActive()) return
-        val u = user ?: return
+    private fun assignOpenContract(contractId: String) {
         val l = league ?: return
-        OocScheduleBuilder.clearAllUserOocGames(u)
-        OocScheduleBuilder.suggestUserOocSchedule(u, l.teamList)
+        val book = l.oocContracts ?: return
+        val week = _uiState.value.opponentPickerWeek
+        val year = _uiState.value.dealTargetYear ?: l.year
+        val contract = book.findById(contractId) ?: return
+        val cg = contract.gameForYear(year) ?: return
+        val home = l.findTeamAbbr(cg.homeAbbr) ?: return
+        val away = l.findTeamAbbr(cg.awayAbbr) ?: return
+        if (week == null) {
+            openRescheduleDialog(contractId, year)
+            dismissOpponentPicker()
+            return
+        }
+        if (!OocScheduleBuilder.placeFixedHomeOocGame(home, away, week, contractId)) {
+            _uiState.update {
+                it.copy(message = "Could not place that contract in week ${week + 1}.")
+            }
+            return
+        }
+        cg.preferredWeek = week
+        dismissOpponentPicker()
         reload()
     }
 
-    fun suggestFutureDeals() {
+    private fun publishPicker(week: Int?, year: Int, eligible: List<Team>) {
         val u = user ?: return
-        val l = league ?: return
-        val book = l.oocContracts ?: return
-        val signed = book.suggestUserFutureDeals(u, l.teamList)
-        reload()
+        val options = buildOpponentOptions(u, year, week, eligible)
+        val conferences = options
+            .map { it.conference }
+            .distinct()
+            .sorted()
         _uiState.update {
             it.copy(
-                message = if (signed > 0) {
-                    "Suggested $signed future deal${if (signed == 1) "" else "s"}."
-                } else {
-                    "No future deals available to suggest."
-                },
+                opponentPickerWeek = week,
+                dealTargetYear = year,
+                opponentOptions = options,
+                availableConferences = conferences,
+                conferenceFilter = null,
+                dealOpponentAbbr = null,
+                dealQuote = "",
+                dealSite = DealSite.HOME,
+                hhReturnOffset = 1,
             )
         }
     }
 
-    fun revertSuggestedDeals() {
-        val l = league ?: return
-        val book = l.oocContracts ?: return
-        val removed = book.revertSuggestedUserDeals()
-        reload()
-        _uiState.update {
-            it.copy(
-                message = if (removed > 0) {
-                    "Reverted $removed suggested deal${if (removed == 1) "" else "s"}."
-                } else {
-                    "No suggested deals to revert."
-                },
+    private fun buildOpponentOptions(
+        user: Team,
+        year: Int,
+        week: Int?,
+        eligible: List<Team>,
+    ): List<OpponentOptionUi> {
+        val openRows = buildOpenContractOptions(user, year, week)
+        val openAbbrs = openRows.map { it.abbr }.toSet()
+        val teamRows = eligible
+            .filter { it.abbr !in openAbbrs }
+            .map { formatOpponent(user, it) }
+        return (openRows + teamRows).sortedWith(
+            compareBy<OpponentOptionUi> { it.section.ordinal }
+                .thenBy { it.name.lowercase() },
+        )
+    }
+
+    private fun buildOpenContractOptions(
+        user: Team,
+        year: Int,
+        week: Int?,
+    ): List<OpponentOptionUi> {
+        val l = league ?: return emptyList()
+        val book = l.oocContracts ?: return emptyList()
+        val placedIds = user.gameSchedule
+            .mapNotNull { it?.contractId }
+            .toSet()
+        return book.forTeamInYear(user.abbr, year).mapNotNull { contract ->
+            if (contract.id in placedIds) return@mapNotNull null
+            val cg = contract.gameForYear(year) ?: return@mapNotNull null
+            if (cg.settled) return@mapNotNull null
+            val oppAbbr = if (cg.homeAbbr == user.abbr) cg.awayAbbr else cg.homeAbbr
+            val opp = l.findTeamAbbr(oppAbbr) ?: return@mapNotNull null
+            if (week != null && !opp.isOpenOocWeek(week)) return@mapNotNull null
+            val userIsHome = cg.homeAbbr == user.abbr
+            val money = moneyForGuarantee(userIsHome, cg.guarantee)
+            OpponentOptionUi(
+                abbr = opp.abbr,
+                name = opp.name,
+                conference = opp.conference,
+                rivalryLabel = rivalryLabel(user, opp),
+                moneyKind = money.first,
+                moneyLabel = money.second,
+                section = OpponentSection.OPEN_CONTRACT,
+                openContractId = contract.id,
             )
+        }
+    }
+
+    private fun formatOpponent(user: Team, t: Team): OpponentOptionUi {
+        val userTier = user.programProfile.scheduleTier
+        val oppTier = t.programProfile.scheduleTier
+        val section = when {
+            Team.strongestRivalryBetween(user, t) > 0 -> OpponentSection.RIVALRY
+            userTier > oppTier -> OpponentSection.BUY
+            userTier < oppTier -> OpponentSection.EARN
+            else -> OpponentSection.PEER
+        }
+        // Default list money assumes the natural site for that section.
+        val (kind, label) = when {
+            userTier > oppTier -> {
+                val g = NilMoney.buyGameGuarantee(user.programProfile, t.programProfile)
+                OpponentMoneyKind.PAY to "Pay ${NilMoney.format(g)}"
+            }
+            userTier < oppTier -> {
+                val g = NilMoney.buyGameGuarantee(t.programProfile, user.programProfile)
+                OpponentMoneyKind.EARN to "Earn ${NilMoney.format(g)}"
+            }
+            else -> OpponentMoneyKind.NONE to "No fee"
+        }
+        return OpponentOptionUi(
+            abbr = t.abbr,
+            name = t.name,
+            conference = t.conference,
+            rivalryLabel = rivalryLabel(user, t),
+            moneyKind = kind,
+            moneyLabel = label,
+            section = section,
+        )
+    }
+
+    private fun rivalryLabel(user: Team, opp: Team): String? {
+        val strength = Team.strongestRivalryBetween(user, opp)
+        return if (strength > 0) {
+            "${Rivalry.band(strength)} ($strength)"
+        } else {
+            null
+        }
+    }
+
+    private fun defaultSiteFor(section: OpponentSection): DealSite {
+        return when (section) {
+            OpponentSection.EARN -> DealSite.AWAY
+            else -> DealSite.HOME
+        }
+    }
+
+    private fun buildDealQuote(oppAbbr: String, site: DealSite): String {
+        val u = user ?: return ""
+        val l = league ?: return ""
+        val opponent = l.findTeamAbbr(oppAbbr) ?: return ""
+        val year = _uiState.value.dealTargetYear ?: l.year
+        val home = if (site == DealSite.HOME) u else opponent
+        val away = if (site == DealSite.HOME) opponent else u
+        val siteLabel = if (site == DealSite.HOME) "Home" else "Away"
+        if (home.programProfile.scheduleTier <= away.programProfile.scheduleTier) {
+            return "$year $siteLabel · No fee"
+        }
+        val guarantee = NilMoney.buyGameGuarantee(home.programProfile, away.programProfile)
+        return if (site == DealSite.HOME) {
+            "$year $siteLabel · Pay ${NilMoney.format(guarantee)}"
+        } else {
+            "$year $siteLabel · Earn ${NilMoney.format(guarantee)}"
+        }
+    }
+
+    private fun moneyForGuarantee(userIsHome: Boolean, guarantee: Int): Pair<OpponentMoneyKind, String> {
+        if (guarantee <= 0) {
+            return OpponentMoneyKind.NONE to "No fee"
+        }
+        return if (userIsHome) {
+            OpponentMoneyKind.PAY to "Pay ${NilMoney.format(guarantee)}"
+        } else {
+            OpponentMoneyKind.EARN to "Earn ${NilMoney.format(guarantee)}"
         }
     }
 
@@ -571,9 +694,6 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
     private fun reload() {
         val u = user ?: return
         val l = league ?: return
-        if (schedulingActive()) {
-            maybeAutoSuggestOoc()
-        }
         val notices = l.oocContracts?.consumeBreachNotices().orEmpty()
         val breachMsg = notices.firstOrNull()
         val weeks = buildScheduleWeeks(u)
@@ -601,7 +721,6 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 contractCards = cards,
                 scheduleWeeks = weeks,
                 primaryLabel = primary,
-                canRevertSuggestedDeals = l.oocContracts?.hasSuggestedUserDeals() == true,
                 message = breachMsg ?: it.message,
             )
         }
@@ -621,48 +740,11 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
-    private fun maybeAutoSuggestOoc() {
-        val u = user ?: return
-        val l = league ?: return
-        if (!schedulingActive()) return
-        val open = (0 until League.REGULAR_SEASON_WEEKS).count { u.isOpenOocWeek(it) }
-        val anyOoc = u.gameSchedule.any { g ->
-            g != null && (
-                g.gameName == "OOC" || g.gameName == "OOC Rivalry"
-                    || g.gameName == "Rivalry Game OOC"
-                )
-        }
-        if (open > 0 && !anyOoc) {
-            OocScheduleBuilder.suggestUserOocSchedule(u, l.teamList)
-        }
-    }
-
     private fun buildRivalSummary(u: Team): String {
         return u.rivalries
             .sortedByDescending { it.strength }
             .take(3)
             .joinToString(" · ") { "${it.opponentAbbr} ${it.strength}" }
-    }
-
-    private fun formatOpponent(user: Team, t: Team): OpponentOptionUi {
-        val strength = Team.strongestRivalryBetween(user, t)
-        val rivalTag = if (strength > 0) {
-            "${Rivalry.band(strength)} ($strength)"
-        } else {
-            null
-        }
-        val buyHint = if (user.programProfile.scheduleTier >= t.programProfile.scheduleTier) {
-            "Buy: you pay ${NilMoney.format(NilMoney.buyGameGuarantee(user.programProfile, t.programProfile))}"
-        } else {
-            "Buy: you get ${NilMoney.format(NilMoney.buyGameGuarantee(t.programProfile, user.programProfile))}"
-        }
-        return OpponentOptionUi(
-            abbr = t.abbr,
-            name = t.name,
-            conference = t.conference,
-            rivalryLabel = rivalTag,
-            buyHint = buyHint,
-        )
     }
 
     private fun buildContractCards(u: Team): List<ContractCardUi> {

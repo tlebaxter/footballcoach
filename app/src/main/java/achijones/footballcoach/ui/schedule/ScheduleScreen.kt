@@ -57,9 +57,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import achijones.footballcoach.ui.components.SegmentedControl
 import achijones.footballcoach.ui.components.TeamLogo
 import achijones.footballcoach.ui.components.rememberLogoNeedsContrastBoost
 import achijones.footballcoach.ui.components.rememberTeamColors
+import achijones.footballcoach.ui.theme.onColorFor
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
@@ -139,8 +141,9 @@ fun ScheduleScreen(
                 }
                 Text(
                     if (state.schedulingActive) {
-                        "OOC slate — tap open weeks to pick or sign deals. " +
-                            "${state.filledOocSlots} filled · ${state.openOocSlots} open."
+                        "OOC slate — tap open weeks to sign deals. " +
+                            "${state.filledOocSlots} filled · ${state.openOocSlots} open. " +
+                            "Leftover weeks fill when you tap Done."
                     } else {
                         "Contract desk — review obligations and sign future deals. " +
                             "Week picks unlock in the scheduling phase."
@@ -178,33 +181,11 @@ fun ScheduleScreen(
             }
 
             item {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(
-                        "Contract desk",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = viewModel::suggestFutureDeals) {
-                            Text("Suggest deals")
-                        }
-                        TextButton(
-                            onClick = viewModel::revertSuggestedDeals,
-                            enabled = state.canRevertSuggestedDeals,
-                        ) {
-                            Text("Revert suggestions")
-                        }
-                        if (state.schedulingActive) {
-                            TextButton(onClick = viewModel::resuggestOocSchedule) {
-                                Text("Resuggest")
-                            }
-                        }
-                    }
-                }
+                Text(
+                    "Contract desk",
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                )
             }
 
             if (state.filteredContracts.isEmpty()) {
@@ -515,8 +496,20 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
 private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewModel) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val weekLabel = state.opponentPickerWeek?.let { "Week ${it + 1}" } ?: "Future deal"
-    val selected = state.opponentOptions.find { it.abbr == state.dealOpponentAbbr }
+    val selected = state.opponentOptions.find {
+        it.abbr == state.dealOpponentAbbr && it.openContractId == null
+    }
     val fulfillByYear = (state.dealTargetYear ?: 0) + state.hhReturnOffset
+    val filteredOptions = state.opponentOptions.filter { opt ->
+        state.conferenceFilter == null || opt.conference == state.conferenceFilter
+    }
+    val sectionOrder = listOf(
+        OpponentSection.OPEN_CONTRACT,
+        OpponentSection.RIVALRY,
+        OpponentSection.BUY,
+        OpponentSection.EARN,
+        OpponentSection.PEER,
+    )
 
     ModalBottomSheet(
         onDismissRequest = viewModel::dismissOpponentPicker,
@@ -551,19 +544,55 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                 }
             }
 
+            if (state.availableConferences.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    FilterChip(
+                        selected = state.conferenceFilter == null,
+                        onClick = { viewModel.setConferenceFilter(null) },
+                        label = { Text("All") },
+                    )
+                    state.availableConferences.forEach { conf ->
+                        FilterChip(
+                            selected = state.conferenceFilter == conf,
+                            onClick = { viewModel.setConferenceFilter(conf) },
+                            label = { Text(conf) },
+                        )
+                    }
+                }
+            }
+
             selected?.let { opt ->
+                val colors = rememberTeamColors(opt.name, opt.abbr)
+                val leftColor = colors.primary.copy(alpha = 0.45f)
+                val brush = Brush.horizontalGradient(
+                    listOf(leftColor, colors.secondary.copy(alpha = 0.28f)),
+                )
+                val contrastBoost = rememberLogoNeedsContrastBoost(opt.name, leftColor)
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(top = 16.dp)
                         .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                        .background(brush)
+                        .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.45f))
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        TeamLogo(opt.name, opt.abbr, size = 40.dp)
-                        Spacer(Modifier.width(12.dp))
+                        TeamLogo(
+                            opt.name,
+                            opt.abbr,
+                            size = 40.dp,
+                            framed = false,
+                            contrastBoost = contrastBoost,
+                        )
+                        Spacer(modifier = Modifier.width(12.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 opt.name,
@@ -573,51 +602,34 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                "${opt.abbr} · ${opt.conference}",
+                                opt.conference + (opt.rivalryLabel?.let { " · $it" } ?: ""),
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
                         }
                     }
+                    SegmentedControl(
+                        labels = listOf("Home", "Away"),
+                        selected = if (state.dealSite == DealSite.HOME) 0 else 1,
+                        onSelect = { index ->
+                            viewModel.setDealSite(
+                                if (index == 0) DealSite.HOME else DealSite.AWAY,
+                            )
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                    )
                     if (state.dealQuote.isNotBlank()) {
                         Text(
                             state.dealQuote,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
                         )
                     }
-                    Row(
+                    Button(
+                        onClick = viewModel::signSingleGame,
                         modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Button(
-                            onClick = { viewModel.signSingleGame(false) },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("Single game")
-                        }
-                        OutlinedButton(
-                            onClick = { viewModel.signSingleGame(true) },
-                            modifier = Modifier.weight(1f),
-                        ) {
-                            Text("Guarantee buyout")
-                        }
-                    }
-                    Text(
-                        "Buy game",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        listOf(1, 2, 3).forEach { years ->
-                            FilterChip(
-                                selected = false,
-                                onClick = { viewModel.signBuyGameYears(years) },
-                                label = {
-                                    Text(if (years == 1) "1 year" else "$years years")
-                                },
-                            )
-                        }
+                        Text("Sign single game")
                     }
                     Text(
                         "Home-and-home · return in +${state.hhReturnOffset} yr (by $fulfillByYear)",
@@ -638,7 +650,7 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                             )
                         }
                     }
-                    Button(
+                    OutlinedButton(
                         onClick = viewModel::signHomeAndHomeDeal,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
@@ -660,63 +672,130 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                     .weight(1f),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
-                items(state.opponentOptions, key = { it.abbr }) { opt ->
-                    val isSelected = opt.abbr == state.dealOpponentAbbr
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(10.dp))
-                            .then(
-                                if (isSelected) {
-                                    Modifier
-                                        .background(MaterialTheme.colorScheme.primaryContainer)
-                                        .border(
-                                            1.dp,
-                                            MaterialTheme.colorScheme.primary,
-                                            RoundedCornerShape(10.dp),
-                                        )
-                                } else {
-                                    Modifier
-                                },
-                            )
-                            .clickable { viewModel.selectDealOpponent(opt.abbr) }
-                            .padding(horizontal = 10.dp, vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        TeamLogo(opt.name, opt.abbr, size = 36.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(
-                                "${opt.name} (${opt.abbr})",
-                                style = MaterialTheme.typography.bodyMedium,
-                                fontWeight = FontWeight.SemiBold,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer
-                                } else {
-                                    MaterialTheme.colorScheme.onSurface
-                                },
-                            )
-                            Text(
-                                buildString {
-                                    append(opt.conference)
-                                    opt.rivalryLabel?.let { append(" · "); append(it) }
-                                    append(" · ")
-                                    append(opt.buyHint)
-                                },
-                                style = MaterialTheme.typography.labelSmall,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                } else {
-                                    MaterialTheme.colorScheme.onSurfaceVariant
-                                },
-                                maxLines = 2,
-                                overflow = TextOverflow.Ellipsis,
-                            )
-                        }
+                sectionOrder.forEach { section ->
+                    val sectionItems = filteredOptions.filter { it.section == section }
+                    if (sectionItems.isEmpty()) return@forEach
+                    item(key = "section-${section.name}") {
+                        Text(
+                            sectionTitle(section),
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
+                        )
+                    }
+                    items(
+                        sectionItems,
+                        key = { "${section.name}-${it.abbr}-${it.openContractId}" },
+                    ) { opt ->
+                        OpponentPickerRow(
+                            opt = opt,
+                            showConference = state.conferenceFilter == null,
+                            selected = opt.abbr == state.dealOpponentAbbr &&
+                                opt.openContractId == null,
+                            onClick = { viewModel.selectDealOpponent(opt.abbr) },
+                        )
                     }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun OpponentPickerRow(
+    opt: OpponentOptionUi,
+    showConference: Boolean,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val colors = rememberTeamColors(opt.name, opt.abbr)
+    val leftColor = colors.primary.copy(alpha = if (selected) 0.55f else 0.4f)
+    val brush = Brush.horizontalGradient(
+        listOf(
+            leftColor,
+            colors.secondary.copy(alpha = if (selected) 0.35f else 0.22f),
+        ),
+    )
+    val contrastBoost = rememberLogoNeedsContrastBoost(opt.name, leftColor)
+    val moneyColor = when (opt.moneyKind) {
+        OpponentMoneyKind.PAY -> Color(0xFFE76F51)
+        OpponentMoneyKind.EARN -> Color(0xFF2A9D8F)
+        OpponentMoneyKind.NONE -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(brush)
+            .then(
+                if (selected) {
+                    Modifier.border(
+                        1.dp,
+                        MaterialTheme.colorScheme.primary,
+                        RoundedCornerShape(10.dp),
+                    )
+                } else {
+                    Modifier
+                },
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TeamLogo(
+            opt.name,
+            opt.abbr,
+            size = 36.dp,
+            framed = false,
+            contrastBoost = contrastBoost,
+        )
+        Spacer(modifier = Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                opt.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = onColorFor(leftColor).copy(alpha = 0.95f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                buildString {
+                    if (showConference) {
+                        append(opt.conference)
+                    }
+                    opt.rivalryLabel?.let {
+                        if (isNotEmpty()) append(" · ")
+                        append(it)
+                    }
+                    if (opt.openContractId != null) {
+                        if (isNotEmpty()) append(" · ")
+                        append("Tap to place")
+                    }
+                },
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.75f),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            opt.moneyLabel,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.Bold,
+            color = moneyColor,
+        )
+    }
+}
+
+private fun sectionTitle(section: OpponentSection): String {
+    return when (section) {
+        OpponentSection.OPEN_CONTRACT -> "Open contracts"
+        OpponentSection.RIVALRY -> "Rivalries"
+        OpponentSection.BUY -> "Buy games"
+        OpponentSection.EARN -> "Road paydays"
+        OpponentSection.PEER -> "Peers"
     }
 }
 

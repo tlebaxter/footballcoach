@@ -24,22 +24,30 @@ public final class ConferenceScheduleBuilder {
     private ConferenceScheduleBuilder() {
     }
 
+    /** 1-based calendar weeks preferred for strongest in-conference rivalries. */
+    private static final int RIVALRY_WEEK_MIN = 8;
+    private static final int RIVALRY_WEEK_MAX = 11;
+
     public static void schedule(Conference conference) {
         if (!conference.hasChampionship || conference.confTeams.size() < 2) {
             return;
         }
 
-        ArrayList<Team> rotation = arrangeRivalsInOpeningRound(conference.confTeams);
         int scheduledRounds = conferenceGameTarget(conference.confTeams.size());
-        int completeRoundRobinRounds = rotation.size() - 1;
+        int rotationSize = conference.confTeams.size() % 2 == 0
+                ? conference.confTeams.size()
+                : conference.confTeams.size() + 1;
+        int completeRoundRobinRounds = rotationSize - 1;
         Set<Integer> selectedRounds = selectRounds(
                 completeRoundRobinRounds,
                 scheduledRounds,
                 conference.league.leagueHistory.size());
+        int[] weekForSlot = conferenceWeeks(scheduledRounds);
+        int rivalryRound = pickLateRivalryRound(selectedRounds, weekForSlot);
+        ArrayList<Team> rotation = arrangeRivalsForRound(conference.confTeams, rivalryRound);
         boolean reverseHomeField = conference.league.leagueHistory.size() % 2 == 1;
         int scheduleSlot = 0;
         ArrayList<Team> shortTeams = new ArrayList<>();
-        int[] weekForSlot = conferenceWeeks(scheduledRounds);
 
         for (int round = 0; round < completeRoundRobinRounds; round++) {
             if (selectedRounds.contains(round)) {
@@ -70,6 +78,28 @@ public final class ConferenceScheduleBuilder {
         }
 
         placeCatchUpGames(shortTeams, conference.league.leagueHistory.size());
+    }
+
+    /**
+     * Among selected rounds (in schedule order), pick the latest whose mapped week
+     * is in calendar weeks {@link #RIVALRY_WEEK_MIN}–{@link #RIVALRY_WEEK_MAX}.
+     * Falls back to the last selected round when none fall in that band.
+     */
+    static int pickLateRivalryRound(Set<Integer> selectedRounds, int[] weekForSlot) {
+        ArrayList<Integer> ordered = new ArrayList<>(selectedRounds);
+        Collections.sort(ordered);
+        if (ordered.isEmpty()) {
+            return 0;
+        }
+        int fallback = ordered.get(ordered.size() - 1);
+        int best = -1;
+        for (int slot = 0; slot < ordered.size() && slot < weekForSlot.length; slot++) {
+            int calendarWeek = weekForSlot[slot] + 1;
+            if (calendarWeek >= RIVALRY_WEEK_MIN && calendarWeek <= RIVALRY_WEEK_MAX) {
+                best = ordered.get(slot);
+            }
+        }
+        return best >= 0 ? best : fallback;
     }
 
     /**
@@ -236,7 +266,12 @@ public final class ConferenceScheduleBuilder {
         return selected;
     }
 
-    private static ArrayList<Team> arrangeRivalsInOpeningRound(List<Team> teams) {
+    /**
+     * Seats strongest reciprocal in-conf rivals opposite each other for
+     * {@code targetRound}, then reverse-rotates so that meeting occurs in that
+     * round under the circle method.
+     */
+    private static ArrayList<Team> arrangeRivalsForRound(List<Team> teams, int targetRound) {
         int rotationSize = teams.size() % 2 == 0 ? teams.size() : teams.size() + 1;
         ArrayList<Team> arranged = new ArrayList<>();
         for (int i = 0; i < rotationSize; i++) {
@@ -262,6 +297,11 @@ public final class ConferenceScheduleBuilder {
             }
             arranged.set(nextEmpty, team);
             placed.add(team);
+        }
+
+        int rounds = Math.max(0, targetRound);
+        for (int i = 0; i < rounds; i++) {
+            reverseRotate(arranged);
         }
         return arranged;
     }
@@ -374,5 +414,14 @@ public final class ConferenceScheduleBuilder {
     private static void rotate(ArrayList<Team> rotation) {
         Team last = rotation.remove(rotation.size() - 1);
         rotation.add(1, last);
+    }
+
+    /** Inverse of {@link #rotate}: move index-1 team to the end. */
+    private static void reverseRotate(ArrayList<Team> rotation) {
+        if (rotation.size() < 2) {
+            return;
+        }
+        Team moved = rotation.remove(1);
+        rotation.add(moved);
     }
 }

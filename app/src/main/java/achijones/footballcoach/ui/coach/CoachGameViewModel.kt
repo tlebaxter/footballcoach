@@ -10,6 +10,7 @@ import CFBsimPack.engine.GameSituation
 import CFBsimPack.engine.OffenseConcept
 import CFBsimPack.engine.Playbook
 import CFBsimPack.engine.TempoCall
+import CFBsimPack.engine.TimeoutCoachTips
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,6 +36,7 @@ data class CoachUiState(
     val showCoinToss: Boolean = false,
     val showTryChoice: Boolean = false,
     val showTimeoutConfirm: Boolean = false,
+    val timeoutTip: TimeoutCoachTips.Tip? = null,
     val finished: Boolean = false,
     val error: String? = null,
 )
@@ -44,6 +46,10 @@ class CoachGameViewModel : ViewModel() {
     private val game: Game? = GameSession.getActiveCoachGame()
     private val _uiState = MutableStateFlow(CoachUiState())
     val uiState: StateFlow<CoachUiState> = _uiState.asStateFlow()
+
+    /** Tip id + clock bucket dismissed so the same tip does not spam. */
+    private var dismissedTipKey: String? = null
+    private var lastPossessionHome: Boolean? = null
 
     init {
         val g = game
@@ -69,6 +75,10 @@ class CoachGameViewModel : ViewModel() {
         // Opponent AI try choices (kick XP / go for 2) resolve when user isn't choosing
         g.autoResolveTryIfNeeded()
         val sit = g.getSituation()
+        if (lastPossessionHome != null && lastPossessionHome != sit.possessionHome) {
+            dismissedTipKey = null
+        }
+        lastPossessionHome = sit.possessionHome
         _uiState.update { prev ->
             var offense = prev.selectedOffense
             var defense = prev.selectedDefense
@@ -88,15 +98,28 @@ class CoachGameViewModel : ViewModel() {
                     defense = pool.firstOrNull() ?: defense
                 }
             }
+            val tip = visibleTimeoutTip(sit, prev.selectedTempo)
             prev.copy(
                 situation = sit,
                 selectedOffense = offense,
                 selectedDefense = defense,
                 showCoinToss = sit.awaitingCoinToss && sit.userWonToss,
                 showTryChoice = sit.userChoosesTry,
+                timeoutTip = tip,
                 finished = g.hasPlayed || (g.state?.gameOver == true),
             )
         }
+    }
+
+    private fun tipKey(tip: TimeoutCoachTips.Tip, sit: GameSituation): String {
+        val bucket = sit.clockInQuarter / 15
+        return "${tip.id}:${sit.down}:$bucket:${sit.possessionHome}"
+    }
+
+    private fun visibleTimeoutTip(sit: GameSituation, tempo: TempoCall): TimeoutCoachTips.Tip? {
+        val tip = TimeoutCoachTips.suggest(sit, tempo) ?: return null
+        if (dismissedTipKey == tipKey(tip, sit)) return null
+        return tip
     }
 
     fun confirmCoinToss(receive: Boolean, defendLeft: Boolean) {
@@ -125,7 +148,18 @@ class CoachGameViewModel : ViewModel() {
     }
 
     fun selectTempo(t: TempoCall) {
-        _uiState.update { it.copy(selectedTempo = t) }
+        _uiState.update { prev ->
+            val sit = prev.situation
+            val tip = if (sit != null) visibleTimeoutTip(sit, t) else null
+            prev.copy(selectedTempo = t, timeoutTip = tip)
+        }
+    }
+
+    fun dismissTimeoutTip() {
+        val sit = _uiState.value.situation ?: return
+        val tip = _uiState.value.timeoutTip ?: return
+        dismissedTipKey = tipKey(tip, sit)
+        _uiState.update { it.copy(timeoutTip = null) }
     }
 
     fun setAiCallMode(enabled: Boolean) {
@@ -200,7 +234,7 @@ class CoachGameViewModel : ViewModel() {
             } else {
                 null
             }
-            val concept = ai.suggestDefense(defense, state, offHint)
+            val concept = ai.suggestDefense(offense, defense, state, offHint)
             _uiState.update { it.copy(selectedDefense = concept, aiCallMode = false) }
         }
     }
@@ -225,17 +259,16 @@ class CoachGameViewModel : ViewModel() {
             }
         } else if (sit.userOnOffense) {
             // User offense matched vs AI defense (aware of the called concept)
-            val def = ai.suggestDefense(
-                if (state.possessionHome) g.awayTeam else g.homeTeam,
-                state,
-                s.selectedOffense,
-            )
+            val offense = if (state.possessionHome) g.homeTeam else g.awayTeam
+            val defense = if (state.possessionHome) g.awayTeam else g.homeTeam
+            val def = ai.suggestDefense(offense, defense, state, s.selectedOffense)
             g.buildMatchedCall(s.selectedOffense, def, s.selectedTempo)
         } else {
             g.buildMatchedCall(null, s.selectedDefense, s.selectedTempo)
         }
 
         g.executeSnap(call)
+        dismissedTipKey = null
         if (g.state?.gameOver == true && !g.hasPlayed) g.finalizeGame()
         refresh()
         if (s.aiCallMode) {
@@ -261,6 +294,7 @@ class CoachGameViewModel : ViewModel() {
         val g = game ?: return
         val userIsHome = g.homeTeam.userControlled
         g.callTimeout(userIsHome)
+        dismissedTipKey = null
         _uiState.update { it.copy(showTimeoutConfirm = false) }
         refresh()
     }
