@@ -47,7 +47,6 @@ import achijones.footballcoach.ui.theme.FcChipPosBg
 import achijones.footballcoach.ui.theme.FcChipPosText
 import achijones.footballcoach.ui.theme.FcOvrElite
 import achijones.footballcoach.ui.theme.FcPhasePortal
-import achijones.footballcoach.ui.theme.FcPrimary
 import achijones.footballcoach.ui.theme.gradeColor
 import achijones.footballcoach.ui.theme.gradeColorBg
 import achijones.footballcoach.ui.theme.ovrColor
@@ -260,8 +259,8 @@ private fun RatingsGrid(ratings: List<StatChipUi>) {
 
 @Composable
 private fun RatingCell(chip: StatChipUi, modifier: Modifier = Modifier) {
-    val accent = gradeColor(chip.value)
-    val bg = gradeColorBg(chip.value)
+    val accent = gradeColor(chip.value, MaterialTheme.colorScheme.primary)
+    val bg = gradeColorBg(chip.value, MaterialTheme.colorScheme.primaryContainer)
     Column(
         modifier = modifier
             .clip(CellShape)
@@ -296,13 +295,13 @@ private fun FootballStatCard(stats: List<StatChipUi>) {
             .fillMaxWidth()
             .clip(CardShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, FcPrimary.copy(alpha = 0.35f), CardShape),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), CardShape),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .background(FcPrimary),
+                .background(MaterialTheme.colorScheme.primary),
         )
         val columns = 3
         Column(
@@ -365,13 +364,13 @@ private fun CareerTotalsTable(stats: List<StatChipUi>) {
             .fillMaxWidth()
             .clip(CardShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, FcPrimary.copy(alpha = 0.35f), CardShape),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), CardShape),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .background(FcPrimary),
+                .background(MaterialTheme.colorScheme.primary),
         )
         Row(
             modifier = Modifier
@@ -436,13 +435,13 @@ private fun YearByYearTable(years: List<SeasonYearUi>) {
             .fillMaxWidth()
             .clip(CardShape)
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .border(1.dp, FcPrimary.copy(alpha = 0.35f), CardShape),
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), CardShape),
     ) {
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(4.dp)
-                .background(FcPrimary),
+                .background(MaterialTheme.colorScheme.primary),
         )
         Row(
             modifier = Modifier
@@ -659,7 +658,7 @@ private fun TimelineRow(
 private fun timelineAccent(kind: TimelineKind): Color = when (kind) {
     TimelineKind.DEAL -> FcChipMoneyText
     TimelineKind.TRANSFER -> FcPhasePortal
-    TimelineKind.SCHOOL -> FcPrimary
+    TimelineKind.SCHOOL -> MaterialTheme.colorScheme.primary
     TimelineKind.AWARD -> FcOvrElite
 }
 

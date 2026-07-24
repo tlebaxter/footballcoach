@@ -114,14 +114,40 @@ public final class AiPlayCaller {
                                           int time, boolean trailing, int deficit) {
         double fgMake = fgMakePct(offense, yardLine);
         boolean late = !state.playingOT && time < 300;
+        int yardsToGoal = Math.max(1, 100 - yardLine);
+        // Goal-to-go / red-zone: conversion distance is capped by the end zone
+        int effectiveNeed = Math.min(need, yardsToGoal);
 
         // Must-score situations: go for it more aggressively
         if (trailing && late && deficit > 3) {
             if (yardLine >= 55 && fgMake >= 0.45 && deficit <= 3) {
                 return Playbook.offenseById("field_goal");
             }
-            return weightedPick(scoreCandidates(offense, state, need > 4),
-                    need <= 3 ? Playbook.offenseById("i_dive") : Playbook.offenseById("gun_slants"));
+            return goForItCall(offense, state, effectiveNeed);
+        }
+
+        // Goal-to-go / inside the 10: punch it in on short yardage instead of kicking
+        if (yardLine >= 90) {
+            if (effectiveNeed <= 3 && rng.nextDouble() < 0.80) {
+                return goForItCall(offense, state, effectiveNeed);
+            }
+            if (fgMake >= 0.45) {
+                return Playbook.offenseById("field_goal");
+            }
+            return goForItCall(offense, state, effectiveNeed);
+        }
+
+        // Red zone: prefer go-for-it on short/manageable 4th downs
+        if (yardLine >= 80) {
+            if (effectiveNeed <= 2 && rng.nextDouble() < 0.75) {
+                return goForItCall(offense, state, effectiveNeed);
+            }
+            if (effectiveNeed <= 4 && rng.nextDouble() < 0.45) {
+                return goForItCall(offense, state, effectiveNeed);
+            }
+            if (fgMake >= 0.52 || yardLine > 68) {
+                return Playbook.offenseById("field_goal");
+            }
         }
 
         // Short yardage near midfield: analytics-leaning go
@@ -129,7 +155,7 @@ public final class AiPlayCaller {
             if (rng.nextDouble() < 0.55) return Playbook.offenseById("i_dive");
         }
 
-        // FG range
+        // FG range (outside red zone / after red-zone go declined)
         if (yardLine > 62 && fgMake >= 0.52) {
             return Playbook.offenseById("field_goal");
         }
@@ -141,6 +167,11 @@ public final class AiPlayCaller {
             return Playbook.offenseById("fake_punt");
         }
         return Playbook.offenseById("punt");
+    }
+
+    private OffenseConcept goForItCall(Team offense, GameState state, int need) {
+        return weightedPick(scoreCandidates(offense, state, need > 4),
+                need <= 3 ? Playbook.offenseById("i_dive") : Playbook.offenseById("gun_slants"));
     }
 
     private boolean shouldKneel(Team offense, GameState state, int yardLine, int down,

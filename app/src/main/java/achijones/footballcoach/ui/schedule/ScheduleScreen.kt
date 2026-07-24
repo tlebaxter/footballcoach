@@ -13,10 +13,10 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,6 +33,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -41,6 +42,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -252,7 +254,7 @@ fun ScheduleScreen(
     }
 
     if (state.dealTargetYear != null) {
-        OpponentDealDialog(state, viewModel)
+        OpponentDealSheet(state, viewModel)
     }
 
     state.cancelConfirmLabel?.let { label ->
@@ -508,96 +510,214 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun OpponentDealDialog(state: ScheduleUiState, viewModel: ScheduleViewModel) {
+private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewModel) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     val weekLabel = state.opponentPickerWeek?.let { "Week ${it + 1}" } ?: "Future deal"
-    AlertDialog(
+    val selected = state.opponentOptions.find { it.abbr == state.dealOpponentAbbr }
+    val fulfillByYear = (state.dealTargetYear ?: 0) + state.hhReturnOffset
+
+    ModalBottomSheet(
         onDismissRequest = viewModel::dismissOpponentPicker,
-        title = { Text("OOC — $weekLabel (${state.dealTargetYear})") },
-        text = {
-            Column {
-                if (state.dealOpponentAbbr != null) {
+        sheetState = sheetState,
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .fillMaxHeight(0.92f)
+                .padding(horizontal = 20.dp)
+                .padding(bottom = 24.dp),
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        state.dealQuote,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(bottom = 8.dp),
+                        "Pick opponent · $weekLabel",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
                     )
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        TextButton(onClick = { viewModel.signSingleGame(false) }) {
-                            Text("Single")
+                    Text(
+                        "Out of conference · ${state.dealTargetYear}",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                TextButton(onClick = viewModel::dismissOpponentPicker) {
+                    Text("Close")
+                }
+            }
+
+            selected?.let { opt ->
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 16.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+                        .padding(14.dp),
+                    verticalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        TeamLogo(opt.name, opt.abbr, size = 40.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                opt.name,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                            Text(
+                                "${opt.abbr} · ${opt.conference}",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
                         }
-                        TextButton(onClick = { viewModel.signSingleGame(true) }) {
-                            Text("Single + $")
+                    }
+                    if (state.dealQuote.isNotBlank()) {
+                        Text(
+                            state.dealQuote,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        Button(
+                            onClick = { viewModel.signSingleGame(false) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Single game")
                         }
-                        TextButton(onClick = { viewModel.signBuyGameYears(1) }) {
-                            Text("Buy 1yr")
-                        }
-                        TextButton(onClick = { viewModel.signBuyGameYears(2) }) {
-                            Text("Buy 2yr")
-                        }
-                        TextButton(onClick = { viewModel.signBuyGameYears(3) }) {
-                            Text("Buy 3yr")
+                        OutlinedButton(
+                            onClick = { viewModel.signSingleGame(true) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text("Guarantee buyout")
                         }
                     }
                     Text(
-                        "H&H return in +${state.hhReturnOffset} yr (fulfill by ${(state.dealTargetYear ?: 0) + state.hhReturnOffset})",
-                        style = MaterialTheme.typography.labelSmall,
-                        modifier = Modifier.padding(top = 4.dp),
+                        "Buy game",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Row(horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        listOf(1, 2, 3).forEach { years ->
+                            FilterChip(
+                                selected = false,
+                                onClick = { viewModel.signBuyGameYears(years) },
+                                label = {
+                                    Text(if (years == 1) "1 year" else "$years years")
+                                },
+                            )
+                        }
+                    }
+                    Text(
+                        "Home-and-home · return in +${state.hhReturnOffset} yr (by $fulfillByYear)",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    ) {
                         listOf(1, 2, 3, 4, 5, 6).forEach { offset ->
                             FilterChip(
                                 selected = state.hhReturnOffset == offset,
                                 onClick = { viewModel.setHhReturnOffset(offset) },
-                                label = { Text("+$offset") },
+                                label = { Text("+$offset yr") },
                             )
                         }
                     }
-                    TextButton(onClick = viewModel::signHomeAndHomeDeal) {
+                    Button(
+                        onClick = viewModel::signHomeAndHomeDeal,
+                        modifier = Modifier.fillMaxWidth(),
+                    ) {
                         Text("Sign home-and-home")
                     }
                 }
-                LazyColumn(modifier = Modifier.heightIn(max = 280.dp)) {
-                    items(state.opponentOptions, key = { it.abbr }) { opt ->
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { viewModel.selectDealOpponent(opt.abbr) }
-                                .padding(vertical = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            TeamLogo(opt.name, opt.abbr, size = 32.dp)
-                            Spacer(Modifier.width(10.dp))
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(
-                                    "${opt.name} (${opt.abbr})",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold,
-                                )
-                                Text(
-                                    "${opt.conference}" +
-                                        (opt.rivalryLabel?.let { " · $it" } ?: "") +
-                                        " · ${opt.buyHint}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    maxLines = 2,
-                                    overflow = TextOverflow.Ellipsis,
-                                )
-                            }
-                            OutlinedButton(onClick = { viewModel.declareRival(opt.abbr) }) {
-                                Text("Rival")
-                            }
+            }
+
+            Text(
+                if (selected == null) "Choose a team" else "Or choose a different team",
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+            )
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(state.opponentOptions, key = { it.abbr }) { opt ->
+                    val isSelected = opt.abbr == state.dealOpponentAbbr
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .then(
+                                if (isSelected) {
+                                    Modifier
+                                        .background(MaterialTheme.colorScheme.primaryContainer)
+                                        .border(
+                                            1.dp,
+                                            MaterialTheme.colorScheme.primary,
+                                            RoundedCornerShape(10.dp),
+                                        )
+                                } else {
+                                    Modifier
+                                },
+                            )
+                            .clickable { viewModel.selectDealOpponent(opt.abbr) }
+                            .padding(horizontal = 10.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        TeamLogo(opt.name, opt.abbr, size = 36.dp)
+                        Spacer(Modifier.width(12.dp))
+                        Column(modifier = Modifier.weight(1f)) {
+                            Text(
+                                "${opt.name} (${opt.abbr})",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                            )
+                            Text(
+                                buildString {
+                                    append(opt.conference)
+                                    opt.rivalryLabel?.let { append(" · "); append(it) }
+                                    append(" · ")
+                                    append(opt.buyHint)
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = if (isSelected) {
+                                    MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                            )
                         }
                     }
                 }
             }
-        },
-        confirmButton = {
-            TextButton(onClick = viewModel::dismissOpponentPicker) {
-                Text("Close")
-            }
-        },
-    )
+        }
+    }
 }
 
 @OptIn(ExperimentalLayoutApi::class)

@@ -20,6 +20,7 @@ import CFBsimPack.PositionGroup
 import CFBsimPack.PositionOvr
 import CFBsimPack.Team
 import CFBsimPack.TransferReason
+import achijones.footballcoach.ui.theme.UserBrandTheme
 import achijones.footballcoach.ui.util.SaveSlots
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -126,10 +127,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             navigateToOffseasonDestination()
             return
         }
-        if (GameSession.needsTeamPicker() || l.userTeam == null) {
+        val needsPicker = GameSession.needsTeamPicker() || l.userTeam == null
+        if (needsPicker) {
             val seed = l.userTeam ?: l.teamList[0]
             l.userTeam = seed
             seed.userControlled = true
+            UserBrandTheme.clear()
             _uiState.update {
                 it.copy(
                     showTeamPicker = true,
@@ -143,6 +146,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         showToasts = userTeam!!.showPopups
         showInjuryReport = true
         l.setTeamRanks()
+        if (!needsPicker) {
+            UserBrandTheme.setFrom(userTeam)
+        }
         if (l.getYear() != League.FIRST_SEASON_YEAR) {
             showRecruitingClassDialogInternal()
         }
@@ -548,6 +554,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         userTeam = picked
         l.userTeam = userTeam
         userTeam!!.userControlled = true
+        UserBrandTheme.setFrom(userTeam)
         currentTeam = userTeam
         currentConference = l.findConference(userTeam!!.conference)
         l.setTeamRanks()
@@ -733,6 +740,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     fun confirmExit() {
         GameSession.clearAll()
+        UserBrandTheme.clear()
         _uiState.update { it.copy(showExitConfirm = false, navigateHome = true) }
     }
 

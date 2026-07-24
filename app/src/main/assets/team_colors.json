@@ -52,7 +52,7 @@
     "secondary": "#FFB81C"
   },
   "Bentley": {
-    "primary": "#000000",
+    "primary": "#0075BE",
     "secondary": "#000000"
   },
   "Boise State": {
@@ -240,8 +240,8 @@
     "secondary": "#8E908F"
   },
   "Merrimack": {
-    "primary": "#000000",
-    "secondary": "#000000"
+    "primary": "#003767",
+    "secondary": "#FFDD00"
   },
   "Miami": {
     "primary": "#F47423",

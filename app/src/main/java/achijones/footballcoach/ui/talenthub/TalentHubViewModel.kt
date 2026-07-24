@@ -14,6 +14,7 @@ import CFBsimPack.PositionOvr
 import CFBsimPack.ProgramOffers
 import CFBsimPack.RosterStatus
 import CFBsimPack.Team
+import achijones.footballcoach.ui.theme.UserBrandTheme
 import achijones.footballcoach.ui.util.SaveSlots
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -122,6 +123,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         league = OffseasonSession.league
         offseason = OffseasonSession.offseason
         user = league?.userTeam
+        UserBrandTheme.setFrom(user)
         if (OffseasonSession.phase == null) {
             OffseasonSession.phase = OffseasonSession.Phase.RETENTION
         }
@@ -179,6 +181,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun confirmLeave() {
         GameSession.clearAll()
+        UserBrandTheme.clear()
         _uiState.update { it.copy(showLeaveConfirm = false, navigateHome = true) }
     }
 

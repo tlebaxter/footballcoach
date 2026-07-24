@@ -29,8 +29,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import achijones.footballcoach.ui.theme.FcOnPrimary
-import achijones.footballcoach.ui.theme.FcPrimary
 
 private val SheetBg = Color(0xFF121A14)
 private val ChipShape = RoundedCornerShape(10.dp)
@@ -116,8 +114,8 @@ fun CoinTossSheet(
             Button(
                 onClick = { onConfirm(receive, defendLeft) },
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = FcPrimary,
-                    contentColor = FcOnPrimary,
+                    containerColor = MaterialTheme.colorScheme.primary,
+                    contentColor = MaterialTheme.colorScheme.onPrimary,
                 ),
                 shape = RoundedCornerShape(14.dp),
                 modifier = Modifier
@@ -137,8 +135,8 @@ private fun TossOptionChip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val bg = if (selected) FcPrimary.copy(alpha = 0.35f) else Color(0xFF1A241C)
-    val border = if (selected) FcPrimary else GhostBorder
+    val bg = if (selected) MaterialTheme.colorScheme.primary.copy(alpha = 0.35f) else Color(0xFF1A241C)
+    val border = if (selected) MaterialTheme.colorScheme.primary else GhostBorder
     Text(
         label,
         color = Color.White,

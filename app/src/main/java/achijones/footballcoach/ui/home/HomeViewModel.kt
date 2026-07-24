@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import CFBsimPack.GameSession
 import CFBsimPack.League
 import achijones.footballcoach.R
+import achijones.footballcoach.ui.theme.UserBrandTheme
 import achijones.footballcoach.ui.util.AssetReader
 import achijones.footballcoach.ui.util.SaveSlots
 import kotlinx.coroutines.Dispatchers
@@ -75,6 +76,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     GameSession.clearOffseason()
                     GameSession.setNeedsTeamPicker(true)
                 }
+                UserBrandTheme.clear()
                 _uiState.update { it.copy(loading = false, navigateToMain = true) }
             } catch (e: Exception) {
                 _uiState.update {
@@ -93,7 +95,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _uiState.update { it.copy(loading = true, showLoadDialog = false, errorMessage = null) }
             try {
-                withContext(Dispatchers.Default) {
+                val loadedUser = withContext(Dispatchers.Default) {
                     val app = getApplication<Application>()
                     val file = SaveSlots.file(app, index)
                     val league = League(
@@ -104,7 +106,9 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
                     GameSession.setLeague(league)
                     GameSession.setNeedsTeamPicker(false)
                     // Mid-offseason restore already calls OffseasonSession.begin inside League.
+                    league.userTeam
                 }
+                UserBrandTheme.setFrom(loadedUser)
                 _uiState.update { it.copy(loading = false, navigateToMain = true) }
             } catch (e: Exception) {
                 _uiState.update {

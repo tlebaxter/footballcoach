@@ -34,7 +34,6 @@ import CFBsimPack.engine.GameSituation
 import CFBsimPack.engine.GameState
 import CFBsimPack.engine.OffenseConcept
 import CFBsimPack.engine.Playbook
-import achijones.footballcoach.ui.theme.FcPrimary
 
 private val SheetBg = Color(0xFF121A14)
 private val ChipShape = RoundedCornerShape(10.dp)
@@ -175,13 +174,13 @@ private fun FilterChipLabel(label: String, selected: Boolean, onClick: () -> Uni
     Box(
         Modifier
             .clip(ChipShape)
-            .background(if (selected) FcPrimary else Color(0xFF2A2A2A))
+            .background(if (selected) MaterialTheme.colorScheme.primary else Color(0xFF2A2A2A))
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 7.dp),
     ) {
         Text(
             label,
-            color = if (selected) Color(0xFF00332E) else Color(0xFFE5E7EB),
+            color = if (selected) MaterialTheme.colorScheme.onPrimary else Color(0xFFE5E7EB),
             style = MaterialTheme.typography.labelLarge,
             fontWeight = FontWeight.SemiBold,
         )
@@ -199,7 +198,7 @@ private fun OffenseConceptRow(
             .fillMaxWidth()
             .clip(RowShape)
             .background(Color(0xFF1A241C))
-            .border(1.dp, if (selected) FcPrimary else Color(0xFF3A4A3C), RowShape)
+            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else Color(0xFF3A4A3C), RowShape)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {
@@ -216,7 +215,7 @@ private fun OffenseConceptRow(
             )
             Text(
                 concept.typeLabel().uppercase(),
-                color = FcPrimary,
+                color = MaterialTheme.colorScheme.primary,
                 style = MaterialTheme.typography.labelSmall,
                 fontWeight = FontWeight.Bold,
             )
@@ -249,7 +248,7 @@ private fun DefenseConceptRow(
             .fillMaxWidth()
             .clip(RowShape)
             .background(Color(0xFF1A241C))
-            .border(1.dp, if (selected) FcPrimary else Color(0xFF3A4A3C), RowShape)
+            .border(1.dp, if (selected) MaterialTheme.colorScheme.primary else Color(0xFF3A4A3C), RowShape)
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
     ) {

@@ -124,8 +124,6 @@ import achijones.footballcoach.ui.theme.FcChipPosText
 import achijones.footballcoach.ui.theme.FcLoss
 import achijones.footballcoach.ui.theme.FcOvrElite
 import achijones.footballcoach.ui.theme.FcOvrStarter
-import achijones.footballcoach.ui.theme.FcPrimary
-import achijones.footballcoach.ui.theme.FcPrimaryDark
 import achijones.footballcoach.ui.theme.FcWin
 import achijones.footballcoach.ui.theme.gradeColor
 import achijones.footballcoach.ui.theme.gradeColorBg
@@ -747,7 +745,7 @@ private fun TeamPanel(state: MainUiState, viewModel: MainViewModel, modifier: Mo
                             "SYSTEM",
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.Bold,
-                            color = FcPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(top = 8.dp, bottom = 4.dp),
                         )
                         SpinnerDropdown(
@@ -1032,7 +1030,7 @@ private fun LazyListScope.rosterItems(
                 pos,
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = FcPrimary,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
             )
         }
@@ -1081,7 +1079,7 @@ private fun LazyListScope.teamStatsItems(
                 section.uppercase(),
                 style = MaterialTheme.typography.labelLarge,
                 fontWeight = FontWeight.Bold,
-                color = FcPrimary,
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(top = 10.dp, bottom = 2.dp),
             )
         }
@@ -1120,10 +1118,10 @@ private fun TeamStatsHero(
             .clip(StatCardShape)
             .background(
                 Brush.verticalGradient(
-                    listOf(FcPrimaryDark.copy(alpha = 0.55f), MaterialTheme.colorScheme.surfaceVariant),
+                    listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f), MaterialTheme.colorScheme.surfaceVariant),
                 ),
             )
-            .border(1.dp, FcPrimary.copy(alpha = 0.4f), StatCardShape)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), StatCardShape)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1186,7 +1184,7 @@ private fun StatMetricTile(
     compact: Boolean = false,
     emphasize: Boolean = false,
 ) {
-    val rankColors = rankAccent(row.rankNum)
+    val rankColors = rankAccent(row.rankNum, MaterialTheme.colorScheme.primary)
     Column(
         modifier = modifier
             .clip(StatTileShape)
@@ -1249,7 +1247,7 @@ private fun StatMetricTile(
 
 private data class RankAccent(val bg: Color, val fg: Color, val border: Color)
 
-private fun rankAccent(rankNum: Int): RankAccent = when {
+private fun rankAccent(rankNum: Int, brandPrimary: Color): RankAccent = when {
     rankNum <= 3 -> RankAccent(
         bg = Color(0xFF3E2E00),
         fg = FcOvrElite,
@@ -1257,8 +1255,8 @@ private fun rankAccent(rankNum: Int): RankAccent = when {
     )
     rankNum <= 10 -> RankAccent(
         bg = Color(0xFF00332E),
-        fg = FcPrimary,
-        border = FcPrimary.copy(alpha = 0.45f),
+        fg = brandPrimary,
+        border = brandPrimary.copy(alpha = 0.45f),
     )
     rankNum <= 25 -> RankAccent(
         bg = Color(0xFF1A2A3A),
@@ -1298,10 +1296,10 @@ private fun RosterSummaryHero(roster: List<RosterRowUi>) {
             .clip(StatCardShape)
             .background(
                 Brush.verticalGradient(
-                    listOf(FcPrimaryDark.copy(alpha = 0.55f), MaterialTheme.colorScheme.surfaceVariant),
+                    listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f), MaterialTheme.colorScheme.surfaceVariant),
                 ),
             )
-            .border(1.dp, FcPrimary.copy(alpha = 0.4f), StatCardShape)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), StatCardShape)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1449,15 +1447,19 @@ private fun OvrPotBadge(
                 .padding(start = overlapOffset)
                 .size(circleSize)
                 .clip(CircleShape)
-                .background(gradeColorBg(potGrade))
-                .border(1.dp, gradeColor(potGrade).copy(alpha = 0.45f), CircleShape),
+                .background(gradeColorBg(potGrade, MaterialTheme.colorScheme.primaryContainer))
+                .border(
+                    1.dp,
+                    gradeColor(potGrade, MaterialTheme.colorScheme.primary).copy(alpha = 0.45f),
+                    CircleShape,
+                ),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = potGrade,
                 style = MaterialTheme.typography.labelMedium,
                 fontWeight = FontWeight.Bold,
-                color = gradeColor(potGrade),
+                color = gradeColor(potGrade, MaterialTheme.colorScheme.primary),
                 textAlign = TextAlign.Center,
                 maxLines = 1,
             )
@@ -1525,10 +1527,10 @@ private fun ScheduleSnapshotHero(schedule: List<ScheduleRowUi>) {
             .clip(StatCardShape)
             .background(
                 Brush.verticalGradient(
-                    listOf(FcPrimaryDark.copy(alpha = 0.55f), MaterialTheme.colorScheme.surfaceVariant),
+                    listOf(MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.55f), MaterialTheme.colorScheme.surfaceVariant),
                 ),
             )
-            .border(1.dp, FcPrimary.copy(alpha = 0.4f), StatCardShape)
+            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f), StatCardShape)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1846,9 +1848,12 @@ private fun TeamPickerScreen(
     var dragAccum by remember { mutableFloatStateOf(0f) }
 
     fun goToTeam(nextIndex: Int, forward: Boolean) {
-        if (nextIndex !in selectedConf.teams.indices || nextIndex == teamIndex) return
+        val size = selectedConf.teams.size
+        if (size == 0) return
+        val wrapped = ((nextIndex % size) + size) % size
+        if (wrapped == teamIndex) return
         slideForward = forward
-        teamIndex = nextIndex
+        teamIndex = wrapped
     }
 
     LaunchedEffect(confIndex) {
@@ -1911,15 +1916,16 @@ private fun TeamPickerScreen(
                         .fillMaxWidth(),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val canCycleTeams = selectedConf.teams.size > 1
                     IconButton(
                         onClick = { goToTeam(teamIndex - 1, forward = false) },
-                        enabled = teamIndex > 0,
+                        enabled = canCycleTeams,
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.KeyboardArrowLeft,
                             contentDescription = "Previous team",
                             tint = Color.White.copy(
-                                alpha = if (teamIndex > 0) 0.95f else 0.3f,
+                                alpha = if (canCycleTeams) 0.95f else 0.3f,
                             ),
                             modifier = Modifier.size(40.dp),
                         )
@@ -1975,17 +1981,13 @@ private fun TeamPickerScreen(
                     }
                     IconButton(
                         onClick = { goToTeam(teamIndex + 1, forward = true) },
-                        enabled = teamIndex < selectedConf.teams.lastIndex,
+                        enabled = canCycleTeams,
                     ) {
                         Icon(
                             Icons.AutoMirrored.Filled.KeyboardArrowRight,
                             contentDescription = "Next team",
                             tint = Color.White.copy(
-                                alpha = if (teamIndex < selectedConf.teams.lastIndex) {
-                                    0.95f
-                                } else {
-                                    0.3f
-                                },
+                                alpha = if (canCycleTeams) 0.95f else 0.3f,
                             ),
                             modifier = Modifier.size(40.dp),
                         )
@@ -2407,7 +2409,7 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                             .fillMaxWidth()
                             .clip(cardShape)
                             .background(MaterialTheme.colorScheme.surfaceVariant)
-                            .border(1.dp, FcPrimary.copy(alpha = 0.35f), cardShape)
+                            .border(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.35f), cardShape)
                             .padding(16.dp),
                         horizontalArrangement = Arrangement.SpaceEvenly,
                         verticalAlignment = Alignment.CenterVertically,
@@ -2432,7 +2434,7 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                             dialog.otLabel.orEmpty(),
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
-                            color = FcPrimary,
+                            color = MaterialTheme.colorScheme.primary,
                             modifier = Modifier.padding(horizontal = 8.dp),
                         )
                         Column(
@@ -2458,7 +2460,7 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                     if (dialog.played) "BOX SCORE" else "SCOUT REPORT",
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
-                    color = FcPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                 )
                 Row(
                     modifier = Modifier
@@ -2497,7 +2499,7 @@ private fun GameDetailSheet(dialog: GameDialogUi, viewModel: MainViewModel) {
                         if (dialog.played) "GAME LOG" else "NOTES",
                         style = MaterialTheme.typography.labelLarge,
                         fontWeight = FontWeight.Bold,
-                        color = FcPrimary,
+                        color = MaterialTheme.colorScheme.primary,
                     )
                     Text(
                         text = dialog.bottom.trim(),

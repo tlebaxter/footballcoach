@@ -2,6 +2,7 @@ package CFBsimPack;
 
 import CFBsimPack.engine.AutoSimUntil;
 import CFBsimPack.engine.CoverageCall;
+import CFBsimPack.engine.GamePhase;
 import CFBsimPack.engine.OffenseConcept;
 import CFBsimPack.engine.OffensePlay;
 import CFBsimPack.engine.PlayCall;
@@ -264,6 +265,102 @@ public class EngineGreenfieldTest {
         assertFalse(g.state.pendingTry);
         assertTrue(g.state.pendingKickoff || g.state.playingOT || g.state.gameOver);
         assertTrue(g.state.homeScore >= scoreBefore); // XP may miss
+    }
+
+    @Test
+    public void otGameWinningTdSkipsTry() throws Exception {
+        League league = createLeague();
+        Team home = league.teamList.get(0);
+        Team away = league.teamList.get(1);
+        home.userControlled = true;
+        away.userControlled = false;
+        Game g = new Game(home, away);
+        g.setRandom(new Random(8L));
+        g.startGame();
+        settleOpeningKickoff(g);
+
+        g.state.playingOT = true;
+        g.state.phase = GamePhase.OT;
+        g.state.bottomOT = true;
+        g.state.numOT = 1;
+        g.state.gameTime = -1;
+        g.state.homeScore = 17;
+        g.state.awayScore = 17;
+        g.state.possessionHome = true;
+        g.state.pendingKickoff = false;
+        g.state.clearTry();
+
+        int guard = 0;
+        while (!g.state.gameOver && !g.state.pendingTry && guard++ < 40) {
+            g.state.playingOT = true;
+            g.state.bottomOT = true;
+            g.state.homeScore = 17;
+            g.state.awayScore = 17;
+            g.state.possessionHome = true;
+            g.state.yardLine = 99;
+            g.state.down = 1;
+            g.state.yardsNeed = 1;
+            g.state.pendingKickoff = false;
+            g.state.clearTry();
+            g.executeSnap(PlayCall.fromConcepts(
+                    Playbook.offenseById("i_dive"),
+                    Playbook.defenseFor(CoverageCall.COVER_3),
+                    TempoCall.NORMAL));
+        }
+        assertTrue("expected game-winning OT TD", g.state.gameOver);
+        assertFalse(g.state.pendingTry);
+        assertFalse(g.state.tryAwaitingChoice);
+        assertEquals(23, g.state.homeScore);
+        assertEquals(17, g.state.awayScore);
+    }
+
+    @Test
+    public void otTdThatOnlyTiesStillPresentsTry() throws Exception {
+        League league = createLeague();
+        Team home = league.teamList.get(0);
+        Team away = league.teamList.get(1);
+        home.userControlled = true;
+        away.userControlled = false;
+        Game g = new Game(home, away);
+        g.setRandom(new Random(8L));
+        g.startGame();
+        settleOpeningKickoff(g);
+
+        // Away led by 7; home TD ties — XP/2 still needed
+        g.state.playingOT = true;
+        g.state.phase = GamePhase.OT;
+        g.state.bottomOT = true;
+        g.state.numOT = 1;
+        g.state.gameTime = -1;
+        g.state.homeScore = 10;
+        g.state.awayScore = 17;
+        g.state.possessionHome = true;
+        g.state.pendingKickoff = false;
+        g.state.clearTry();
+
+        int guard = 0;
+        while (!g.state.pendingTry && guard++ < 40) {
+            g.state.playingOT = true;
+            g.state.bottomOT = true;
+            g.state.gameOver = false;
+            g.state.homeScore = 10;
+            g.state.awayScore = 17;
+            g.state.possessionHome = true;
+            g.state.yardLine = 99;
+            g.state.down = 1;
+            g.state.yardsNeed = 1;
+            g.state.pendingKickoff = false;
+            g.state.clearTry();
+            g.executeSnap(PlayCall.fromConcepts(
+                    Playbook.offenseById("i_dive"),
+                    Playbook.defenseFor(CoverageCall.COVER_3),
+                    TempoCall.NORMAL));
+        }
+        assertTrue("expected a try after OT TD that only ties", g.state.pendingTry);
+        assertTrue(g.state.tryAwaitingChoice);
+        assertFalse(g.state.gameOver);
+        assertEquals(16, g.state.homeScore);
+        assertEquals(17, g.state.awayScore);
     }
 
     @Test

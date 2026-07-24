@@ -9,8 +9,8 @@ import CFBsimPack.OffseasonSession
 import CFBsimPack.OocContract
 import CFBsimPack.OocScheduleBuilder
 import CFBsimPack.Rivalry
-import CFBsimPack.RivalryDynamics
 import CFBsimPack.Team
+import achijones.footballcoach.ui.theme.UserBrandTheme
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -128,6 +128,9 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             GameSession.setLeague(league)
         }
         user = league?.userTeam
+        if (!GameSession.needsTeamPicker()) {
+            UserBrandTheme.setFrom(user)
+        }
         val year = league?.year ?: 0
         _uiState.update {
             it.copy(
@@ -343,20 +346,6 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             placeIfCurrentWeek(contract.id, home, away, startYear)
         }
         dismissOpponentPicker()
-        reload()
-    }
-
-    fun declareRival(opponentAbbr: String) {
-        val u = user ?: return
-        val opponent = league?.findTeamAbbr(opponentAbbr) ?: return
-        val error = RivalryDynamics.declareRival(u, opponent)
-        if (error != null) {
-            _uiState.update { it.copy(message = error) }
-            return
-        }
-        _uiState.update {
-            it.copy(message = "Declared ${opponent.abbr} as a rival (${u.rivalryWith(opponent.abbr)?.displayLabel()}).")
-        }
         reload()
     }
 

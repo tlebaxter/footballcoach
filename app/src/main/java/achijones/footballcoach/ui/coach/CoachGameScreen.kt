@@ -48,11 +48,6 @@ import CFBsimPack.engine.OffenseConcept
 import CFBsimPack.engine.Playbook
 import CFBsimPack.engine.TempoCall
 import achijones.footballcoach.ui.components.SegmentedControl
-import achijones.footballcoach.ui.theme.FcAccent
-import achijones.footballcoach.ui.theme.FcOnAccent
-import achijones.footballcoach.ui.theme.FcOnPrimary
-import achijones.footballcoach.ui.theme.FcPrimary
-
 private val ScoreboardBg = Color(0xFF0D1117)
 private val PanelBg = Color(0xFF121A14)
 private val GhostBorder = Color(0xFF3A4A3C)
@@ -95,7 +90,7 @@ fun CoachGameScreen(
                     viewModel.finishAndClose()
                     onFinished()
                 },
-                colors = ButtonDefaults.buttonColors(containerColor = FcPrimary, contentColor = FcOnPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 shape = PlayButtonShape,
                 modifier = Modifier
                     .fillMaxWidth()
@@ -223,10 +218,10 @@ private fun CoachTabBar(selected: CoachTab, onSelect: (CoachTab) -> Unit) {
                 Modifier
                     .weight(1f)
                     .clip(RoundedCornerShape(10.dp))
-                    .background(if (active) FcPrimary.copy(alpha = 0.25f) else Color.Transparent)
+                    .background(if (active) MaterialTheme.colorScheme.primary.copy(alpha = 0.25f) else Color.Transparent)
                     .border(
                         1.dp,
-                        if (active) FcPrimary else GhostBorder.copy(alpha = 0.5f),
+                        if (active) MaterialTheme.colorScheme.primary else GhostBorder.copy(alpha = 0.5f),
                         RoundedCornerShape(10.dp),
                     )
                     .clickable { onSelect(tab) }
@@ -235,7 +230,7 @@ private fun CoachTabBar(selected: CoachTab, onSelect: (CoachTab) -> Unit) {
             ) {
                 Text(
                     label,
-                    color = if (active) FcPrimary else MutedText,
+                    color = if (active) MaterialTheme.colorScheme.primary else MutedText,
                     fontWeight = if (active) FontWeight.Bold else FontWeight.Medium,
                     style = MaterialTheme.typography.labelLarge,
                 )
@@ -317,7 +312,7 @@ private fun ScoreboardHeader(sit: GameSituation) {
             ) {
                 Text(
                     if (sit.playingOT) "OT" else "Q${sit.quarter}",
-                    color = FcPrimary,
+                    color = MaterialTheme.colorScheme.primary,
                     style = MaterialTheme.typography.labelLarge,
                     fontWeight = FontWeight.Bold,
                     letterSpacing = 1.sp,
@@ -421,7 +416,7 @@ private fun TimeoutPips(count: Int, label: String) {
                 Modifier
                     .size(width = 14.dp, height = 6.dp)
                     .clip(RoundedCornerShape(2.dp))
-                    .background(if (i < count) FcPrimary else Color(0xFF374151)),
+                    .background(if (i < count) MaterialTheme.colorScheme.primary else Color(0xFF374151)),
             )
         }
     }
@@ -447,7 +442,7 @@ private fun SituationStrip(sit: GameSituation) {
         )
         Text(
             if (sit.userOnOffense) "YOUR BALL" else "DEFENDING",
-            color = if (sit.userOnOffense) FcPrimary else FcAccent,
+            color = if (sit.userOnOffense) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondary,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium,
             letterSpacing = 0.8.sp,
@@ -469,7 +464,7 @@ private fun LastPlayBanner(sit: GameSituation) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Text(
                 "LAST",
-                color = FcPrimary,
+                color = MaterialTheme.colorScheme.primary,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.labelSmall,
                 letterSpacing = 1.sp,
@@ -516,7 +511,7 @@ private fun ControlCard(
     ) {
         Text(
             if (sit.userOnOffense) "Offense pace" else "Defense call",
-            color = FcPrimary,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium,
             letterSpacing = 1.sp,
@@ -540,7 +535,7 @@ private fun ControlCard(
             Button(
                 onClick = viewModel::simPlay,
                 enabled = !sit.awaitingCoinToss,
-                colors = ButtonDefaults.buttonColors(containerColor = FcPrimary, contentColor = FcOnPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 shape = PlayButtonShape,
                 modifier = Modifier
                     .weight(1f)
@@ -552,7 +547,7 @@ private fun ControlCard(
                 Button(
                     onClick = { viewModel.showSimUntilMenu(true) },
                     enabled = !sit.awaitingCoinToss,
-                    colors = ButtonDefaults.buttonColors(containerColor = FcAccent, contentColor = FcOnAccent),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary, contentColor = MaterialTheme.colorScheme.onSecondary),
                     shape = PlayButtonShape,
                     modifier = Modifier
                         .fillMaxWidth()
@@ -588,7 +583,7 @@ private fun ControlCard(
             ) {
                 Text(
                     "Timeout",
-                    color = if (sit.canCallTimeout) FcAccent else MutedText,
+                    color = if (sit.canCallTimeout) MaterialTheme.colorScheme.secondary else MutedText,
                 )
             }
         }
@@ -643,7 +638,7 @@ private fun SelectedPlayCard(
     ) {
         Text(
             eyebrow,
-            color = FcPrimary,
+            color = MaterialTheme.colorScheme.primary,
             fontWeight = FontWeight.Bold,
             style = MaterialTheme.typography.labelMedium,
             letterSpacing = 1.2.sp,
@@ -672,7 +667,7 @@ private fun SelectedPlayCard(
             }
             Button(
                 onClick = onSuggestion,
-                colors = ButtonDefaults.buttonColors(containerColor = FcPrimary, contentColor = FcOnPrimary),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary, contentColor = MaterialTheme.colorScheme.onPrimary),
                 shape = PlayButtonShape,
                 modifier = Modifier.weight(1f),
             ) {

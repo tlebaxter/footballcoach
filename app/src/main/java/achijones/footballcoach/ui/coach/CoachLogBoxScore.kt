@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import CFBsimPack.engine.BoxScoreLine
 import CFBsimPack.engine.GameSituation
 import CFBsimPack.engine.PlayLogEntry
-import achijones.footballcoach.ui.theme.FcPrimary
 
 private val CardShape = RoundedCornerShape(12.dp)
 private val Muted = Color(0xFF9CA3AF)
@@ -60,7 +59,7 @@ private fun PlayLogRow(entry: PlayLogEntry) {
     ) {
         Text(
             "Q${entry.quarter} ${entry.clockLabel} · ${ordinal(entry.down)} & ${entry.distance}",
-            color = FcPrimary,
+            color = MaterialTheme.colorScheme.primary,
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
         )
@@ -92,7 +91,7 @@ fun CoachBoxScoreTab(situation: GameSituation) {
             if (lines.isEmpty()) {
                 Text("Stats will appear after snaps.", color = Muted)
             } else {
-                Text("PLAYERS", color = FcPrimary, fontWeight = FontWeight.Bold)
+                Text("PLAYERS", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.Bold)
                 Spacer(Modifier.height(8.dp))
             }
         }

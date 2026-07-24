@@ -698,6 +698,12 @@ public class Game implements Serializable {
                 state.possessionHome = !state.possessionHome;
             }
             addScore(6);
+            if (otTouchdownAlreadyWins()) {
+                gameEventLog += prefix() + "Game-winning TD — no try needed.\n";
+                state.lastPlayLog = "Game-winning touchdown!";
+                resetForOT();
+                return;
+            }
             beginTryAfterTd();
             return;
         }
@@ -802,6 +808,13 @@ public class Game implements Serializable {
         if (!userControlsOffense()) {
             autoResolveTryIfNeeded();
         }
+    }
+
+    /** Bottom of OT TD that already puts the scoring team ahead — try cannot change the winner. */
+    private boolean otTouchdownAlreadyWins() {
+        if (!state.playingOT || !state.bottomOT) return false;
+        if (state.possessionHome) return state.homeScore > state.awayScore;
+        return state.awayScore > state.homeScore;
     }
 
     private boolean userControlsOffense() {

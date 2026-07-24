@@ -21,8 +21,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
-import achijones.footballcoach.ui.theme.FcOnPrimary
-import achijones.footballcoach.ui.theme.FcPrimary
 
 private val SheetBg = Color(0xFF121A14)
 private val Muted = Color(0xFF9CA3AF)
@@ -68,8 +66,8 @@ fun TryChoiceSheet(
                 Button(
                     onClick = onKickXp,
                     colors = ButtonDefaults.buttonColors(
-                        containerColor = FcPrimary,
-                        contentColor = FcOnPrimary,
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
                     ),
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier

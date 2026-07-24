@@ -36,10 +36,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import achijones.footballcoach.ui.theme.FcSegmentBorder
-import achijones.footballcoach.ui.theme.FcSegmentSelected
-import achijones.footballcoach.ui.theme.FcSegmentSelectedText
 import achijones.footballcoach.ui.theme.FcSegmentTrack
 import achijones.footballcoach.ui.theme.FcSegmentUnselectedText
+import achijones.footballcoach.ui.theme.onColorFor
 
 private val SegmentPillShape = RoundedCornerShape(percent = 50)
 
@@ -57,6 +56,8 @@ fun SegmentedControl(
 ) {
     if (labels.isEmpty()) return
     val selectedIndex = selected.coerceIn(labels.indices)
+    val selectedFill = MaterialTheme.colorScheme.primary
+    val selectedContent = onColorFor(selectedFill)
 
     BoxWithConstraints(
         modifier = modifier
@@ -81,7 +82,7 @@ fun SegmentedControl(
                 .width(tabWidth)
                 .fillMaxHeight()
                 .clip(SegmentPillShape)
-                .background(FcSegmentSelected),
+                .background(selectedFill),
         )
 
         Row(
@@ -92,7 +93,7 @@ fun SegmentedControl(
                 val isSelected = index == selectedIndex
                 val textColor by animateColorAsState(
                     targetValue = if (isSelected) {
-                        FcSegmentSelectedText
+                        selectedContent
                     } else {
                         FcSegmentUnselectedText
                     },
@@ -111,7 +112,7 @@ fun SegmentedControl(
                         .clip(SegmentPillShape)
                         .clickable(
                             interactionSource = interactionSource,
-                            indication = ripple(bounded = true, color = FcSegmentSelectedText),
+                            indication = ripple(bounded = true, color = selectedContent),
                             role = Role.Tab,
                             onClick = { onSelect(index) },
                         )
