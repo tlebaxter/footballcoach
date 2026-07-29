@@ -115,6 +115,11 @@ fun CoachGameScreen(
                 sit = sit,
                 selectedTempo = state.selectedTempo,
                 showField = true,
+                selectedOffense = if (state.tab == CoachTab.CALL_PLAYS) {
+                    state.selectedOffense
+                } else {
+                    null
+                },
             )
             CoachTabBar(state.tab, viewModel::selectTab)
 

@@ -5,6 +5,7 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,8 +18,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.nativeCanvas
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -32,6 +35,7 @@ private val LosWhite = Color(0xFFF8FAFC)
 private val ToGoBand = Color(0x66FDE047)
 private val BallColor = Color(0xFFF59E0B)
 private val PossessionChipBg = Color(0xE6111820)
+private val SelectedStroke = Color(0xFFF8FAFC)
 
 /**
  * Maps offense-relative yard line (0–100 toward opponent) to absolute field fraction (0 = left, 1 = right).
@@ -56,6 +60,9 @@ fun CoachField(
     awayName: String,
     possessionAbbr: String,
     modifier: Modifier = Modifier,
+    driveSegments: List<DriveSegment> = emptyList(),
+    selectedSegmentId: Int? = null,
+    onSegmentClick: ((Int?) -> Unit)? = null,
 ) {
     val leftName = if (homeDefendsLeft) homeName else awayName
     val rightName = if (homeDefendsLeft) awayName else homeName
@@ -75,7 +82,36 @@ fun CoachField(
     Box(
         modifier = modifier
             .clip(FieldShape)
-            .border(1.dp, Color(0xFF2F5D34), FieldShape),
+            .border(1.dp, Color(0xFF2F5D34), FieldShape)
+            .then(
+                if (onSegmentClick != null) {
+                    Modifier.pointerInput(driveSegments, possessionHome, homeDefendsLeft, selectedSegmentId) {
+                        detectTapGestures { offset ->
+                            val w = size.width
+                            val endZoneW = w * 0.09f
+                            val playableW = w - endZoneW * 2f
+                            if (playableW <= 0f) {
+                                onSegmentClick(null)
+                                return@detectTapGestures
+                            }
+                            val xInPlayable = ((offset.x - endZoneW) / playableW).coerceIn(0f, 1f)
+                            val hit = hitTestDriveSegment(
+                                driveSegments,
+                                xInPlayable,
+                                possessionHome,
+                                homeDefendsLeft,
+                            )
+                            when {
+                                hit == null -> onSegmentClick(null)
+                                hit.id == selectedSegmentId -> onSegmentClick(null)
+                                else -> onSegmentClick(hit.id)
+                            }
+                        }
+                    }
+                } else {
+                    Modifier
+                },
+            ),
     ) {
         Canvas(modifier = Modifier.fillMaxSize()) {
             val w = size.width
@@ -157,6 +193,62 @@ fun CoachField(
                 val width = kotlin.math.abs(fdX - losX)
                 drawRect(ToGoBand, Offset(left, 0f), Size(width, h))
                 drawLine(FirstDownYellow, Offset(fdX, 0f), Offset(fdX, h), strokeWidth = 4.5f)
+            }
+
+            // Drive stacked bars (lower band)
+            if (driveSegments.isNotEmpty() && playableW > 0f) {
+                val barTop = h * 0.70f
+                val barH = h * 0.16f
+                val selectedH = h * 0.20f
+                val selectedTop = h * 0.68f
+                val dash = PathEffect.dashPathEffect(floatArrayOf(8f, 6f), 0f)
+                for (seg in driveSegments) {
+                    val (leftF, rightF) = segmentAbsoluteFractions(seg, possessionHome, homeDefendsLeft)
+                    val left = endZoneW + playableW * leftF
+                    val right = endZoneW + playableW * rightF
+                    val segW = (right - left).coerceAtLeast(2f)
+                    val selected = seg.id == selectedSegmentId && seg.kind == DriveSegmentKind.COMPLETED
+                    val top = if (selected) selectedTop else barTop
+                    val height = if (selected) selectedH else barH
+                    val color = driveSegmentColor(seg)
+                    when (seg.kind) {
+                        DriveSegmentKind.COMPLETED -> {
+                            drawRoundRect(
+                                color = color.copy(alpha = if (selected) 0.95f else 0.82f),
+                                topLeft = Offset(left, top),
+                                size = Size(segW, height),
+                                cornerRadius = CornerRadius(3.dp.toPx()),
+                            )
+                            if (selected) {
+                                drawRoundRect(
+                                    color = SelectedStroke,
+                                    topLeft = Offset(left, top),
+                                    size = Size(segW, height),
+                                    cornerRadius = CornerRadius(3.dp.toPx()),
+                                    style = Stroke(width = 2.dp.toPx()),
+                                )
+                            }
+                        }
+                        DriveSegmentKind.PREVIEW -> {
+                            drawRoundRect(
+                                color = color.copy(alpha = 0.22f),
+                                topLeft = Offset(left, top),
+                                size = Size(segW, height),
+                                cornerRadius = CornerRadius(3.dp.toPx()),
+                            )
+                            drawRoundRect(
+                                color = color.copy(alpha = 0.85f),
+                                topLeft = Offset(left, top),
+                                size = Size(segW, height),
+                                cornerRadius = CornerRadius(3.dp.toPx()),
+                                style = Stroke(
+                                    width = 2.dp.toPx(),
+                                    pathEffect = dash,
+                                ),
+                            )
+                        }
+                    }
+                }
             }
 
             drawLine(LosWhite, Offset(losX, 0f), Offset(losX, h), strokeWidth = 4f)

@@ -4,9 +4,12 @@ import androidx.lifecycle.ViewModel
 import CFBsimPack.Formation
 import CFBsimPack.Game
 import CFBsimPack.GameSession
+import CFBsimPack.Team
+import CFBsimPack.engine.AiPlayCaller
 import CFBsimPack.engine.AutoSimUntil
 import CFBsimPack.engine.DefenseConcept
 import CFBsimPack.engine.GameSituation
+import CFBsimPack.engine.GameState
 import CFBsimPack.engine.OffenseConcept
 import CFBsimPack.engine.Playbook
 import CFBsimPack.engine.TempoCall
@@ -15,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.random.Random
 
 enum class CoachTab {
     CALL_PLAYS,
@@ -50,6 +54,11 @@ class CoachGameViewModel : ViewModel() {
     /** Tip id + clock bucket dismissed so the same tip does not spam. */
     private var dismissedTipKey: String? = null
     private var lastPossessionHome: Boolean? = null
+    private val suggestionRandom = Random.Default
+
+    companion object {
+        private const val SUGGESTION_REROLL_ATTEMPTS = 7
+    }
 
     init {
         val g = game
@@ -67,7 +76,7 @@ class CoachGameViewModel : ViewModel() {
     private fun maybeSuggestInitial() {
         val sit = _uiState.value.situation ?: return
         if (sit.awaitingCoinToss || sit.tryAwaitingChoice) return
-        applySuggestion(sit.userOnOffense)
+        applySuggestion(sit.userOnOffense, preferDifferent = false)
     }
 
     private fun refresh() {
@@ -140,7 +149,7 @@ class CoachGameViewModel : ViewModel() {
         val g = game ?: return
         if (!g.chooseGoForTwo()) return
         refresh()
-        applySuggestion(true)
+        applySuggestion(true, preferDifferent = false)
     }
 
     fun selectTab(tab: CoachTab) {
@@ -212,14 +221,24 @@ class CoachGameViewModel : ViewModel() {
         _uiState.update { it.copy(showSimUntilMenu = show) }
     }
 
-    fun applySuggestion(forOffense: Boolean = _uiState.value.situation?.userOnOffense == true) {
+    fun applySuggestion(
+        forOffense: Boolean = _uiState.value.situation?.userOnOffense == true,
+        preferDifferent: Boolean = true,
+    ) {
         val g = game ?: return
         val state = g.state ?: return
         val offense = if (state.possessionHome) g.homeTeam else g.awayTeam
         val defense = if (state.possessionHome) g.awayTeam else g.homeTeam
         val ai = g.aiCaller
         if (forOffense) {
-            val concept = ai.suggestOffense(offense, defense, state)
+            val concept = suggestOffenseCall(
+                ai,
+                offense,
+                defense,
+                state,
+                excludeId = _uiState.value.selectedOffense.id,
+                preferDifferent = preferDifferent,
+            )
             _uiState.update {
                 it.copy(
                     selectedOffense = concept,
@@ -234,8 +253,82 @@ class CoachGameViewModel : ViewModel() {
             } else {
                 null
             }
-            val concept = ai.suggestDefense(offense, defense, state, offHint)
+            val concept = suggestDefenseCall(
+                ai,
+                offense,
+                defense,
+                state,
+                offHint,
+                excludeId = _uiState.value.selectedDefense.id,
+                preferDifferent = preferDifferent,
+            )
             _uiState.update { it.copy(selectedDefense = concept, aiCallMode = false) }
+        }
+    }
+
+    /**
+     * AI suggestion for the Call Plays card. When [preferDifferent] is true (Suggestion button),
+     * re-roll until the call differs from [excludeId] if alternatives exist.
+     */
+    private fun suggestOffenseCall(
+        ai: AiPlayCaller,
+        offense: Team,
+        defense: Team,
+        state: GameState,
+        excludeId: String,
+        preferDifferent: Boolean,
+    ): OffenseConcept {
+        var concept = ai.suggestOffense(offense, defense, state)
+        if (!preferDifferent) return concept
+        repeat(SUGGESTION_REROLL_ATTEMPTS) {
+            if (concept.id != excludeId) return concept
+            concept = ai.suggestOffense(offense, defense, state)
+        }
+        if (concept.id != excludeId) return concept
+        val alts = offenseSuggestionAlternatives(state, excludeId)
+        return if (alts.isNotEmpty()) alts.random(suggestionRandom) else concept
+    }
+
+    private fun suggestDefenseCall(
+        ai: AiPlayCaller,
+        offense: Team,
+        defense: Team,
+        state: GameState,
+        offHint: OffenseConcept?,
+        excludeId: String,
+        preferDifferent: Boolean,
+    ): DefenseConcept {
+        var concept = ai.suggestDefense(offense, defense, state, offHint)
+        if (!preferDifferent) return concept
+        repeat(SUGGESTION_REROLL_ATTEMPTS) {
+            if (concept.id != excludeId) return concept
+            concept = ai.suggestDefense(offense, defense, state, offHint)
+        }
+        if (concept.id != excludeId) return concept
+        val alts = Playbook.situationalDefense(state).filter { it.id != excludeId }
+        return if (alts.isNotEmpty()) alts.random(suggestionRandom) else concept
+    }
+
+    private fun offenseSuggestionAlternatives(state: GameState, excludeId: String): List<OffenseConcept> {
+        if (state.pendingKickoff) {
+            return listOfNotNull(
+                Playbook.offenseById("kickoff"),
+                Playbook.offenseById("onside"),
+            ).filter { it.id != excludeId }
+        }
+        return Playbook.situationalOffense(state, true).filter { it.id != excludeId }
+    }
+
+    /** After a snap, replace the Call Plays selection with a suggestion for the new situation. */
+    private fun suggestNextPlayIfNeeded(preserveAiCallMode: Boolean) {
+        val g = game ?: return
+        val next = g.getSituation()
+        if (next.gameOver || next.userChoosesTry || next.awaitingCoinToss || next.tryAwaitingChoice) {
+            return
+        }
+        applySuggestion(next.userOnOffense, preferDifferent = false)
+        if (preserveAiCallMode) {
+            _uiState.update { it.copy(aiCallMode = true) }
         }
     }
 
@@ -248,6 +341,7 @@ class CoachGameViewModel : ViewModel() {
         val sit = g.getSituation()
         val s = _uiState.value
         val ai = g.aiCaller
+        val wasAiCallMode = s.aiCallMode
 
         val call = if (s.aiCallMode) {
             g.buildMatchedCall(null, null, s.selectedTempo)
@@ -271,13 +365,7 @@ class CoachGameViewModel : ViewModel() {
         dismissedTipKey = null
         if (g.state?.gameOver == true && !g.hasPlayed) g.finalizeGame()
         refresh()
-        if (s.aiCallMode) {
-            val next = g.getSituation()
-            if (!next.gameOver && !next.userChoosesTry) {
-                applySuggestion(next.userOnOffense)
-                _uiState.update { it.copy(aiCallMode = true) }
-            }
-        }
+        suggestNextPlayIfNeeded(preserveAiCallMode = wasAiCallMode)
     }
 
     fun requestTimeout() {
@@ -302,10 +390,12 @@ class CoachGameViewModel : ViewModel() {
     fun autoSim(until: AutoSimUntil) {
         val g = game ?: return
         if (g.state?.awaitingCoinToss == true) return
+        val wasAiCallMode = _uiState.value.aiCallMode
         g.autoSimUntil(until)
         if (g.state?.gameOver == true && !g.hasPlayed) g.finalizeGame()
         refresh()
         _uiState.update { it.copy(showSimUntilMenu = false) }
+        suggestNextPlayIfNeeded(preserveAiCallMode = wasAiCallMode)
     }
 
     fun finishAndClose() {

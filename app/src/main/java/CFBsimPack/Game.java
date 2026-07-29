@@ -4,6 +4,7 @@ import CFBsimPack.engine.AiPlayCaller;
 import CFBsimPack.engine.AtmosphereEngine;
 import CFBsimPack.engine.AutoSimUntil;
 import CFBsimPack.engine.BoxScoreLine;
+import CFBsimPack.engine.ConceptFamily;
 import CFBsimPack.engine.DefenseConcept;
 import CFBsimPack.engine.FatigueTracker;
 import CFBsimPack.engine.GamePhase;
@@ -794,6 +795,10 @@ public class Game implements Serializable {
                 state.driveNetYards += result.yardsGained;
             }
         }
+        int yardAfter = Math.max(0, Math.min(100, endYard));
+        ConceptFamily offenseFamily = call != null
+                ? call.resolvedOffenseConcept().family
+                : ConceptFamily.SPECIAL;
         playLog.add(new PlayLogEntry(
                 clockBefore,
                 quarter,
@@ -801,8 +806,10 @@ public class Game implements Serializable {
                 distance,
                 yardBefore,
                 result != null ? result.yardsGained : 0,
+                yardAfter,
                 call != null ? call.resolvedOffenseConcept().id : null,
                 call != null ? call.resolvedOffenseConcept().displayName : "",
+                offenseFamily,
                 call != null ? call.resolvedDefenseConcept().id : null,
                 call != null ? call.resolvedDefenseConcept().displayName : "",
                 result != null ? result.logLine : "",

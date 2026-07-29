@@ -17,6 +17,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,6 +32,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import CFBsimPack.engine.GameSituation
+import CFBsimPack.engine.OffenseConcept
 import CFBsimPack.engine.TempoCall
 
 private val ScoreboardBg = Color(0xFF0D1117)
@@ -34,10 +40,12 @@ private val StripBg = Color(0xFF152018)
 private val GhostBorder = Color(0xFF3A4A3C)
 private val MutedText = Color(0xFF9CA3AF)
 private val BallOrange = Color(0xFFF59E0B)
+private val DetailChipBg = Color(0xFF1A241C)
 
 /**
  * Sticky coach chrome: scoreboard, ESPN situation strip, clock chip, and field.
  * All labels come from [GameSituation]; tempo only supplies runoff preview.
+ * When [selectedOffense] is set, the field shows stacked drive bars + next-play preview.
  */
 @Composable
 fun CoachSituationModule(
@@ -45,7 +53,19 @@ fun CoachSituationModule(
     selectedTempo: TempoCall,
     showField: Boolean,
     modifier: Modifier = Modifier,
+    selectedOffense: OffenseConcept? = null,
 ) {
+    val driveSegments = remember(sit, selectedOffense) {
+        if (selectedOffense != null) buildDriveSegments(sit, selectedOffense) else emptyList()
+    }
+    var selectedSegmentId by remember { mutableStateOf<Int?>(null) }
+    LaunchedEffect(sit.drivePlayCount, sit.playLog.size) {
+        selectedSegmentId = null
+    }
+    val selectedSegment = driveSegments.firstOrNull {
+        it.id == selectedSegmentId && it.kind == DriveSegmentKind.COMPLETED
+    }
+
     Column(modifier.fillMaxWidth()) {
         CompactScoreboard(sit)
         EspnSituationStrip(sit)
@@ -60,10 +80,69 @@ fun CoachSituationModule(
                 homeName = sit.homeName,
                 awayName = sit.awayName,
                 possessionAbbr = sit.possessionAbbr,
+                driveSegments = driveSegments,
+                selectedSegmentId = selectedSegmentId,
+                onSegmentClick = if (selectedOffense != null) {
+                    { id -> selectedSegmentId = id }
+                } else {
+                    null
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(170.dp)
                     .padding(horizontal = 12.dp),
+            )
+            if (selectedSegment != null) {
+                Spacer(Modifier.height(6.dp))
+                DrivePlayDetailChip(
+                    conceptName = selectedSegment.conceptName,
+                    logLine = selectedSegment.logLine,
+                    modifier = Modifier.padding(horizontal = 12.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun DrivePlayDetailChip(
+    conceptName: String,
+    logLine: String,
+    modifier: Modifier = Modifier,
+) {
+    Column(
+        modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(DetailChipBg)
+            .padding(12.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "PLAY",
+                color = MaterialTheme.colorScheme.primary,
+                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.labelSmall,
+                letterSpacing = 1.sp,
+                modifier = Modifier.padding(end = 10.dp),
+            )
+            Text(
+                conceptName.ifBlank { "Play" },
+                color = Color(0xFFE5E7EB),
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        if (logLine.isNotBlank()) {
+            Spacer(Modifier.height(4.dp))
+            Text(
+                logLine,
+                color = Color(0xFFD1D5DB),
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 4,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }
@@ -83,7 +162,7 @@ private fun CompactScoreboard(sit: GameSituation) {
         ) {
             TeamScoreBlock(
                 rank = sit.awayRank,
-                abbr = sit.awayAbbr,
+                name = sit.awayName,
                 score = sit.awayScore,
                 hasBall = !sit.possessionHome,
                 modifier = Modifier.weight(1f),
@@ -109,7 +188,7 @@ private fun CompactScoreboard(sit: GameSituation) {
             }
             TeamScoreBlock(
                 rank = sit.homeRank,
-                abbr = sit.homeAbbr,
+                name = sit.homeName,
                 score = sit.homeScore,
                 hasBall = sit.possessionHome,
                 modifier = Modifier.weight(1f),
@@ -239,7 +318,7 @@ fun clockRunoffPreview(sit: GameSituation, tempo: TempoCall): String? {
 @Composable
 private fun TeamScoreBlock(
     rank: Int,
-    abbr: String,
+    name: String,
     score: Int,
     hasBall: Boolean,
     alignEnd: Boolean,
@@ -258,7 +337,7 @@ private fun TeamScoreBlock(
                 Spacer(Modifier.width(6.dp))
             }
             Text(
-                if (rank in 1..25) "#$rank $abbr" else abbr,
+                if (rank in 1..25) "#$rank $name" else name,
                 color = if (hasBall) Color.White else MutedText,
                 fontWeight = FontWeight.Bold,
                 style = MaterialTheme.typography.titleSmall,
