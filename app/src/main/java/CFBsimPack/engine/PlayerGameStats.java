@@ -33,6 +33,7 @@ public final class PlayerGameStats {
         public int passYards;
         public int passTd;
         public int passInt;
+        public int defInt;
         public int sacks;
         public int rushAtt;
         public int rushYards;

@@ -1,10 +1,13 @@
 package CFBsimPack.engine;
 
 import CFBsimPack.Formation;
+import CFBsimPack.engine.playdef.PlayDefinition;
+import CFBsimPack.engine.playdef.PlayDefinitions;
 
 /**
  * Named offensive play concept with engine modifiers.
  * Display is text-only: formation + popular call name + concept tagline.
+ * Wraps a {@link PlayDefinition} for assignment snap resolution.
  */
 public final class OffenseConcept {
     public final String id;
@@ -23,6 +26,8 @@ public final class OffenseConcept {
     public final double fumbleMod;
     public final TargetBias targetBias;
     public final double clockMultExtra;
+    /** Structured play data for the snap engine. */
+    public final PlayDefinition definition;
 
     public OffenseConcept(
             String id,
@@ -56,6 +61,12 @@ public final class OffenseConcept {
         this.fumbleMod = fumbleMod;
         this.targetBias = targetBias != null ? targetBias : TargetBias.ANY;
         this.clockMultExtra = clockMultExtra;
+        this.definition = PlayDefinitions.build(
+                this.id, this.displayName, this.family, this.offensePlay, this.formation,
+                this.personnel, this.depth, this.concept, this.targetBias,
+                this.completionMod, this.yardsMod, this.sackRiskMod,
+                this.runYardsMod, this.fumbleMod, this.clockMultExtra
+        );
     }
 
     public String depthLabel() {

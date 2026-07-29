@@ -9,6 +9,19 @@ import CFBsimPack.PressureResponse;
 import CFBsimPack.QbPressurePolicy;
 import CFBsimPack.RoleTag;
 import CFBsimPack.Team;
+import CFBsimPack.engine.playdef.PlayDefinition;
+import CFBsimPack.engine.playdef.ProtectionScheme;
+import CFBsimPack.engine.playdef.RpoRules;
+import CFBsimPack.engine.playdef.RunScheme;
+import CFBsimPack.engine.playdef.RunTrack;
+import CFBsimPack.engine.snap.IntResolver;
+import CFBsimPack.engine.snap.PassTimeline;
+import CFBsimPack.engine.snap.ProtectionResolver;
+import CFBsimPack.engine.snap.ProtectionResult;
+import CFBsimPack.engine.snap.RunGapResolver;
+import CFBsimPack.engine.snap.RunGapResult;
+import CFBsimPack.engine.snap.SituationMods;
+import CFBsimPack.engine.snap.ThrowWindow;
 
 import java.util.List;
 import java.util.Random;
@@ -19,11 +32,19 @@ import java.util.Random;
 public final class PlayResolver {
 
     private final Random rng;
+    private final ProtectionResolver protectionResolver;
+    private final PassTimeline passTimeline;
+    private final IntResolver intResolver;
+    private final RunGapResolver runGapResolver;
     private PlayerGameStats gameStats;
     private FatigueTracker fatigue;
 
     public PlayResolver(Random rng) {
         this.rng = rng != null ? rng : new Random();
+        this.protectionResolver = new ProtectionResolver(this.rng);
+        this.passTimeline = new PassTimeline(this.rng);
+        this.intResolver = new IntResolver(this.rng);
+        this.runGapResolver = new RunGapResolver(this.rng);
     }
 
     public void setGameStats(PlayerGameStats gameStats) {
@@ -122,18 +143,20 @@ public final class PlayResolver {
         int spd = rating(qb, x -> x.spd, 55);
         int elu = rating(qb, x -> x.elu, 55);
         double scrambleMod = cov != null ? cov.scrambleMod : 1.0;
+        RpoRules rules = concept != null && concept.definition != null && concept.definition.rpoRules != null
+                ? concept.definition.rpoRules
+                : RpoRules.defaults();
 
-        double give = 0.35;
+        double give = rules.giveWeight;
         if (cov == CoverageCall.STACK_BOX) give += 0.18;
 
-        double keep = (0.15 + spd / 400.0 + elu / 500.0) * scrambleMod;
-        if (concept != null && "pistol_zone_read".equals(concept.id)) {
+        double keep = (rules.keepWeightBase + spd / 400.0 + elu / 500.0) * scrambleMod;
+        if (rules.zoneReadBoost || (concept != null && "pistol_zone_read".equals(concept.id))) {
             keep += 0.12 * scrambleMod;
         }
         if (keep < 0.02) keep = 0.02;
 
-        // Baseline throw attractiveness; remainder-style floor without collapsing keep
-        double throwW = Math.max(0.25, 1.0 - give - keep);
+        double throwW = Math.max(rules.throwFloor, 1.0 - give - keep);
 
         double total = give + keep + throwW;
         double roll = rng.nextDouble() * total;
@@ -151,6 +174,7 @@ public final class PlayResolver {
         PlayResult r = new PlayResult();
         r.playType = OffensePlay.PASS;
         OffenseConcept concept = call.resolvedOffenseConcept();
+        PlayDefinition defn = concept != null ? concept.definition : null;
         Player qb = onFieldQb(off, offense);
         if (qb == null) {
             return PlayResult.logOnly(offense.abbr + " has no QB on the field.", 5);
@@ -161,37 +185,67 @@ public final class PlayResolver {
         boolean rpoThrow = concept != null && concept.family == ConceptFamily.RPO;
         int qbSpd = rating(qb, x -> x.spd, 55);
         int qbElu = rating(qb, x -> x.elu, 55);
-
-        // Block battles: OL pass-block wins vs pass rush feed pressure
-        int blockWins = countBlockWins(off, def, true);
-        int pressure = (int) ((def.passRushComposite() * 2 - off.olPassComposite() - blockWins * 4)
-                * sys.passWeight * concept.sackRiskMod);
-        pressure += AtmosphereEngine.roadPressureAdd(state);
         int thv = rating(qb, x -> x.thv, 55);
-        double pressureScale = 1.0 - (thv - 50) / 250.0;
+        int yardsToGoal = Math.max(1, 100 - state.yardLine);
+
+        SituationMods sit = SituationMods.from(state, cov);
+        ProtectionScheme scheme = defn != null && defn.protection != null
+                ? defn.protection
+                : ProtectionScheme.infer(concept.depth, "10".equals(concept.personnel), false);
+        double thvScale = 1.0 - (thv - 50) / 250.0;
         if (rpoThrow) {
-            // Mobility softens pocket pressure on RPO peek/alert throws
-            pressureScale -= (qbSpd - 50) / 400.0 + (qbElu - 50) / 500.0;
+            thvScale -= (qbSpd - 50) / 400.0 + (qbElu - 50) / 500.0;
         }
-        int effectivePressure = (int) (pressure * pressureScale);
-        if (effectivePressure < 0) effectivePressure = 0;
-        if (rng.nextDouble() * 100 < effectivePressure / 8.0) {
+        if (thvScale < 0.55) thvScale = 0.55;
+        double sackMod = concept.sackRiskMod * sys.passWeight;
+        ProtectionResult protection = protectionResolver.resolve(
+                off, def, scheme, sit, fatigue, sackMod,
+                AtmosphereEngine.roadPressureAdd(state), thvScale);
+
+        boolean pressJam = cov == CoverageCall.PRESS;
+        PassTimeline.TimelineState timeline = passTimeline.run(
+                off, def, protection,
+                defn != null ? defn.routes : null,
+                cov, fatigue, pressJam);
+        ThrowWindow decision = timeline.decision;
+
+        // Pressure won the pocket before a throw — reuse existing scramble policy
+        if (decision == null || decision.decision == ThrowWindow.Decision.PRESSURE_OUT) {
             return resolvePressure(offense, defense, state, call, r, qb, concept, cov,
                     tempo, rpoThrow, qbSpd, qbElu, thv);
         }
 
-        int yardsToGoal = Math.max(1, 100 - state.yardLine);
-        double intChance = (pressure + def.coverageComposite()
-                - (rating(qb, x -> x.tha, 55) + qb.ratFootIQ + thv + 100) / 4.0) / 18.0;
-        intChance *= cov.intMod;
-        if (concept.depth == DepthBand.DEEP) {
-            intChance *= 1.12;
-            if (state.gameTime <= 40 && yardsToGoal >= 35) {
-                intChance *= 1.25;
-            }
+        Player target = decision.target;
+        if (target == null) {
+            target = pickReceiver(off, offense, concept.targetBias);
         }
-        if (intChance < 0.015) intChance = 0.015;
-        if (100 * rng.nextDouble() < intChance) {
+        Player cb = decision.coverage != null ? decision.coverage.defender : onFieldCb(def, defense);
+        int cat = recvCatch(target);
+        int spd = recvSpeed(target);
+        int rtr = rating(target, x -> x.rtr, 60);
+        int cbCov = cb != null ? rating(cb, x -> x.pcv, 70) : 70;
+        int cbSpd = cb != null ? rating(cb, x -> x.spd, 70) : 70;
+
+        int routeDepth = decision.route != null ? decision.route.depthYards
+                : (concept.depth == DepthBand.DEEP ? 22 : concept.depth == DepthBand.MEDIUM ? 12 : 6);
+        r.passArriveYardLine = Math.max(1, Math.min(99, state.yardLine + routeDepth + rng.nextInt(5) - 2));
+
+        // Matchup INT at throw time
+        IntResolver.IntResult intHit = intResolver.resolve(
+                qb, decision.route, target, decision.coverage, timeline.coverage, cov,
+                protection, decision.throwTimeSec, decision.separation, fatigue);
+        if (intHit.incompleteBatDown) {
+            qb.seasonStats.passAtt++;
+            if (gameStats != null) gameStats.line(qb).passAtt++;
+            r.incomplete = true;
+            r.stoppedClock = true;
+            r.clockBurned = (int) (5 + 6 * rng.nextDouble() * tempo);
+            state.down++;
+            String tip = intHit.tipper != null ? intHit.tipper.name : "DL";
+            r.logLine = "Batted down at the line by " + tip + " (" + concept.displayName + ").";
+            return r;
+        }
+        if (intHit.isInt()) {
             r.turnover = true;
             r.possessionChanged = true;
             r.stoppedClock = true;
@@ -203,26 +257,32 @@ public final class PlayResolver {
                 line.passAtt++;
                 line.passInt++;
             }
-            r.logLine = "INTERCEPTION! " + offense.abbr + " QB " + qb.name + " intercepted ("
-                    + concept.displayName + ").";
+            Player interceptor = intHit.interceptor;
+            if (interceptor != null) {
+                interceptor.seasonStats.defInt++;
+                if (gameStats != null) gameStats.line(interceptor).defInt++;
+            }
+            String who = interceptor != null ? interceptor.name : "defense";
+            if (intHit.source == IntResolver.Source.DL_TIP && intHit.tipper != null) {
+                r.logLine = "INTERCEPTION! tipped by " + intHit.tipper.name + ", caught by " + who
+                        + " (" + concept.displayName + ").";
+            } else if (intHit.source == IntResolver.Source.SAFETY) {
+                r.logLine = "INTERCEPTION! S " + who + " (" + concept.displayName + ").";
+            } else {
+                r.logLine = "INTERCEPTION! " + who + " (" + concept.displayName + ").";
+            }
             return r;
         }
 
-        Player target = pickReceiver(off, offense, concept.targetBias);
-        Player cb = onFieldCb(def, defense);
-        int cat = recvCatch(target);
-        int spd = recvSpeed(target);
-        int rtr = rating(target, x -> x.rtr, 60);
-        int cbCov = cb != null ? rating(cb, x -> x.pcv, 70) : 70;
-        int cbSpd = cb != null ? rating(cb, x -> x.spd, 70) : 70;
-
-        r.passArriveYardLine = passArriveYardLine(state.yardLine, concept.depth);
-
+        double pressureProxy = Math.max(0, 40 - protection.earliestPressureSec * 12);
+        if (decision.throwTimeSec >= protection.earliestPressureSec - 0.2) {
+            pressureProxy += 18;
+        }
         double completion = (normalize(rating(qb, x -> x.tha, 55)) + normalize(cat) - normalize(cbCov)) / 2.0
-                + 18.25 - pressure / 16.8 + AtmosphereEngine.offenseBonus(state)
-                + normalize(rtr) / 4.0;
-        if (rpoThrow && pressure > 0) {
-            // Capped mobility bump vs pressure on RPO throws
+                + 18.25 - pressureProxy / 16.8 + AtmosphereEngine.offenseBonus(state)
+                + normalize(rtr) / 4.0
+                + (decision.separation - 8) * 1.1;
+        if (rpoThrow && pressureProxy > 0) {
             double mobBump = Math.min(4.0, (qbElu + thv - 100) / 25.0);
             if (mobBump > 0) completion += mobBump;
         }
@@ -260,13 +320,14 @@ public final class PlayResolver {
             return r;
         }
 
-        int yards = (int) ((normalize(rating(qb, x -> x.thp, 55)) + normalize(spd) - normalize(cbSpd)) * rng.nextDouble() / 3.7
-                * cov.yardsMod * concept.yardsMod);
-        if (concept.depth == DepthBand.DEEP) {
+        int yards = (int) ((normalize(rating(qb, x -> x.thp, 55)) + normalize(spd) - normalize(cbSpd))
+                * rng.nextDouble() / 3.7 * cov.yardsMod * concept.yardsMod);
+        yards = (int) (yards * (0.85 + decision.separation / 40.0));
+        if (routeDepth >= 18) {
             int deepBonus = (int) (4 + 8 * rng.nextDouble());
             deepBonus = Math.min(deepBonus, Math.max(0, yardsToGoal - 1));
             yards += deepBonus;
-        } else if (concept.depth == DepthBand.SHORT) {
+        } else if (routeDepth <= 7) {
             yards = (int) (yards * 0.85);
         }
         if (yards < 0) yards = 0;
@@ -293,25 +354,19 @@ public final class PlayResolver {
         }
         CoverageCall cov = call.coverage;
         DefensiveSystem sys = defense.defSystem != null ? defense.defSystem : DefensiveSystem.BASE_4_3;
+        SituationMods sit = SituationMods.from(state, cov);
+        RunScheme runScheme = concept != null && concept.definition != null && concept.definition.run != null
+                ? concept.definition.run
+                : RunScheme.forTrack(RunTrack.INSIDE_ZONE);
 
-        int blockWins = countBlockWins(off, def, false);
-        int blockAdv = (int) ((off.olRushComposite() - def.runStopComposite() * sys.runWeight)
-                + blockWins * 3 + cov.runFitBonus() + concept.matchupBonus(cov, state));
-        int rushSpd = carrierRushSpd(carrier);
-        int rushPow = carrierRushPow(carrier);
-        int rushEva = carrierRushEva(carrier);
-        int yards = (int) ((rushSpd + blockAdv + AtmosphereEngine.offenseBonus(state))
-                * rng.nextDouble() / 10.0 * concept.runYardsMod);
-        if (yards < 2) {
-            yards += rushPow / 20 - 3;
-        } else if (rng.nextDouble() < 0.28) {
-            yards += (int) (rushEva / 5.0 * rng.nextDouble());
-        }
-        if (isPos(carrier, PositionGroup.QB)) {
-            yards = (int) (yards * cov.scrambleMod);
-        }
-
-        return applyGain(offense, defense, state, call, r, null, carrier, yards, false, null);
+        RunGapResult gap = runGapResolver.resolve(
+                off, def, carrier, runScheme, cov, sit, fatigue,
+                concept.runYardsMod,
+                (int) (cov.runFitBonus() + concept.matchupBonus(cov, state)),
+                AtmosphereEngine.offenseBonus(state),
+                sys.runWeight
+        );
+        return applyGain(offense, defense, state, call, r, null, carrier, gap.yards, false, null);
     }
 
     private PlayResult applyGain(Team offense, Team defense, GameState state, PlayCall call, PlayResult r,
@@ -1140,14 +1195,19 @@ public final class PlayResolver {
     /** Package-visible for carrier-selection tests. */
     Player pickCarrier(OnFieldEleven off, Team offense, OffenseConcept concept) {
         Player qb = onFieldQb(off, offense);
+        RunTrack track = concept != null && concept.definition != null && concept.definition.run != null
+                ? concept.definition.run.track
+                : null;
         // Designed QB draw: always the QB when available
-        if (concept != null && "gun_qb_draw".equals(concept.id) && qb != null) {
+        if ((track == RunTrack.QB_DRAW || (concept != null && "gun_qb_draw".equals(concept.id)))
+                && qb != null) {
             return qb;
         }
-        // Designed QB keep / option: athletic QBs occasionally keep
+        // Option / designed keep: athletic QBs keep more often
         int qbSpd = rating(qb, x -> x.spd, 55);
+        double keepBase = track == RunTrack.OPTION ? 0.22 : 0.08;
         if (qb != null && concept != null && concept.family == ConceptFamily.RUN
-                && rng.nextDouble() < 0.08 + qbSpd / 900.0) {
+                && rng.nextDouble() < keepBase + qbSpd / 900.0) {
             return qb;
         }
         Player nonQb = pickNonQbCarrier(off, offense, concept);
@@ -1182,29 +1242,6 @@ public final class PlayResolver {
         double aPref = Math.pow(a.ratOvr, 1.5) * rng.nextDouble();
         double bPref = Math.pow(b.ratOvr, 1.5) * rng.nextDouble();
         return aPref > bPref ? a : b;
-    }
-
-    private int countBlockWins(OnFieldEleven off, OnFieldEleven def, boolean passProtect) {
-        int ol = passProtect ? off.olPassComposite() : off.olRushComposite();
-        int rush = passProtect ? def.passRushComposite() : def.runStopComposite();
-        int wins = 0;
-        for (int i = 0; i < 5; i++) {
-            double edge = (ol - rush) / 40.0 + rng.nextGaussian() * 0.35;
-            if (edge > 0) wins++;
-        }
-        return wins;
-    }
-
-    private int carrierRushSpd(Player p) {
-        return rating(p, x -> x.spd, 55);
-    }
-
-    private int carrierRushPow(Player p) {
-        return rating(p, x -> x.stre, 55);
-    }
-
-    private int carrierRushEva(Player p) {
-        return rating(p, x -> x.elu, 50);
     }
 
     private int recvCatch(Player p) {

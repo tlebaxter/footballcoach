@@ -38,6 +38,9 @@ public final class PlayerSkillStats {
     public int puntAtt;
     public int puntYards;
 
+    // Defense
+    public int defInt;
+
     public void addFrom(PlayerSkillStats other) {
         if (other == null) return;
         passAtt += other.passAtt;
@@ -62,6 +65,7 @@ public final class PlayerSkillStats {
         fgMade += other.fgMade;
         puntAtt += other.puntAtt;
         puntYards += other.puntYards;
+        defInt += other.defInt;
     }
 
     public void clear() {
@@ -87,5 +91,6 @@ public final class PlayerSkillStats {
         fgMade = 0;
         puntAtt = 0;
         puntYards = 0;
+        defInt = 0;
     }
 }
