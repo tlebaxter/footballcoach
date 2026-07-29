@@ -110,6 +110,38 @@ public class OocScheduleBuilderTest {
     }
 
     @Test
+    public void previewUserRemainingFillNamesOpponentsWithoutMutating() throws Exception {
+        League league = createOpenOocLeague();
+        Team user = league.findTeamAbbr("ALA");
+        assertNotNull(user);
+
+        int openBefore = countOpenOoc(user);
+        assertTrue(openBefore > 0);
+
+        Game[] before = new Game[League.REGULAR_SEASON_WEEKS];
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            before[week] = user.gameSchedule.get(week);
+        }
+
+        java.util.List<OocScheduleBuilder.PreviewFill> preview =
+                OocScheduleBuilder.previewUserRemainingFill(user, league.teamList);
+        assertFalse(preview.isEmpty());
+        assertEquals(openBefore, preview.size());
+
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            assertEquals(before[week], user.gameSchedule.get(week));
+        }
+        assertEquals(openBefore, countOpenOoc(user));
+
+        for (OocScheduleBuilder.PreviewFill fill : preview) {
+            assertNotNull(fill.opponentName);
+            assertNotNull(fill.opponentAbbr);
+            assertTrue(fill.week >= 0);
+            assertTrue(fill.week < League.REGULAR_SEASON_WEEKS);
+        }
+    }
+
+    @Test
     public void leagueCompletesAfterUserSuggestions() throws Exception {
         League league = createOpenOocLeague();
         Team user = league.findTeamAbbr("MIA");

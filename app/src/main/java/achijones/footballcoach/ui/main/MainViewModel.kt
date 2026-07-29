@@ -18,6 +18,8 @@ import CFBsimPack.OffensivePhilosophy
 import CFBsimPack.PlayerRatings
 import CFBsimPack.PositionGroup
 import CFBsimPack.PositionOvr
+import CFBsimPack.PressureResponse
+import CFBsimPack.QbPressurePolicy
 import CFBsimPack.Team
 import CFBsimPack.TransferReason
 import achijones.footballcoach.ui.theme.UserBrandTheme
@@ -724,6 +726,18 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         postSnackbar("Depth chart updated for ${values[index].displayName}")
     }
 
+    fun setPressureResponse(slotIndex: Int, responseIndex: Int) {
+        val user = userTeam ?: return
+        val slots = QbPressurePolicy.Slot.values()
+        val responses = PressureResponse.values()
+        if (slotIndex !in slots.indices || responseIndex !in responses.indices) return
+        val slot = slots[slotIndex]
+        val response = responses[responseIndex]
+        user.setPressureResponse(slot, response)
+        rebuildSnapshot()
+        postSnackbar("${slot.displayName}: ${response.displayName}")
+    }
+
     fun openPlayerCareer(playerKey: Int) {
         val player = playerByKey[playerKey] ?: return
         val user = userTeam ?: return
@@ -1155,35 +1169,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             return pool
         }
         val group = lineupPosGroups.getOrNull(position) ?: return emptyList()
-        val filter = _uiState.value.lineupDepthFilter
         val primary = user.playersForGroup(group)?.toList().orEmpty()
-        val all = user.allPlayers
-        return when (filter) {
-            DepthFilter.PRIMARY -> primary
-            DepthFilter.ELIGIBLE -> {
-                val minOvr = 40
-                val byOvr = all
-                    .sortedByDescending { PositionOvr.ovr(it, group) }
-                    .filter { PositionOvr.ovr(it, group) >= minOvr || it.position == group.token }
-                val ordered = LinkedHashSet<Player>()
-                primary.forEach { ordered.add(it) }
-                byOvr.forEach { ordered.add(it) }
-                ordered.toList()
-            }
-            DepthFilter.EVERYONE -> {
-                val primarySet = primary.toSet()
-                val rest = all
-                    .filter { it !in primarySet }
-                    .sortedByDescending { PositionOvr.ovr(it, group) }
-                primary + rest
-            }
-        }
-    }
-
-    fun selectLineupDepthFilter(index: Int) {
-        val filter = DepthFilter.entries.getOrElse(index) { DepthFilter.PRIMARY }
-        _uiState.update { it.copy(lineupDepthFilter = filter) }
-        rebuildSnapshot()
+        val minOvr = 40
+        val byOvr = user.allPlayers
+            .sortedByDescending { PositionOvr.ovr(it, group) }
+            .filter { PositionOvr.ovr(it, group) >= minOvr || it.position == group.token }
+        val ordered = LinkedHashSet<Player>()
+        primary.forEach { ordered.add(it) }
+        byOvr.forEach { ordered.add(it) }
+        return ordered.toList()
     }
 
     private fun rebuildSnapshot(
@@ -1279,6 +1273,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                     ?: OffensivePhilosophy.MULTIPLE.ordinal,
                 defSystemIndex = user.defSystem?.ordinal
                     ?: DefensiveSystem.BASE_4_3.ordinal,
+                pressureResponseNames = PressureResponse.values().map { it.displayName },
+                pressureSlotLabels = QbPressurePolicy.Slot.values().map { it.displayName },
+                pressureResponseIndices = QbPressurePolicy.Slot.values().map { slot ->
+                    val policy = user.qbPressurePolicy ?: QbPressurePolicy.defaults()
+                    policy.forSlot(slot).ordinal
+                },
                 awardsBowlsUnlocked = l.currentWeek >= League.WEEK_CCG,
                 snackbarMessage = snackbar ?: state.snackbarMessage,
                 showInjuryDialog = showInjuryDialog || state.showInjuryDialog,

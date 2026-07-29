@@ -1,6 +1,7 @@
 package achijones.footballcoach.ui.schedule
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -50,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -65,7 +67,11 @@ import achijones.footballcoach.ui.components.rememberSheetFlingBlocker
 import achijones.footballcoach.ui.components.rememberTeamColors
 import achijones.footballcoach.ui.theme.onColorFor
 
-@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    ExperimentalLayoutApi::class,
+    ExperimentalFoundationApi::class,
+)
 @Composable
 fun ScheduleScreen(
     onNavigateToMain: () -> Unit,
@@ -128,7 +134,7 @@ fun ScheduleScreen(
             verticalArrangement = Arrangement.spacedBy(10.dp),
             contentPadding = PaddingValues(bottom = 88.dp, top = 8.dp),
         ) {
-            item {
+            item(key = "header") {
                 Text(
                     "${state.teamName} — ${state.year}",
                     style = MaterialTheme.typography.titleMedium,
@@ -153,9 +159,48 @@ fun ScheduleScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     modifier = Modifier.padding(top = 4.dp),
                 )
+                if (state.budgetLabel.isNotBlank()) {
+                    Text(
+                        state.budgetLabel,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.tertiary,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
             }
 
-            item {
+            if (state.schedulingActive) {
+                stickyHeader(key = "open-progress") {
+                    OpenWeekProgressStrip(
+                        state = state,
+                        onOpenWeek = viewModel::openOpponentPicker,
+                        onPlaceAll = viewModel::placeAllOpenContracts,
+                    )
+                }
+                item(key = "week-board-title") {
+                    Text(
+                        "This year — week board",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
+                items(state.scheduleWeeks, key = { "week-${it.week}" }) { week ->
+                    WeekBoardCard(
+                        week = week,
+                        onClick = {
+                            when {
+                                week.contractLocked && week.contractId != null ->
+                                    viewModel.openRescheduleDialog(week.contractId, state.year)
+                                week.open -> viewModel.openOpponentPicker(week.week)
+                                !week.locked && !week.open -> viewModel.clearScheduleWeek(week.week)
+                            }
+                        },
+                    )
+                }
+            }
+
+            item(key = "horizon") {
                 Text(
                     "Horizon",
                     style = MaterialTheme.typography.titleSmall,
@@ -175,6 +220,14 @@ fun ScheduleScreen(
                         )
                     }
                 }
+                if (state.oocNetLabel.isNotBlank()) {
+                    Text(
+                        state.oocNetLabel,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 6.dp),
+                    )
+                }
                 if (!state.schedulingActive || state.selectedHorizonYear > state.year) {
                     TextButton(onClick = viewModel::openFutureDealPicker) {
                         Text("Sign deal for ${state.selectedHorizonYear}")
@@ -182,7 +235,7 @@ fun ScheduleScreen(
                 }
             }
 
-            item {
+            item(key = "contract-desk-title") {
                 Text(
                     "Contract desk",
                     style = MaterialTheme.typography.titleSmall,
@@ -191,7 +244,7 @@ fun ScheduleScreen(
             }
 
             if (state.filteredContracts.isEmpty()) {
-                item {
+                item(key = "no-contracts") {
                     Text(
                         "No contracts for ${state.selectedHorizonYear}.",
                         style = MaterialTheme.typography.bodySmall,
@@ -211,33 +264,62 @@ fun ScheduleScreen(
                 }
             }
 
-            item {
-                Text(
-                    "This year — week board",
-                    style = MaterialTheme.typography.titleSmall,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-
-            items(state.scheduleWeeks, key = { it.week }) { week ->
-                WeekBoardCard(
-                    week = week,
-                    onClick = {
-                        when {
-                            week.contractLocked && week.contractId != null ->
-                                viewModel.openRescheduleDialog(week.contractId, state.year)
-                            week.open -> viewModel.openOpponentPicker(week.week)
-                            !week.locked && !week.open -> viewModel.clearScheduleWeek(week.week)
-                        }
-                    },
-                )
+            if (!state.schedulingActive) {
+                item(key = "week-board-title-desk") {
+                    Text(
+                        "This year — week board",
+                        style = MaterialTheme.typography.titleSmall,
+                        fontWeight = FontWeight.SemiBold,
+                        modifier = Modifier.padding(top = 4.dp),
+                    )
+                }
+                items(state.scheduleWeeks, key = { "desk-week-${it.week}" }) { week ->
+                    WeekBoardCard(
+                        week = week,
+                        onClick = {
+                            when {
+                                week.contractLocked && week.contractId != null ->
+                                    viewModel.openRescheduleDialog(week.contractId, state.year)
+                                week.open -> viewModel.openOpponentPicker(week.week)
+                                !week.locked && !week.open -> viewModel.clearScheduleWeek(week.week)
+                            }
+                        },
+                    )
+                }
             }
         }
     }
 
     if (state.dealTargetYear != null) {
         OpponentDealSheet(state, viewModel)
+    }
+
+    if (state.showDonePreview) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDonePreview,
+            title = { Text("CPU will fill open weeks") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    if (state.donePreviewLines.isEmpty()) {
+                        Text("${state.openOocSlots} open weeks will be auto-filled.")
+                    } else {
+                        state.donePreviewLines.forEach { line ->
+                            Text(line.label, style = MaterialTheme.typography.bodyMedium)
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDonePreview) {
+                    Text("Continue")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissDonePreview) {
+                    Text("Keep editing")
+                }
+            },
+        )
     }
 
     state.cancelConfirmLabel?.let { label ->
@@ -260,6 +342,53 @@ fun ScheduleScreen(
 
     if (state.rescheduleContractId != null) {
         RescheduleDialog(state, viewModel)
+    }
+}
+
+@Composable
+private fun OpenWeekProgressStrip(
+    state: ScheduleUiState,
+    onOpenWeek: (Int) -> Unit,
+    onPlaceAll: () -> Unit,
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surface)
+            .padding(vertical = 6.dp),
+    ) {
+        Text(
+            "${state.openOocSlots} open · Weeks " +
+                state.openWeekNumbers.joinToString(", ") { "${it + 1}" }
+                    .ifBlank { "—" },
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.SemiBold,
+        )
+        if (state.openWeekNumbers.isNotEmpty()) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 6.dp)
+                    .horizontalScroll(rememberScrollState()),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                state.openWeekNumbers.forEach { week ->
+                    FilterChip(
+                        selected = false,
+                        onClick = { onOpenWeek(week) },
+                        label = { Text("W${week + 1}") },
+                    )
+                }
+            }
+        }
+        if (state.unplacedOpenContractCount > 0) {
+            TextButton(
+                onClick = onPlaceAll,
+                modifier = Modifier.padding(top = 2.dp),
+            ) {
+                Text("Place all open contracts (${state.unplacedOpenContractCount})")
+            }
+        }
     }
 }
 
@@ -483,11 +612,16 @@ private fun WeekBoardCard(week: ScheduleWeekUi, onClick: () -> Unit) {
             when {
                 week.contractLocked ->
                     Text(
-                        "Tap to change week or year",
+                        "Tap to change date",
                         style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 clickable && !week.open ->
-                    Text("Tap to clear and re-pick", style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        "Tap to clear",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
             }
         }
     }
@@ -512,6 +646,7 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
         OpponentSection.EARN,
         OpponentSection.PEER,
     )
+    val hasOpenContracts = state.opponentOptions.any { it.section == OpponentSection.OPEN_CONTRACT }
 
     ModalBottomSheet(
         onDismissRequest = viewModel::dismissOpponentPicker,
@@ -540,6 +675,15 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    if (state.budgetLabel.isNotBlank()) {
+                        Text(
+                            state.budgetLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.tertiary,
+                            modifier = Modifier.padding(top = 4.dp),
+                        )
+                    }
                 }
                 TextButton(onClick = viewModel::dismissOpponentPicker) {
                     Text("Close")
@@ -565,6 +709,12 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                         .padding(14.dp),
                     verticalArrangement = Arrangement.spacedBy(10.dp),
                 ) {
+                    TextButton(
+                        onClick = viewModel::clearDealOpponent,
+                        contentPadding = PaddingValues(0.dp),
+                    ) {
+                        Text("← Opponents")
+                    }
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         TeamLogo(
                             opt.name,
@@ -583,7 +733,12 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                                 overflow = TextOverflow.Ellipsis,
                             )
                             Text(
-                                opt.conference + (opt.rivalryLabel?.let { " · $it" } ?: ""),
+                                buildString {
+                                    append(opt.conference)
+                                    opt.matchupLabel?.let { append(" · $it") }
+                                    opt.rivalryLabel?.let { append(" · $it") }
+                                    opt.dealTypeChip?.let { append(" · $it") }
+                                },
                                 style = MaterialTheme.typography.labelMedium,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                             )
@@ -646,11 +801,35 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
             }
 
             if (selected == null) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(top = 12.dp)
+                        .horizontalScroll(rememberScrollState()),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    FilterChip(
+                        selected = state.siteFilter == null,
+                        onClick = { viewModel.setSiteFilter(null) },
+                        label = { Text("All sites") },
+                    )
+                    FilterChip(
+                        selected = state.siteFilter == DealSite.HOME,
+                        onClick = { viewModel.setSiteFilter(DealSite.HOME) },
+                        label = { Text("Home") },
+                    )
+                    FilterChip(
+                        selected = state.siteFilter == DealSite.AWAY,
+                        onClick = { viewModel.setSiteFilter(DealSite.AWAY) },
+                        label = { Text("Away") },
+                    )
+                }
+
                 if (state.availableConferences.isNotEmpty()) {
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .padding(top = 12.dp)
+                            .padding(top = 8.dp)
                             .horizontalScroll(rememberScrollState()),
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
@@ -669,11 +848,20 @@ private fun OpponentDealSheet(state: ScheduleUiState, viewModel: ScheduleViewMod
                     }
                 }
 
+                if (hasOpenContracts) {
+                    TextButton(
+                        onClick = viewModel::placeAllOpenContracts,
+                        modifier = Modifier.padding(top = 4.dp),
+                    ) {
+                        Text("Place all open contracts")
+                    }
+                }
+
                 Text(
                     "Choose a team",
                     style = MaterialTheme.typography.labelLarge,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+                    modifier = Modifier.padding(top = 12.dp, bottom = 8.dp),
                 )
 
                 LazyColumn(
@@ -753,6 +941,7 @@ private fun OpponentPickerRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .alpha(if (opt.affordable) 1f else 0.45f)
             .clip(RoundedCornerShape(10.dp))
             .background(brush)
             .then(
@@ -792,13 +981,25 @@ private fun OpponentPickerRow(
                     if (showConference) {
                         append(opt.conference)
                     }
+                    opt.matchupLabel?.let {
+                        if (isNotEmpty()) append(" · ")
+                        append(it)
+                    }
                     opt.rivalryLabel?.let {
+                        if (isNotEmpty()) append(" · ")
+                        append(it)
+                    }
+                    opt.dealTypeChip?.let {
                         if (isNotEmpty()) append(" · ")
                         append(it)
                     }
                     if (opt.openContractId != null) {
                         if (isNotEmpty()) append(" · ")
                         append("Tap to place")
+                    }
+                    if (!opt.affordable && opt.openContractId == null) {
+                        if (isNotEmpty()) append(" · ")
+                        append("Can't afford")
                     }
                 },
                 style = MaterialTheme.typography.labelSmall,
@@ -807,12 +1008,22 @@ private fun OpponentPickerRow(
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Text(
-            opt.moneyLabel,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.Bold,
-            color = moneyColor,
-        )
+        Column(horizontalAlignment = Alignment.End) {
+            opt.dealTypeChip?.let { chip ->
+                Text(
+                    chip,
+                    style = MaterialTheme.typography.labelSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = Color(0xFFE76F51),
+                )
+            }
+            Text(
+                opt.moneyLabel,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.Bold,
+                color = moneyColor,
+            )
+        }
     }
 }
 
@@ -848,7 +1059,7 @@ private fun RescheduleDialog(state: ScheduleUiState, viewModel: ScheduleViewMode
                 Text(
                     "Year",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(bottom = 4.dp),
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     state.rescheduleEligibleYears.forEach { year ->
@@ -859,35 +1070,24 @@ private fun RescheduleDialog(state: ScheduleUiState, viewModel: ScheduleViewMode
                         )
                     }
                 }
-                Spacer(modifier = Modifier.height(8.dp))
                 Text(
                     "Week",
                     style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.padding(top = 10.dp, bottom = 4.dp),
                 )
-                if (state.rescheduleEligibleWeeks.isEmpty()) {
-                    Text(
-                        "No open weeks available for that year yet.",
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                } else {
-                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        state.rescheduleEligibleWeeks.forEach { week ->
-                            FilterChip(
-                                selected = state.rescheduleSelectedWeek == week,
-                                onClick = { viewModel.selectRescheduleWeek(week) },
-                                label = { Text("W${week + 1}") },
-                            )
-                        }
+                FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    state.rescheduleEligibleWeeks.forEach { week ->
+                        FilterChip(
+                            selected = state.rescheduleSelectedWeek == week,
+                            onClick = { viewModel.selectRescheduleWeek(week) },
+                            label = { Text("W${week + 1}") },
+                        )
                     }
                 }
             }
         },
         confirmButton = {
-            TextButton(
-                onClick = viewModel::confirmReschedule,
-                enabled = state.rescheduleSelectedYear != null,
-            ) {
+            TextButton(onClick = viewModel::confirmReschedule) {
                 Text("Save")
             }
         },
@@ -898,4 +1098,3 @@ private fun RescheduleDialog(state: ScheduleUiState, viewModel: ScheduleViewMode
         },
     )
 }
-

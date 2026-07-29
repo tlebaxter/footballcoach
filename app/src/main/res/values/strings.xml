@@ -464,6 +464,10 @@
         - Sets who is on the field and biases AI coverage calls (run-heavy fronts stack the box more; pass packages play more Cover 2/4).\n
         - Also affects pressure and run-stop strength in the play resolver.\n
         \n
+        QB Under Pressure (Normal, Convert, Protect Lead, Late Trailing, Backed Up):\n
+        - Chooses how your QB reacts when the pocket collapses in each situation — scramble for yards, take the first down, slide to protect the ball, throw it away, or force the sideline.\n
+        - Auto uses smart defaults for that situation. Throwaways stop the clock and avoid sacks.\n
+        \n
         After a touchdown in coach mode, choose Kick XP or Go for 2. League sims and the AI pick automatically based on score and clock.\n
     </string>
 </resources>

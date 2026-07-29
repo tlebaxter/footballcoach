@@ -131,6 +131,7 @@ public class Team {
 
     public OffensivePhilosophy offPhilosophy = OffensivePhilosophy.MULTIPLE;
     public DefensiveSystem defSystem = DefensiveSystem.BASE_4_3;
+    public QbPressurePolicy qbPressurePolicy = QbPressurePolicy.defaults();
 
     /** Special-teams depth overlays (point at existing roster players). */
     public Player puntReturner;
@@ -368,6 +369,11 @@ public class Team {
             programProfile.refreshDerived(Conference.mediaShareFor(conference));
             programProfileUpdatedThisOffseason = Boolean.parseBoolean(teamInfo[29]);
             programProfile.restoreAnnualDeltas(teamInfo[30]);
+            if (teamInfo.length >= 32) {
+                qbPressurePolicy = QbPressurePolicy.parse(teamInfo[31]);
+            } else {
+                qbPressurePolicy = QbPressurePolicy.defaults();
+            }
         } else {
             throw new IllegalArgumentException("Unsupported team save profile.");
         }
@@ -768,6 +774,15 @@ public class Team {
     public void setDefSystem(DefensiveSystem sys) {
         defSystem = sys != null ? sys : DefensiveSystem.BASE_4_3;
         DepthChart.applySystems(this);
+    }
+
+    public void setQbPressurePolicy(QbPressurePolicy policy) {
+        qbPressurePolicy = policy != null ? policy : QbPressurePolicy.defaults();
+    }
+
+    public void setPressureResponse(QbPressurePolicy.Slot slot, PressureResponse response) {
+        QbPressurePolicy base = qbPressurePolicy != null ? qbPressurePolicy : QbPressurePolicy.defaults();
+        qbPressurePolicy = base.copyWith(slot, response);
     }
 
     public void grantYearlyBudget() {

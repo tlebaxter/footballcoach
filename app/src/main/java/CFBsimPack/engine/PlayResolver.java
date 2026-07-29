@@ -5,6 +5,8 @@ import CFBsimPack.OnFieldEleven;
 import CFBsimPack.Player;
 import CFBsimPack.PlayerRatings;
 import CFBsimPack.PositionGroup;
+import CFBsimPack.PressureResponse;
+import CFBsimPack.QbPressurePolicy;
 import CFBsimPack.RoleTag;
 import CFBsimPack.Team;
 
@@ -35,9 +37,8 @@ public final class PlayResolver {
     public PlayResult resolve(Team home, Team away, GameState state, PlayCall call) {
         Team offense = state.possessionHome ? home : away;
         Team defense = state.possessionHome ? away : home;
-        String personnel = call.resolvedOffenseConcept() != null
-                ? call.resolvedOffenseConcept().personnel
-                : null;
+        OffenseConcept concept = call.resolvedOffenseConcept();
+        String personnel = concept != null ? concept.personnel : null;
         OnFieldEleven offEleven = OnFieldEleven.forOffense(offense, personnel, fatigue);
         OnFieldEleven defEleven = OnFieldEleven.forDefense(defense, fatigue);
 
@@ -59,10 +60,13 @@ public final class PlayResolver {
         if (call.offensePlay == OffensePlay.KICKOFF) {
             return kickoff(offense, defense, state, call);
         }
+        if (concept != null && concept.family == ConceptFamily.RPO) {
+            return rpo(offense, defense, offEleven, defEleven, state, call);
+        }
         if (call.offensePlay == OffensePlay.PASS) {
             return pass(offense, defense, offEleven, defEleven, state, call);
         }
-        return rush(offense, defense, offEleven, defEleven, state, call);
+        return rush(offense, defense, offEleven, defEleven, state, call, null);
     }
 
     private PlayResult spike(GameState state, Team offense, PlayCall call) {
@@ -91,6 +95,57 @@ public final class PlayResolver {
         return r;
     }
 
+    private PlayResult rpo(Team offense, Team defense, OnFieldEleven off, OnFieldEleven def,
+                           GameState state, PlayCall call) {
+        OffenseConcept concept = call.resolvedOffenseConcept();
+        Player qb = onFieldQb(off, offense);
+        RpoBranch branch = chooseRpoBranch(qb, concept, call.coverage);
+        if (branch == RpoBranch.GIVE) {
+            Player carrier = pickNonQbCarrier(off, offense, concept);
+            if (carrier != null) {
+                return rush(offense, defense, off, def, state, call, carrier);
+            }
+            // No back available — pull and throw
+            return pass(offense, defense, off, def, state, call);
+        }
+        if (branch == RpoBranch.KEEP && qb != null) {
+            return rush(offense, defense, off, def, state, call, qb);
+        }
+        return pass(offense, defense, off, def, state, call);
+    }
+
+    /**
+     * Weighted give / keep / throw for RPO family. Package-visible for tests.
+     * Weights are relative (not forced to sum to 1 before sampling).
+     */
+    RpoBranch chooseRpoBranch(Player qb, OffenseConcept concept, CoverageCall cov) {
+        int spd = rating(qb, x -> x.spd, 55);
+        int elu = rating(qb, x -> x.elu, 55);
+        double scrambleMod = cov != null ? cov.scrambleMod : 1.0;
+
+        double give = 0.35;
+        if (cov == CoverageCall.STACK_BOX) give += 0.18;
+
+        double keep = (0.15 + spd / 400.0 + elu / 500.0) * scrambleMod;
+        if (concept != null && "pistol_zone_read".equals(concept.id)) {
+            keep += 0.12 * scrambleMod;
+        }
+        if (keep < 0.02) keep = 0.02;
+
+        // Baseline throw attractiveness; remainder-style floor without collapsing keep
+        double throwW = Math.max(0.25, 1.0 - give - keep);
+
+        double total = give + keep + throwW;
+        double roll = rng.nextDouble() * total;
+        if (roll < give) return RpoBranch.GIVE;
+        if (roll < give + keep) return RpoBranch.KEEP;
+        return RpoBranch.THROW;
+    }
+
+    enum RpoBranch {
+        GIVE, KEEP, THROW
+    }
+
     private PlayResult pass(Team offense, Team defense, OnFieldEleven off, OnFieldEleven def,
                             GameState state, PlayCall call) {
         PlayResult r = new PlayResult();
@@ -103,6 +158,9 @@ public final class PlayResolver {
         CoverageCall cov = call.coverage;
         DefensiveSystem sys = defense.defSystem != null ? defense.defSystem : DefensiveSystem.BASE_4_3;
         double tempo = call.tempo.clockMult * (1.0 + concept.clockMultExtra);
+        boolean rpoThrow = concept != null && concept.family == ConceptFamily.RPO;
+        int qbSpd = rating(qb, x -> x.spd, 55);
+        int qbElu = rating(qb, x -> x.elu, 55);
 
         // Block battles: OL pass-block wins vs pass rush feed pressure
         int blockWins = countBlockWins(off, def, true);
@@ -110,20 +168,16 @@ public final class PlayResolver {
                 * sys.passWeight * concept.sackRiskMod);
         pressure += AtmosphereEngine.roadPressureAdd(state);
         int thv = rating(qb, x -> x.thv, 55);
-        int effectivePressure = (int) (pressure * (1.0 - (thv - 50) / 250.0));
+        double pressureScale = 1.0 - (thv - 50) / 250.0;
+        if (rpoThrow) {
+            // Mobility softens pocket pressure on RPO peek/alert throws
+            pressureScale -= (qbSpd - 50) / 400.0 + (qbElu - 50) / 500.0;
+        }
+        int effectivePressure = (int) (pressure * pressureScale);
         if (effectivePressure < 0) effectivePressure = 0;
         if (rng.nextDouble() * 100 < effectivePressure / 8.0) {
-            // Designed scramble / escape before sack
-            int qbSpd = rating(qb, x -> x.spd, 55);
-            double escapeChance = (0.22 + qbSpd / 500.0 + (thv - 50) / 400.0) * cov.scrambleMod;
-            if (escapeChance < 0.05) escapeChance = 0.05;
-            if (rng.nextDouble() < escapeChance) {
-                int scrambleYds = (int) ((qbSpd + rating(qb, x -> x.elu, 55)) / 18.0
-                        * rng.nextDouble() * cov.scrambleMod);
-                if (scrambleYds < 1) scrambleYds = 1;
-                return applyGain(offense, defense, state, call, r, null, qb, scrambleYds, false);
-            }
-            return sack(offense, state, call, qb);
+            return resolvePressure(offense, defense, state, call, r, qb, concept, cov,
+                    tempo, rpoThrow, qbSpd, qbElu, thv);
         }
 
         int yardsToGoal = Math.max(1, 100 - state.yardLine);
@@ -167,6 +221,11 @@ public final class PlayResolver {
         double completion = (normalize(rating(qb, x -> x.tha, 55)) + normalize(cat) - normalize(cbCov)) / 2.0
                 + 18.25 - pressure / 16.8 + AtmosphereEngine.offenseBonus(state)
                 + normalize(rtr) / 4.0;
+        if (rpoThrow && pressure > 0) {
+            // Capped mobility bump vs pressure on RPO throws
+            double mobBump = Math.min(4.0, (qbElu + thv - 100) / 25.0);
+            if (mobBump > 0) completion += mobBump;
+        }
         completion *= cov.completionMod * concept.completionMod;
         completion += cov.passFitBonus();
         completion += concept.matchupBonus(cov, state);
@@ -224,11 +283,11 @@ public final class PlayResolver {
     }
 
     private PlayResult rush(Team offense, Team defense, OnFieldEleven off, OnFieldEleven def,
-                            GameState state, PlayCall call) {
+                            GameState state, PlayCall call, Player forcedCarrier) {
         PlayResult r = new PlayResult();
         r.playType = OffensePlay.RUN;
         OffenseConcept concept = call.resolvedOffenseConcept();
-        Player carrier = pickCarrier(off, offense, concept);
+        Player carrier = forcedCarrier != null ? forcedCarrier : pickCarrier(off, offense, concept);
         if (carrier == null) {
             return pass(offense, defense, off, def, state, call);
         }
@@ -252,11 +311,17 @@ public final class PlayResolver {
             yards = (int) (yards * cov.scrambleMod);
         }
 
-        return applyGain(offense, defense, state, call, r, null, carrier, yards, false);
+        return applyGain(offense, defense, state, call, r, null, carrier, yards, false, null);
     }
 
     private PlayResult applyGain(Team offense, Team defense, GameState state, PlayCall call, PlayResult r,
                                  Player qb, Player ballCarrier, int yards, boolean wasPass) {
+        return applyGain(offense, defense, state, call, r, qb, ballCarrier, yards, wasPass, null);
+    }
+
+    private PlayResult applyGain(Team offense, Team defense, GameState state, PlayCall call, PlayResult r,
+                                 Player qb, Player ballCarrier, int yards, boolean wasPass,
+                                 ScrambleIntent scramble) {
         OffenseConcept concept = call.resolvedOffenseConcept();
         double tempo = call.tempo.clockMult * (1.0 + concept.clockMultExtra);
         if (yards < -5) yards = -5;
@@ -276,9 +341,15 @@ public final class PlayResolver {
                         + " (" + concept.displayName + " · " + call.resolvedDefenseConcept().displayName + ").";
             } else {
                 creditTd(offense, state, qb, ballCarrier, actual, wasPass);
-                r.logLine = (wasPass ? "PASS TD! " : "RUSH TD! ") + offense.abbr + " "
-                        + (ballCarrier != null ? ballCarrier.name : "") + " " + actual + " yards"
-                        + " (" + concept.displayName + " · " + call.resolvedDefenseConcept().displayName + ").";
+                if (scramble != null) {
+                    r.logLine = "SCRAMBLE TD! " + offense.abbr + " "
+                            + (ballCarrier != null ? ballCarrier.name : "") + " " + actual + " yards"
+                            + " (" + concept.displayName + " · " + call.resolvedDefenseConcept().displayName + ").";
+                } else {
+                    r.logLine = (wasPass ? "PASS TD! " : "RUSH TD! ") + offense.abbr + " "
+                            + (ballCarrier != null ? ballCarrier.name : "") + " " + actual + " yards"
+                            + " (" + concept.displayName + " · " + call.resolvedDefenseConcept().displayName + ").";
+                }
             }
             return r;
         }
@@ -305,6 +376,9 @@ public final class PlayResolver {
         double bscScale = (120.0 - bsc) / 50.0;
         if (bscScale < 0.2) bscScale = 0.2;
         fum *= bscScale;
+        if (scramble == ScrambleIntent.PROTECT_BALL) {
+            fum *= 0.55;
+        }
         if (100 * rng.nextDouble() < fum / 50.0) {
             r.turnover = true;
             r.possessionChanged = true;
@@ -322,12 +396,222 @@ public final class PlayResolver {
             return r;
         }
 
+        if (scramble != null) {
+            boolean stopClock = scramble == ScrambleIntent.FORCE_OOB
+                    || (scramble == ScrambleIntent.TAKE_WHAT_YOU_NEED && r.firstDown)
+                    || (scramble == ScrambleIntent.PROTECT_BALL && rng.nextDouble() < 0.35);
+            if (scramble == ScrambleIntent.PROTECT_BALL) {
+                r.clockBurned = (int) ((30 + 12 * rng.nextDouble()) * tempo);
+            } else if (stopClock) {
+                r.clockBurned = (int) ((12 + 10 * rng.nextDouble()) * tempo);
+            } else {
+                r.clockBurned = (int) ((22 + 14 * rng.nextDouble()) * tempo);
+            }
+            r.stoppedClock = stopClock;
+            r.logLine = "SCRAMBLE! " + offense.abbr + " " + (ballCarrier != null ? ballCarrier.name : "QB")
+                    + " for " + yards + " yards (" + concept.displayName + " · "
+                    + call.formation.displayName + ").";
+            return r;
+        }
+
         r.clockBurned = (int) ((wasPass ? (15 + 15 * rng.nextDouble()) : (25 + 15 * rng.nextDouble())) * tempo);
         r.stoppedClock = false;
         r.logLine = offense.abbr + (wasPass ? " pass " : " rush ") + yards + " yards to "
                 + (ballCarrier != null ? ballCarrier.name : "ballcarrier")
                 + " (" + concept.displayName + " · " + call.formation.displayName + ").";
         return r;
+    }
+
+    private PlayResult resolvePressure(Team offense, Team defense, GameState state, PlayCall call,
+                                       PlayResult r, Player qb, OffenseConcept concept, CoverageCall cov,
+                                       double tempo, boolean rpoThrow, int qbSpd, int qbElu, int thv) {
+        QbPressurePolicy.Slot bucket = classifyPressureBucket(offense, state);
+        PressureResponse pref = preferenceForBucket(offense, bucket);
+        ScrambleIntent intent = intentFor(pref, bucket, qbSpd, state);
+
+        if (intent == ScrambleIntent.THROW_AWAY) {
+            return throwAway(offense, state, call, qb, tempo);
+        }
+
+        double escapeChance = (0.22 + qbSpd / 500.0 + (thv - 50) / 400.0) * cov.scrambleMod;
+        if (rpoThrow) {
+            escapeChance += qbElu / 800.0;
+        }
+        escapeChance *= intentEscapeMult(intent);
+        if (escapeChance < 0.05) escapeChance = 0.05;
+        if (escapeChance > 0.92) escapeChance = 0.92;
+
+        if (rng.nextDouble() < escapeChance) {
+            int scrambleYds = sampleScrambleYards(intent, state, qbSpd, qbElu, cov, rpoThrow);
+            return applyGain(offense, defense, state, call, r, null, qb, scrambleYds, false, intent);
+        }
+
+        double throwChance = secondaryThrowawayChance(intent, bucket, pref, thv, qb);
+        if (rng.nextDouble() < throwChance) {
+            return throwAway(offense, state, call, qb, tempo);
+        }
+        return sack(offense, state, call, qb);
+    }
+
+    private PlayResult throwAway(Team offense, GameState state, PlayCall call, Player qb, double tempo) {
+        PlayResult r = new PlayResult();
+        OffenseConcept concept = call.resolvedOffenseConcept();
+        r.playType = OffensePlay.PASS;
+        r.incomplete = true;
+        r.throwaway = true;
+        r.stoppedClock = true;
+        r.yardsGained = 0;
+        r.clockBurned = (int) (4 + 5 * rng.nextDouble() * tempo);
+        state.down++;
+        if (qb != null) {
+            qb.seasonStats.passAtt++;
+            if (gameStats != null) gameStats.line(qb).passAtt++;
+        }
+        r.logLine = "THROW AWAY! " + offense.abbr + " QB "
+                + (qb != null ? qb.name : "") + " gets rid of it ("
+                + concept.displayName + ").";
+        return r;
+    }
+
+    QbPressurePolicy.Slot classifyPressureBucket(Team offense, GameState state) {
+        if (state.yardLine <= 10) {
+            return QbPressurePolicy.Slot.BACKED_UP;
+        }
+        if (!state.playingOT && state.gameTime >= 0 && state.gameTime <= 120) {
+            if (offenseLeading(offense, state)) {
+                return QbPressurePolicy.Slot.PROTECT_LEAD;
+            }
+            return QbPressurePolicy.Slot.LATE_TRAILING;
+        }
+        if (state.down >= 3 && state.yardsNeed <= 7) {
+            return QbPressurePolicy.Slot.CONVERT;
+        }
+        return QbPressurePolicy.Slot.NORMAL;
+    }
+
+    private PressureResponse preferenceForBucket(Team offense, QbPressurePolicy.Slot bucket) {
+        QbPressurePolicy policy = offense != null && offense.qbPressurePolicy != null
+                ? offense.qbPressurePolicy
+                : QbPressurePolicy.defaults();
+        return policy.forSlot(bucket);
+    }
+
+    private ScrambleIntent intentFor(PressureResponse pref, QbPressurePolicy.Slot bucket,
+                                     int qbSpd, GameState state) {
+        PressureResponse resolved = pref;
+        if (pref == null || pref == PressureResponse.AUTO) {
+            resolved = autoResponseForBucket(bucket, qbSpd, state);
+        }
+        switch (resolved) {
+            case SCRAMBLE_FOR_IT:
+                return ScrambleIntent.MAXIMIZE;
+            case TAKE_THE_FIRST_DOWN:
+                return ScrambleIntent.TAKE_WHAT_YOU_NEED;
+            case SLIDE_SECURE:
+                return ScrambleIntent.PROTECT_BALL;
+            case THROW_IT_AWAY:
+                return ScrambleIntent.THROW_AWAY;
+            case FORCE_SIDELINE:
+                return ScrambleIntent.FORCE_OOB;
+            case AUTO:
+            default:
+                return ScrambleIntent.TAKE_WHAT_YOU_NEED;
+        }
+    }
+
+    private PressureResponse autoResponseForBucket(QbPressurePolicy.Slot bucket, int qbSpd,
+                                                   GameState state) {
+        switch (bucket) {
+            case BACKED_UP:
+                return PressureResponse.THROW_IT_AWAY;
+            case PROTECT_LEAD:
+                return PressureResponse.SLIDE_SECURE;
+            case LATE_TRAILING:
+                return PressureResponse.SCRAMBLE_FOR_IT;
+            case CONVERT:
+                return PressureResponse.TAKE_THE_FIRST_DOWN;
+            case NORMAL:
+            default:
+                if (qbSpd >= 78 && state.yardsNeed > 5) {
+                    return PressureResponse.SCRAMBLE_FOR_IT;
+                }
+                return PressureResponse.TAKE_THE_FIRST_DOWN;
+        }
+    }
+
+    private double intentEscapeMult(ScrambleIntent intent) {
+        switch (intent) {
+            case MAXIMIZE:
+                return 1.12;
+            case FORCE_OOB:
+                return 1.08;
+            case TAKE_WHAT_YOU_NEED:
+                return 1.05;
+            case PROTECT_BALL:
+                return 0.90;
+            case THROW_AWAY:
+            default:
+                return 1.0;
+        }
+    }
+
+    private int sampleScrambleYards(ScrambleIntent intent, GameState state, int qbSpd, int qbElu,
+                                    CoverageCall cov, boolean rpoThrow) {
+        double scrambleScale = cov != null ? cov.scrambleMod : 1.0;
+        if (rpoThrow) scrambleScale *= 1.0 + qbElu / 400.0;
+        int raw = (int) ((qbSpd + qbElu) / 18.0 * rng.nextDouble() * scrambleScale);
+        if (raw < 1) raw = 1;
+        int yardsToGoal = Math.max(1, 100 - state.yardLine);
+        int need = Math.max(1, state.yardsNeed);
+
+        switch (intent) {
+            case PROTECT_BALL: {
+                int y = Math.min(raw, 1 + rng.nextInt(3));
+                return Math.min(y, yardsToGoal);
+            }
+            case TAKE_WHAT_YOU_NEED: {
+                int target = need + rng.nextInt(3);
+                int y = Math.min(raw + need / 3, target);
+                if (y < 1) y = 1;
+                return Math.min(y, yardsToGoal);
+            }
+            case FORCE_OOB: {
+                int y = Math.max(1, Math.min(raw, 2 + need / 2 + rng.nextInt(4)));
+                return Math.min(y, yardsToGoal);
+            }
+            case MAXIMIZE:
+            default: {
+                int bonus = (int) (rng.nextDouble() * (qbSpd / 25.0));
+                return Math.min(raw + bonus, yardsToGoal);
+            }
+        }
+    }
+
+    private double secondaryThrowawayChance(ScrambleIntent intent, QbPressurePolicy.Slot bucket,
+                                            PressureResponse pref, int thv, Player qb) {
+        double chance = 0.08 + Math.max(0, thv - 50) / 400.0;
+        int iq = qb != null ? qb.ratFootIQ : 70;
+        chance += Math.max(0, iq - 70) / 500.0;
+        if (bucket == QbPressurePolicy.Slot.BACKED_UP) chance += 0.22;
+        if (pref == PressureResponse.THROW_IT_AWAY) chance += 0.18;
+        if (intent == ScrambleIntent.PROTECT_BALL) chance += 0.06;
+        if (chance > 0.55) chance = 0.55;
+        return chance;
+    }
+
+    private static boolean offenseLeading(Team offense, GameState state) {
+        if (state.possessionHome) {
+            return state.homeScore > state.awayScore;
+        }
+        return state.awayScore > state.homeScore;
+    }
+
+    enum ScrambleIntent {
+        THROW_AWAY,
+        TAKE_WHAT_YOU_NEED,
+        MAXIMIZE,
+        PROTECT_BALL,
+        FORCE_OOB
     }
 
     private PlayResult sack(Team offense, GameState state, PlayCall call, Player qb) {
@@ -853,14 +1137,24 @@ public final class PlayResolver {
         return defense.getS(0);
     }
 
-    private Player pickCarrier(OnFieldEleven off, Team offense, OffenseConcept concept) {
-        // Designed QB keep / option: athletic QBs occasionally keep
+    /** Package-visible for carrier-selection tests. */
+    Player pickCarrier(OnFieldEleven off, Team offense, OffenseConcept concept) {
         Player qb = onFieldQb(off, offense);
+        // Designed QB draw: always the QB when available
+        if (concept != null && "gun_qb_draw".equals(concept.id) && qb != null) {
+            return qb;
+        }
+        // Designed QB keep / option: athletic QBs occasionally keep
         int qbSpd = rating(qb, x -> x.spd, 55);
         if (qb != null && concept != null && concept.family == ConceptFamily.RUN
                 && rng.nextDouble() < 0.08 + qbSpd / 900.0) {
             return qb;
         }
+        Player nonQb = pickNonQbCarrier(off, offense, concept);
+        return nonQb != null ? nonQb : qb;
+    }
+
+    private Player pickNonQbCarrier(OnFieldEleven off, Team offense, OffenseConcept concept) {
         Player fb = off != null ? off.firstWithRole(RoleTag.FB) : null;
         if (fb != null && concept != null && "21".equals(concept.personnel)
                 && rng.nextDouble() < 0.18) {
@@ -870,7 +1164,9 @@ public final class PlayResolver {
         if (rbRole != null) return rbRole;
         Player rb = pickRb(off, offense);
         if (rb != null) return rb;
-        return qb;
+        Player fbAny = off != null ? off.firstWithRole(RoleTag.FB) : null;
+        if (fbAny != null) return fbAny;
+        return null;
     }
 
     private Player pickRb(OnFieldEleven off, Team offense) {

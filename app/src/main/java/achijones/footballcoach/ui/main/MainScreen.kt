@@ -528,12 +528,6 @@ private fun DepthChartPanel(state: MainUiState, viewModel: MainViewModel) {
             selectedIndex = state.lineupPositionIndex,
             onSelect = viewModel::selectLineupPosition,
         )
-        SpinnerDropdown(
-            label = "Filter",
-            options = state.lineupDepthFilterLabels,
-            selectedIndex = state.lineupDepthFilter.ordinal,
-            onSelect = viewModel::selectLineupDepthFilter,
-        )
         DepthChartToolbar(
             starterEnabled = state.lineupStarterCount > 0,
             benchEnabled = state.lineupBenchCount > 0,
@@ -802,6 +796,30 @@ private fun TeamPanel(state: MainUiState, viewModel: MainViewModel, modifier: Mo
                             selectedIndex = state.defSystemIndex,
                             onSelect = viewModel::setDefSystem,
                         )
+                        Text(
+                            "QB UNDER PRESSURE",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(top = 16.dp, bottom = 4.dp),
+                        )
+                        Text(
+                            "How your QB reacts when the pocket collapses.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(bottom = 4.dp),
+                        )
+                        state.pressureSlotLabels.forEachIndexed { slotIndex, label ->
+                            val selected = state.pressureResponseIndices.getOrElse(slotIndex) { 0 }
+                            SpinnerDropdown(
+                                label = label,
+                                options = state.pressureResponseNames,
+                                selectedIndex = selected,
+                                onSelect = { responseIndex ->
+                                    viewModel.setPressureResponse(slotIndex, responseIndex)
+                                },
+                            )
+                        }
                     }
                 }
             }

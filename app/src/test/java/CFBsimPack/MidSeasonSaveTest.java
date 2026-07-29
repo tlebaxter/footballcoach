@@ -63,7 +63,7 @@ public class MidSeasonSaveTest {
         File saveFile = temporaryFolder.newFile("midseason.cfb");
         assertTrue(league.saveLeague(saveFile));
         String raw = new String(Files.readAllBytes(saveFile.toPath()), StandardCharsets.UTF_8);
-        assertTrue(raw.contains("SAVE_VERSION,8"));
+        assertTrue(raw.contains("SAVE_VERSION,9"));
         assertTrue(raw.contains("SEASON_PROGRESS"));
         assertTrue(raw.contains("TEAM_SEASON"));
         assertTrue(raw.contains("|SEASON,"));
@@ -125,7 +125,7 @@ public class MidSeasonSaveTest {
         assertTrue(league.saveLeague(v8));
 
         String raw = new String(Files.readAllBytes(v8.toPath()), StandardCharsets.UTF_8);
-        raw = raw.replace("SAVE_VERSION,8", "SAVE_VERSION,6");
+        raw = raw.replace("SAVE_VERSION,9", "SAVE_VERSION,6");
         raw = stripBlock(raw, "SEASON_PROGRESS", "END_SEASON_PROGRESS");
         raw = stripBlock(raw, "TEAM_SEASON", "END_TEAM_SEASON");
         // Drop |SEASON suffixes so player lines look like v6

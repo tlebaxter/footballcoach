@@ -571,6 +571,23 @@ public class Game implements Serializable {
         double roadNoise = AtmosphereEngine.roadNoiseMult(state);
 
         PlayState before = PlayState.from(state);
+
+        // Pre-snap fouls (false start / offsides): dead ball — skip PlayResolver
+        PenaltyCatalog.Foul preSnapFoul = PenaltyCatalog.rollPreSnap(rng, call.offensePlay, roadNoise);
+        if (preSnapFoul != null) {
+            PlayResult deadResult = new PlayResult();
+            deadResult.playType = call.offensePlay;
+            deadResult.clockBurned = 0;
+            deadResult.stoppedClock = true;
+            PlayState afterPre = before.copy();
+            PendingPlay prePending = new PendingPlay(deadResult, before, afterPre);
+            prePending.foul = preSnapFoul;
+            PenaltyResolver.resolve(prePending);
+            return commitAcceptedFoul(
+                    call, prePending, before, deadResult, clockWasRunning,
+                    clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
+        }
+
         PlayResult result = resolver.resolve(homeTeam, awayTeam, state, call);
         // Resolver mutates GameState; snapshot provisional after-play situation
         PlayState after = PlayState.from(state);
@@ -579,7 +596,7 @@ public class Game implements Serializable {
         boolean contactPlay = !result.incomplete && !result.turnover && !result.touchdown
                 && result.playType != OffensePlay.SPIKE && result.playType != OffensePlay.KNEEL
                 && result.yardsGained > 0;
-        pending.foul = PenaltyCatalog.roll(rng, call.offensePlay, roadNoise, contactPlay);
+        pending.foul = PenaltyCatalog.rollLive(rng, call.offensePlay, result, roadNoise, contactPlay);
         if (pending.foul != null) {
             if (pending.foul == PenaltyCatalog.Foul.DPI) {
                 pending.foulSpotYardLine = result.passArriveYardLine > 0
@@ -593,34 +610,9 @@ public class Game implements Serializable {
         maybeRollInjuryStoppage(pending, call, possBefore);
 
         if (pending.foul != null && pending.foulAccepted) {
-            // Accepted foul: discard play outcome; dead ball — no nullified play clock burn
-            writePlayState(state, pending.after);
-            state.homeScore = before.homeScore;
-            state.awayScore = before.awayScore;
-            state.possessionHome = before.possessionHome;
-            if (!state.playingOT) {
-                state.gameTime = before.gameTime;
-            }
-            state.clockRunning = false;
-            if (pending.ejectedPlayer != null) {
-                pending.ejectedPlayer.isEjected = true;
-            }
-            maybeArmTenSecondRunoff(clockWasRunning, pending);
-            if (state.pendingTenSecondRunoff && result.logLine != null
-                    && !result.logLine.contains("10-second runoff")) {
-                result.logLine = result.logLine + " 10-second runoff pending.";
-            }
-            state.lastPlayLog = result.logLine != null ? result.logLine : "";
-            if (result.logLine != null && !result.logLine.isEmpty()) {
-                gameEventLog += prefix() + result.logLine + "\n";
-            }
-            recordPlay(call, result, clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
-            afterSnapFatigue(call, possBefore);
-            afterSnapAtmosphere(result, possBefore, downBefore, distBefore);
-            state.halfUnderway = true;
-            syncPublicFields();
-            checkClockExpiryAfterPlay(qBefore);
-            return result;
+            return commitAcceptedFoul(
+                    call, pending, before, result, clockWasRunning,
+                    clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
         }
 
         // No foul or declined: keep resolved play situation, then score/flip via applyResult
@@ -640,6 +632,50 @@ public class Game implements Serializable {
         } else {
             state.clockRunning = !state.playingOT && !result.stoppedClock;
         }
+        afterSnapFatigue(call, possBefore);
+        afterSnapAtmosphere(result, possBefore, downBefore, distBefore);
+        state.halfUnderway = true;
+        syncPublicFields();
+        checkClockExpiryAfterPlay(qBefore);
+        return result;
+    }
+
+    /**
+     * Commit an accepted foul: discard live play outcome, stop clock, optional runoff.
+     */
+    private PlayResult commitAcceptedFoul(
+            PlayCall call,
+            PendingPlay pending,
+            PlayState before,
+            PlayResult result,
+            boolean clockWasRunning,
+            String clockBefore,
+            int qBefore,
+            int downBefore,
+            int distBefore,
+            int yardBefore,
+            boolean possBefore) {
+        writePlayState(state, pending.after);
+        state.homeScore = before.homeScore;
+        state.awayScore = before.awayScore;
+        state.possessionHome = before.possessionHome;
+        if (!state.playingOT) {
+            state.gameTime = before.gameTime;
+        }
+        state.clockRunning = false;
+        if (pending.ejectedPlayer != null) {
+            pending.ejectedPlayer.isEjected = true;
+        }
+        maybeArmTenSecondRunoff(clockWasRunning, pending);
+        if (state.pendingTenSecondRunoff && result.logLine != null
+                && !result.logLine.contains("10-second runoff")) {
+            result.logLine = result.logLine + " 10-second runoff pending.";
+        }
+        state.lastPlayLog = result.logLine != null ? result.logLine : "";
+        if (result.logLine != null && !result.logLine.isEmpty()) {
+            gameEventLog += prefix() + result.logLine + "\n";
+        }
+        recordPlay(call, result, clockBefore, qBefore, downBefore, distBefore, yardBefore, possBefore);
         afterSnapFatigue(call, possBefore);
         afterSnapAtmosphere(result, possBefore, downBefore, distBefore);
         state.halfUnderway = true;

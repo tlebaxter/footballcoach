@@ -15,6 +15,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlin.math.abs
 
 /** Series return legs land a few years out, matching how real home-and-homes are booked. */
 private const val DEFAULT_HH_RETURN_OFFSET = 2
@@ -87,8 +88,20 @@ data class OpponentOptionUi(
     val rivalryLabel: String?,
     val moneyKind: OpponentMoneyKind,
     val moneyLabel: String,
+    val moneyAmount: Int = 0,
+    val tierGap: Int = 0,
+    val preferredWeek: Int = -1,
+    val affordable: Boolean = true,
+    val matchupLabel: String? = null,
+    val dealTypeChip: String? = null,
     val section: OpponentSection,
     val openContractId: String? = null,
+    val userIsHome: Boolean = true,
+)
+
+data class DonePreviewLineUi(
+    val week: Int,
+    val label: String,
 )
 
 data class ScheduleUiState(
@@ -102,8 +115,15 @@ data class ScheduleUiState(
     val rivalSummary: String = "",
     val openOocSlots: Int = 0,
     val filledOocSlots: Int = 0,
+    val openWeekNumbers: List<Int> = emptyList(),
+    val unplacedOpenContractCount: Int = 0,
     val selectedHorizonYear: Int = 0,
     val horizonYears: List<Int> = emptyList(),
+    val oocNetAmount: Int = 0,
+    val oocNetLabel: String = "",
+    val budgetAvailable: Int = 0,
+    val guaranteesCommitted: Int = 0,
+    val budgetLabel: String = "",
     val contractCards: List<ContractCardUi> = emptyList(),
     val filteredContracts: List<ContractCardUi> = emptyList(),
     val scheduleWeeks: List<ScheduleWeekUi> = emptyList(),
@@ -113,6 +133,7 @@ data class ScheduleUiState(
     val opponentOptions: List<OpponentOptionUi> = emptyList(),
     val availableConferences: List<String> = emptyList(),
     val conferenceFilter: String? = null,
+    val siteFilter: DealSite? = null,
     val dealOpponentAbbr: String? = null,
     val dealQuote: String = "",
     val singleGameAllowed: Boolean = true,
@@ -132,6 +153,8 @@ data class ScheduleUiState(
     val rescheduleEligibleWeeks: List<Int> = emptyList(),
     val rescheduleFulfillByYear: Int? = null,
     val rescheduleOpponentLabel: String = "",
+    val showDonePreview: Boolean = false,
+    val donePreviewLines: List<DonePreviewLineUi> = emptyList(),
     val primaryLabel: String? = null,
     val message: String? = null,
     val navigateToMain: Boolean = false,
@@ -144,6 +167,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
 
     private var league: League? = null
     private var user: Team? = null
+    private var pickerEligible: List<Team> = emptyList()
 
     init {
         bootstrap()
@@ -192,6 +216,40 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
 
     fun onPrimary() {
         if (!schedulingActive()) return
+        val u = user ?: return
+        val l = league ?: return
+        if (_uiState.value.openOocSlots <= 0) {
+            finishScheduling()
+            return
+        }
+        val fills = OocScheduleBuilder.previewUserRemainingFill(u, l.teamList)
+        val lines = fills.map { fill ->
+            val site = if (fill.userHome) "vs" else "@"
+            DonePreviewLineUi(
+                week = fill.week,
+                label = "Week ${fill.week + 1} $site ${fill.opponentName}",
+            )
+        }
+        _uiState.update {
+            it.copy(
+                showDonePreview = true,
+                donePreviewLines = lines,
+            )
+        }
+    }
+
+    fun dismissDonePreview() {
+        _uiState.update {
+            it.copy(showDonePreview = false, donePreviewLines = emptyList())
+        }
+    }
+
+    fun confirmDonePreview() {
+        dismissDonePreview()
+        finishScheduling()
+    }
+
+    private fun finishScheduling() {
         GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_SCHEDULE)
         _uiState.update { it.copy(navigateToMain = true) }
     }
@@ -247,6 +305,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
     }
 
     fun dismissOpponentPicker() {
+        pickerEligible = emptyList()
         _uiState.update {
             it.copy(
                 opponentPickerWeek = null,
@@ -254,6 +313,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 opponentOptions = emptyList(),
                 availableConferences = emptyList(),
                 conferenceFilter = null,
+                siteFilter = null,
                 dealOpponentAbbr = null,
                 dealQuote = "",
                 singleGameAllowed = true,
@@ -266,8 +326,31 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         }
     }
 
+    fun clearDealOpponent() {
+        _uiState.update {
+            it.copy(
+                dealOpponentAbbr = null,
+                dealQuote = "",
+                singleGameAllowed = true,
+                hhQuote = "",
+                hhAllowed = true,
+                twoForOneQuote = "",
+                twoForOneAllowed = false,
+            )
+        }
+    }
+
     fun setConferenceFilter(conference: String?) {
         _uiState.update { it.copy(conferenceFilter = conference) }
+    }
+
+    fun setSiteFilter(site: DealSite?) {
+        val u = user ?: return
+        val year = _uiState.value.dealTargetYear ?: league?.year ?: return
+        val week = _uiState.value.opponentPickerWeek
+        _uiState.update { it.copy(siteFilter = site) }
+        val options = buildOpponentOptions(u, year, week, pickerEligible, site)
+        _uiState.update { it.copy(opponentOptions = options) }
     }
 
     fun selectDealOpponent(abbr: String) {
@@ -276,7 +359,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             assignOpenContract(option.openContractId)
             return
         }
-        val site = defaultSiteFor(option.section)
+        val site = _uiState.value.siteFilter ?: defaultSiteFor(option.section)
         val quotes = buildDealQuotes(abbr, site, _uiState.value.hhReturnOffset)
         _uiState.update {
             it.copy(
@@ -300,6 +383,46 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             val next = it.copy(hhReturnOffset = clamped)
             if (quotes == null) next else next.withQuotes(quotes)
         }
+    }
+
+    fun placeAllOpenContracts() {
+        val u = user ?: return
+        val l = league ?: return
+        val book = l.oocContracts ?: return
+        val year = l.year
+        val placedIds = u.gameSchedule.mapNotNull { it?.contractId }.toSet()
+        var placed = 0
+        var failed = 0
+        book.forTeamInYear(u.abbr, year).forEach { contract ->
+            if (contract.id in placedIds) return@forEach
+            val cg = contract.gameForYear(year) ?: return@forEach
+            if (cg.settled) return@forEach
+            val home = l.findTeamAbbr(cg.homeAbbr) ?: return@forEach
+            val away = l.findTeamAbbr(cg.awayAbbr) ?: return@forEach
+            val preferred = cg.preferredWeek
+            val week = when {
+                preferred >= 0 && home.isOpenOocWeek(preferred) && away.isOpenOocWeek(preferred) ->
+                    preferred
+                else -> OocScheduleBuilder.findSharedOpenWeek(home, away)
+            }
+            if (week < 0) {
+                failed++
+                return@forEach
+            }
+            if (OocScheduleBuilder.placeFixedHomeOocGame(home, away, week, contract.id)) {
+                cg.preferredWeek = week
+                placed++
+            } else {
+                failed++
+            }
+        }
+        if (_uiState.value.dealTargetYear != null) {
+            dismissOpponentPicker()
+        }
+        _uiState.update {
+            it.copy(message = "Placed $placed · $failed could not place")
+        }
+        reload()
     }
 
     fun signSingleGame() {
@@ -585,7 +708,8 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
 
     private fun publishPicker(week: Int?, year: Int, eligible: List<Team>) {
         val u = user ?: return
-        val options = buildOpponentOptions(u, year, week, eligible)
+        pickerEligible = eligible
+        val options = buildOpponentOptions(u, year, week, eligible, null)
         val conferences = options
             .map { it.conference }
             .distinct()
@@ -597,6 +721,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 opponentOptions = options,
                 availableConferences = conferences,
                 conferenceFilter = null,
+                siteFilter = null,
                 dealOpponentAbbr = null,
                 dealQuote = "",
                 singleGameAllowed = true,
@@ -615,14 +740,34 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         year: Int,
         week: Int?,
         eligible: List<Team>,
+        siteFilter: DealSite?,
     ): List<OpponentOptionUi> {
-        val openRows = buildOpenContractOptions(user, year, week)
+        val openRows = buildOpenContractOptions(user, year, week, siteFilter)
         val openAbbrs = openRows.map { it.abbr }.toSet()
         val teamRows = eligible
             .filter { it.abbr !in openAbbrs }
-            .map { formatOpponent(user, it) }
-        return (openRows + teamRows).sortedWith(
+            .mapNotNull { formatOpponent(user, it, siteFilter) }
+        return sortOpponentOptions(openRows + teamRows)
+    }
+
+    private fun sortOpponentOptions(options: List<OpponentOptionUi>): List<OpponentOptionUi> {
+        return options.sortedWith(
             compareBy<OpponentOptionUi> { it.section.ordinal }
+                .thenComparator { a, b ->
+                    when (a.section) {
+                        OpponentSection.OPEN_CONTRACT -> {
+                            val weekA = if (a.preferredWeek >= 0) a.preferredWeek else Int.MAX_VALUE
+                            val weekB = if (b.preferredWeek >= 0) b.preferredWeek else Int.MAX_VALUE
+                            weekA.compareTo(weekB)
+                                .takeIf { it != 0 }
+                                ?: b.moneyAmount.compareTo(a.moneyAmount)
+                        }
+                        OpponentSection.PEER -> {
+                            abs(a.tierGap).compareTo(abs(b.tierGap))
+                        }
+                        else -> b.moneyAmount.compareTo(a.moneyAmount)
+                    }
+                }
                 .thenBy { it.name.lowercase() },
         )
     }
@@ -631,6 +776,7 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         user: Team,
         year: Int,
         week: Int?,
+        siteFilter: DealSite?,
     ): List<OpponentOptionUi> {
         val l = league ?: return emptyList()
         val book = l.oocContracts ?: return emptyList()
@@ -641,11 +787,14 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             if (contract.id in placedIds) return@mapNotNull null
             val cg = contract.gameForYear(year) ?: return@mapNotNull null
             if (cg.settled) return@mapNotNull null
-            val oppAbbr = if (cg.homeAbbr == user.abbr) cg.awayAbbr else cg.homeAbbr
+            val userIsHome = cg.homeAbbr == user.abbr
+            if (siteFilter == DealSite.HOME && !userIsHome) return@mapNotNull null
+            if (siteFilter == DealSite.AWAY && userIsHome) return@mapNotNull null
+            val oppAbbr = if (userIsHome) cg.awayAbbr else cg.homeAbbr
             val opp = l.findTeamAbbr(oppAbbr) ?: return@mapNotNull null
             if (week != null && !opp.isOpenOocWeek(week)) return@mapNotNull null
-            val userIsHome = cg.homeAbbr == user.abbr
             val money = moneyForGuarantee(userIsHome, cg.guarantee)
+            val tierGap = user.programProfile.scheduleTier - opp.programProfile.scheduleTier
             OpponentOptionUi(
                 abbr = opp.abbr,
                 name = opp.name,
@@ -653,45 +802,80 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 rivalryLabel = rivalryLabel(user, opp),
                 moneyKind = money.first,
                 moneyLabel = money.second,
+                moneyAmount = cg.guarantee,
+                tierGap = tierGap,
+                preferredWeek = cg.preferredWeek,
+                affordable = money.first != OpponentMoneyKind.PAY ||
+                    user.recruitMoney >= cg.guarantee,
+                matchupLabel = matchupLabelFor(tierGap),
+                dealTypeChip = null,
                 section = OpponentSection.OPEN_CONTRACT,
                 openContractId = contract.id,
+                userIsHome = userIsHome,
             )
         }
     }
 
-    private fun formatOpponent(user: Team, t: Team): OpponentOptionUi {
+    private fun formatOpponent(
+        user: Team,
+        t: Team,
+        siteFilter: DealSite?,
+    ): OpponentOptionUi? {
         val userTier = user.programProfile.scheduleTier
         val oppTier = t.programProfile.scheduleTier
+        val tierGap = userTier - oppTier
+        val userIsPower = tierGap > NilMoney.PEER_SERIES_TIER_GAP
+        if (siteFilter == DealSite.AWAY && userIsPower) {
+            return null
+        }
+
         val section = when {
             Team.strongestRivalryBetween(user, t) > 0 -> OpponentSection.RIVALRY
-            userTier - oppTier > NilMoney.PEER_SERIES_TIER_GAP -> OpponentSection.BUY
-            oppTier - userTier > NilMoney.PEER_SERIES_TIER_GAP -> OpponentSection.EARN
+            tierGap > NilMoney.PEER_SERIES_TIER_GAP -> OpponentSection.BUY
+            -tierGap > NilMoney.PEER_SERIES_TIER_GAP -> OpponentSection.EARN
             else -> OpponentSection.PEER
         }
-        // Default list money assumes the natural site for that section.
-        val (kind, label) = when {
-            userTier - oppTier > NilMoney.PEER_SERIES_TIER_GAP -> {
-                val g = NilMoney.buyGameGuarantee(user.programProfile, t.programProfile)
-                OpponentMoneyKind.PAY to "Pay ${NilMoney.format(g)}"
-            }
-            oppTier - userTier > NilMoney.PEER_SERIES_TIER_GAP -> {
-                val g = NilMoney.buyGameGuarantee(t.programProfile, user.programProfile)
-                OpponentMoneyKind.EARN to "Earn ${NilMoney.format(g)}"
-            }
-            else -> {
-                val g = NilMoney.visitorFloorGuarantee(t.programProfile)
-                OpponentMoneyKind.PAY to "Pay ${NilMoney.format(g)}"
-            }
+
+        val userIsHome = when (siteFilter) {
+            DealSite.HOME -> true
+            DealSite.AWAY -> false
+            null -> section != OpponentSection.EARN
+        }
+        val home = if (userIsHome) user else t
+        val away = if (userIsHome) t else user
+        val fee = NilMoney.singleGameGuarantee(home.programProfile, away.programProfile)
+        val money = moneyForGuarantee(userIsHome, fee)
+        val dealTypeChip = when {
+            section == OpponentSection.RIVALRY &&
+                tierGap > NilMoney.PEER_SERIES_TIER_GAP -> "Buy game"
+            section == OpponentSection.RIVALRY &&
+                -tierGap > NilMoney.PEER_SERIES_TIER_GAP -> "Road payday"
+            else -> null
         }
         return OpponentOptionUi(
             abbr = t.abbr,
             name = t.name,
             conference = t.conference,
             rivalryLabel = rivalryLabel(user, t),
-            moneyKind = kind,
-            moneyLabel = label,
+            moneyKind = money.first,
+            moneyLabel = money.second,
+            moneyAmount = fee,
+            tierGap = tierGap,
+            preferredWeek = -1,
+            affordable = money.first != OpponentMoneyKind.PAY || user.recruitMoney >= fee,
+            matchupLabel = matchupLabelFor(tierGap),
+            dealTypeChip = dealTypeChip,
             section = section,
+            userIsHome = userIsHome,
         )
+    }
+
+    private fun matchupLabelFor(tierGap: Int): String {
+        return when {
+            tierGap > NilMoney.PEER_SERIES_TIER_GAP -> "Cupcake"
+            tierGap < -NilMoney.PEER_SERIES_TIER_GAP -> "Tough"
+            else -> "Peer"
+        }
     }
 
     private fun rivalryLabel(user: Team, opp: Team): String? {
@@ -856,7 +1040,8 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         val notices = l.oocContracts?.consumeBreachNotices().orEmpty()
         val breachMsg = notices.firstOrNull()
         val weeks = buildScheduleWeeks(u)
-        val open = weeks.count { it.open }
+        val openWeeks = weeks.filter { it.open }.map { it.week }
+        val open = openWeeks.size
         val filled = weeks.count { it.isOoc && !it.open }
         val cards = buildContractCards(u)
         val active = schedulingActive()
@@ -866,6 +1051,9 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
             yearOne -> "Done — Start Season"
             else -> "Done — Begin HS Recruiting"
         }
+        val unplaced = countUnplacedOpenContracts(u, l.year)
+        val committed = computeGuaranteesCommitted(u, l.year)
+        val budgetAvailable = u.recruitMoney
         _uiState.update {
             it.copy(
                 teamName = u.name,
@@ -876,7 +1064,13 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
                 rivalSummary = buildRivalSummary(u),
                 openOocSlots = open,
                 filledOocSlots = filled,
+                openWeekNumbers = openWeeks,
+                unplacedOpenContractCount = unplaced,
                 horizonYears = (0..3).map { l.year + it },
+                budgetAvailable = budgetAvailable,
+                guaranteesCommitted = committed,
+                budgetLabel = "Budget ${NilMoney.format(budgetAvailable)} · " +
+                    "Guarantees committed ${NilMoney.format(committed)}",
                 contractCards = cards,
                 scheduleWeeks = weeks,
                 primaryLabel = primary,
@@ -886,15 +1080,54 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
         applyContractFilter()
     }
 
+    private fun countUnplacedOpenContracts(user: Team, year: Int): Int {
+        val book = league?.oocContracts ?: return 0
+        val placedIds = user.gameSchedule.mapNotNull { it?.contractId }.toSet()
+        return book.forTeamInYear(user.abbr, year).count { contract ->
+            contract.id !in placedIds &&
+                contract.gameForYear(year)?.let { !it.settled } == true
+        }
+    }
+
+    private fun computeGuaranteesCommitted(user: Team, year: Int): Int {
+        val book = league?.oocContracts ?: return 0
+        return book.forTeamInYear(user.abbr, year).sumOf { contract ->
+            val cg = contract.gameForYear(year) ?: return@sumOf 0
+            if (cg.settled || cg.homeAbbr != user.abbr) 0 else cg.guarantee
+        }
+    }
+
+    private fun computeOocNet(user: Team, year: Int): Int {
+        val book = league?.oocContracts ?: return 0
+        return book.forTeamInYear(user.abbr, year).sumOf { contract ->
+            val cg = contract.gameForYear(year) ?: return@sumOf 0
+            if (cg.settled) return@sumOf 0
+            if (cg.homeAbbr == user.abbr) -cg.guarantee else cg.guarantee
+        }
+    }
+
+    private fun formatOocNetLabel(year: Int, net: Int): String {
+        val formatted = when {
+            net > 0 -> "+${NilMoney.format(net)}"
+            net < 0 -> "−${NilMoney.format(-net)}"
+            else -> NilMoney.format(0)
+        }
+        return "OOC net $year: $formatted"
+    }
+
     private fun applyContractFilter() {
+        val u = user
         val year = _uiState.value.selectedHorizonYear
         val cards = _uiState.value.contractCards
+        val net = if (u != null) computeOocNet(u, year) else 0
         _uiState.update {
             it.copy(
                 filteredContracts = cards.filter { c ->
                     c.games.any { g -> g.year == year } ||
                         (c.fulfillByYear >= year && c.games.any { g -> g.year >= year })
                 },
+                oocNetAmount = net,
+                oocNetLabel = formatOocNetLabel(year, net),
             )
         }
     }

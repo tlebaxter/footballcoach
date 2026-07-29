@@ -8,8 +8,6 @@ enum class BrowseSegment { STATS, ROSTER, GAMES }
 
 enum class TeamPanelSegment { DEPTH_CHART, STRATEGY }
 
-enum class DepthFilter { PRIMARY, ELIGIBLE, EVERYONE }
-
 enum class AwardsSegment { HONORS, BOWLS }
 
 enum class PlayersLeavingTab { GRADUATES, MOCK_DRAFT }
@@ -234,8 +232,6 @@ data class MainUiState(
     val selectedConfIndex: Int = 0,
     val selectedBrowseTeamIndex: Int = 0,
     val lineupPositionIndex: Int = 0,
-    val lineupDepthFilter: DepthFilter = DepthFilter.PRIMARY,
-    val lineupDepthFilterLabels: List<String> = listOf("Primary", "Eligible", "Everyone"),
     val lineupPositionLabel: String = "",
     val lineupRequired: Int = 1,
     val lineupRows: List<LineupRowUi> = emptyList(),
@@ -245,6 +241,9 @@ data class MainUiState(
     val defSystemNames: List<String> = emptyList(),
     val offPhilosophyIndex: Int = 0,
     val defSystemIndex: Int = 0,
+    val pressureResponseNames: List<String> = emptyList(),
+    val pressureSlotLabels: List<String> = emptyList(),
+    val pressureResponseIndices: List<Int> = emptyList(),
     val navigateToCoach: Boolean = false,
     val awardsBowlsUnlocked: Boolean = false,
     val awardCategories: List<String> = emptyList(),

@@ -12,6 +12,7 @@ public final class PlayResult {
     public boolean firstDown;
     public boolean incomplete;
     public boolean sack;
+    public boolean throwaway;
     public boolean stoppedClock;
     public boolean fairCatch;
     public boolean touchback;

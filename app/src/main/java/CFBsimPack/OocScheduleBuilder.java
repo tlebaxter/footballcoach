@@ -64,6 +64,101 @@ public final class OocScheduleBuilder {
     }
 
     /**
+     * Dry-runs {@link #scheduleRemaining} and returns the OOC fill for {@code user}'s
+     * currently open weeks. Restores every team's regular-season slots afterward.
+     */
+    public static List<PreviewFill> previewUserRemainingFill(Team user, List<Team> teams) {
+        ArrayList<PreviewFill> preview = new ArrayList<>();
+        if (user == null || teams == null || teams.isEmpty()) {
+            return preview;
+        }
+        HashSet<Integer> openWeeks = new HashSet<>();
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            if (user.isOpenOocWeek(week)) {
+                openWeeks.add(week);
+            }
+        }
+        if (openWeeks.isEmpty()) {
+            return preview;
+        }
+
+        Map<Team, Game[]> snapshots = snapshotRegularSeason(teams);
+        try {
+            scheduleRemaining(teams);
+            for (int week : openWeeks) {
+                Game game = user.gameSchedule.get(week);
+                if (game == null) {
+                    continue;
+                }
+                Team opp = game.homeTeam == user ? game.awayTeam : game.homeTeam;
+                preview.add(new PreviewFill(week, opp.name, opp.abbr, game.homeTeam == user));
+            }
+            preview.sort(new Comparator<PreviewFill>() {
+                @Override
+                public int compare(PreviewFill a, PreviewFill b) {
+                    return Integer.compare(a.week, b.week);
+                }
+            });
+        } finally {
+            restoreRegularSeason(snapshots);
+        }
+        return preview;
+    }
+
+    /** First shared open OOC week for both teams, or -1. */
+    public static int findSharedOpenWeek(Team user, Team opponent) {
+        if (user == null || opponent == null) {
+            return -1;
+        }
+        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+            if (user.isOpenOocWeek(week) && opponent.isOpenOocWeek(week)) {
+                return week;
+            }
+        }
+        return -1;
+    }
+
+    public static final class PreviewFill {
+        public final int week;
+        public final String opponentName;
+        public final String opponentAbbr;
+        public final boolean userHome;
+
+        public PreviewFill(int week, String opponentName, String opponentAbbr, boolean userHome) {
+            this.week = week;
+            this.opponentName = opponentName;
+            this.opponentAbbr = opponentAbbr;
+            this.userHome = userHome;
+        }
+    }
+
+    private static Map<Team, Game[]> snapshotRegularSeason(List<Team> teams) {
+        HashMap<Team, Game[]> snapshots = new HashMap<>();
+        for (Team team : teams) {
+            Game[] copy = new Game[League.REGULAR_SEASON_WEEKS];
+            for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+                if (week < team.gameSchedule.size()) {
+                    copy[week] = team.gameSchedule.get(week);
+                }
+            }
+            snapshots.put(team, copy);
+        }
+        return snapshots;
+    }
+
+    private static void restoreRegularSeason(Map<Team, Game[]> snapshots) {
+        for (Map.Entry<Team, Game[]> entry : snapshots.entrySet()) {
+            Team team = entry.getKey();
+            Game[] copy = entry.getValue();
+            for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
+                if (week < team.gameSchedule.size()) {
+                    team.gameSchedule.set(week, copy[week]);
+                }
+            }
+        }
+    }
+
+    /**
      * Places a user-selected OOC game. Returns false if the matchup/week is illegal.
      */
     public static boolean placeUserOocGame(Team user, Team opponent, int week) {
@@ -228,15 +323,6 @@ public final class OocScheduleBuilder {
     }
 
     private static final int SCHEDULE_TIER_BAND = 8;
-
-    private static int findSharedOpenWeek(Team user, Team opponent) {
-        for (int week = 0; week < League.REGULAR_SEASON_WEEKS; week++) {
-            if (user.isOpenOocWeek(week) && opponent.isOpenOocWeek(week)) {
-                return week;
-            }
-        }
-        return -1;
-    }
 
     /**
      * @param bandIndex 0 = tough, 1 = peer, 2 = easy

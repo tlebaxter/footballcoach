@@ -175,7 +175,7 @@ public class EngineGreenfieldTest {
         g.setRandom(noFoulRandom());
         g.startGame();
         settleOpeningKickoff(g);
-        g.setRandom(forceDpiOnSpikeRandom());
+        g.setRandom(forceFalseStartOnSpikeRandom());
         g.state.clockRunning = false;
         g.state.yardLine = 40;
         g.state.yardsNeed = 10;
@@ -184,10 +184,39 @@ public class EngineGreenfieldTest {
 
         g.executeSnap(new PlayCall(OffensePlay.SPIKE, Formation.SHOTGUN, CoverageCall.COVER_3, TempoCall.NORMAL));
         assertTrue(g.state.lastPlayLog.contains("PENALTY"));
-        assertTrue(g.state.lastPlayLog.contains("DPI") || g.state.lastPlayLog.contains("accepted"));
+        assertTrue(g.state.lastPlayLog.contains("FALSE START"));
+        assertFalse(g.state.lastPlayLog.contains("DPI"));
         // Dead-ball foul: no spike 3s burn
         assertEquals(timeBefore, g.state.gameTime);
         assertFalse(g.state.clockRunning);
+    }
+
+    @Test
+    public void runPlaysNeverLogDpi() throws Exception {
+        League league = createLeague();
+        Game g = new Game(league.teamList.get(0), league.teamList.get(1));
+        g.setRandom(new Random(99L));
+        g.startGame();
+        settleOpeningKickoff(g);
+        for (int i = 0; i < 60; i++) {
+            if (g.state.gameOver) break;
+            if (g.state.pendingKickoff) {
+                g.executeSnap(null);
+                continue;
+            }
+            if (g.state.pendingTry) {
+                g.autoResolveTryIfNeeded(true);
+                continue;
+            }
+            g.state.down = 1;
+            g.state.yardsNeed = 10;
+            if (g.state.yardLine < 10 || g.state.yardLine > 90) g.state.yardLine = 40;
+            g.state.clockRunning = false;
+            g.executeSnap(new PlayCall(OffensePlay.RUN, Formation.I_FORM, CoverageCall.COVER_3, TempoCall.NORMAL));
+            String log = g.state.lastPlayLog != null ? g.state.lastPlayLog : "";
+            assertFalse("DPI must not appear on RUN: " + log, log.contains("DPI"));
+            assertFalse("Roughing must not appear on RUN: " + log, log.contains("ROUGHING"));
+        }
     }
 
     @Test
@@ -716,10 +745,10 @@ public class EngineGreenfieldTest {
     }
 
     /**
-     * Spike uses no play RNG. Sequence: skip DOG, miss FS/offsides/holding, hit DPI, skip injury.
+     * Spike uses no play RNG. Sequence: skip DOG, hit false start on pre-snap roll.
      */
-    private static Random forceDpiOnSpikeRandom() {
-        final double[] seq = {0.99, 0.99, 0.99, 0.99, 0.0, 0.99};
+    private static Random forceFalseStartOnSpikeRandom() {
+        final double[] seq = {0.99, 0.0};
         return new Random() {
             int i;
 

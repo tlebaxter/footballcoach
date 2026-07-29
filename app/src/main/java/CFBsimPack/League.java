@@ -318,7 +318,7 @@ public class League {
                 throw new IOException("Save from older version — start a new career.");
             }
             int saveVersion = Integer.parseInt(line.substring("SAVE_VERSION,".length()).trim());
-            if (saveVersion != 6 && saveVersion != 7 && saveVersion != 8) {
+            if (saveVersion != 6 && saveVersion != 7 && saveVersion != 8 && saveVersion != 9) {
                 throw new IOException("Save from older version — start a new career.");
             }
             line = bufferedReader.readLine();
@@ -1689,13 +1689,16 @@ public class League {
             sb.append(heismanHistory.get(i) + "\n");
         }
             sb.append("END_HEISMAN_HIST\n");
-        sb.append("SAVE_VERSION,8\n");
+        sb.append("SAVE_VERSION,9\n");
         sb.append("TEAM_COUNT," + teamList.size() + "\n");
 
         // Save information about each team like W-L records, as well as all the players
         for (Team t : teamList) {
             int offPhil = t.offPhilosophy != null ? t.offPhilosophy.ordinal() : OffensivePhilosophy.MULTIPLE.ordinal();
             int defSys = t.defSystem != null ? t.defSystem.ordinal() : DefensiveSystem.BASE_4_3.ordinal();
+            String qbPress = t.qbPressurePolicy != null
+                    ? t.qbPressurePolicy.encode()
+                    : QbPressurePolicy.defaults().encode();
             ProgramProfile profile = t.programProfile;
             sb.append(t.conference).append(",").append(t.name).append(",").append(t.abbr).append(",")
                     .append(profile.tradition).append(",").append(profile.fanbase).append(",")
@@ -1713,7 +1716,8 @@ public class League {
                     .append(profile.finishHistoryCsv()).append(",")
                     .append(profile.draftHistoryCsv()).append(",")
                     .append(t.programProfileUpdatedThisOffseason).append(",")
-                    .append(profile.annualDeltaCsv()).append("%")
+                    .append(profile.annualDeltaCsv()).append(",")
+                    .append(qbPress).append("%")
                     .append(t.evenYearHomeOpp).append("%\n");
             sb.append(t.getPlayerInfoSaveFile());
             sb.append("END_PLAYERS\n");

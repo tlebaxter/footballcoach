@@ -13,14 +13,17 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.ModalBottomSheetProperties
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 private val SheetBg = Color(0xFF121A14)
 private val Muted = Color(0xFF9CA3AF)
@@ -33,11 +36,27 @@ fun TryChoiceSheet(
     onGoForTwo: () -> Unit,
 ) {
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    val scope = rememberCoroutineScope()
+
+    // Hide the sheet (and its Dialog window) before clearing showTryChoice. Removing
+    // ModalBottomSheet from composition while still Expanded — or letting swipe/back
+    // hide it while onDismissRequest is a no-op — leaves an invisible scrim that
+    // freezes the coach UI.
+    fun dismissThen(action: () -> Unit) {
+        scope.launch { sheetState.hide() }.invokeOnCompletion {
+            if (!sheetState.isVisible) action()
+        }
+    }
 
     ModalBottomSheet(
-        onDismissRequest = { /* must choose */ },
+        onDismissRequest = { /* must choose — dismiss paths disabled below */ },
         sheetState = sheetState,
+        sheetGesturesEnabled = false,
         containerColor = SheetBg,
+        properties = ModalBottomSheetProperties(
+            shouldDismissOnBackPress = false,
+            shouldDismissOnClickOutside = false,
+        ),
     ) {
         Column(Modifier.padding(horizontal = 16.dp).padding(bottom = 28.dp)) {
             Text(
@@ -55,7 +74,7 @@ fun TryChoiceSheet(
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 OutlinedButton(
-                    onClick = onGoForTwo,
+                    onClick = { dismissThen(onGoForTwo) },
                     shape = RoundedCornerShape(14.dp),
                     modifier = Modifier
                         .weight(1f)
@@ -64,7 +83,7 @@ fun TryChoiceSheet(
                     Text("Go for 2", fontWeight = FontWeight.SemiBold)
                 }
                 Button(
-                    onClick = onKickXp,
+                    onClick = { dismissThen(onKickXp) },
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,

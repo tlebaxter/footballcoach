@@ -141,7 +141,9 @@ public class PlayResolverRatingsTest {
                     TempoCall.NORMAL
             );
             PlayResult r = resolver.resolve(offense, defense, state, call);
-            if (r.logLine != null && r.logLine.contains(" rush ") && r.logLine.contains(qb.name)) {
+            if (r.logLine != null
+                    && (r.logLine.contains("SCRAMBLE!") || r.logLine.contains("SCRAMBLE TD!"))
+                    && r.logLine.contains(qb.name)) {
                 escapes++;
             }
         }

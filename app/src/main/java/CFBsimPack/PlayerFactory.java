@@ -7,6 +7,9 @@ import java.util.Random;
  */
 public final class PlayerFactory {
 
+    /** Chance a WR/RB/TE rolled as a former HS QB / athlete with usable throw skills. */
+    static final double FORMER_HS_QB_RATE = 0.04;
+
     private PlayerFactory() {}
 
     public static Player fromStars(PositionGroup pos, String name, int year, int stars, Team team, Random rng) {
@@ -36,6 +39,7 @@ public final class PlayerFactory {
 
     public static PlayerRatings rollRatings(PositionGroup pos, int year, int stars, Random rng) {
         Random r = rng != null ? rng : new Random();
+        PositionGroup g = pos != null ? pos : PositionGroup.LB;
         PlayerRatings out = new PlayerRatings();
         out.pot = clampRoll(50 + (int) (50 * r.nextDouble()), r);
         out.footIq = clampRoll(50 + (int) (50 * r.nextDouble()), r);
@@ -49,6 +53,8 @@ public final class PlayerFactory {
         out.endu = skill(base - 8, r);
         out.bsc = skill(base - 10, r);
         out.elu = skill(base - 10, r);
+
+        // Position-adjacent skills (milder offset; preserves cross-pos flexibility)
         out.rtr = skill(base - 12, r);
         out.hnd = skill(base - 12, r);
         out.pbk = skill(base - 15, r);
@@ -57,15 +63,20 @@ public final class PlayerFactory {
         out.tck = skill(base - 12, r);
         out.prs = skill(base - 15, r);
         out.rns = skill(base - 15, r);
-        out.thv = skill(base - 20, r);
-        out.thp = skill(base - 20, r);
-        out.tha = skill(base - 20, r);
-        out.kpw = skill(base - 20, r);
-        out.kac = skill(base - 20, r);
-        out.ppw = skill(base - 20, r);
-        out.pac = skill(base - 20, r);
 
-        applyArchetypeBoosts(out, pos, base, r);
+        // Specialist skills: low fixed band unless the position owns them
+        boolean ownsThrow = g == PositionGroup.QB;
+        boolean ownsKick = g == PositionGroup.K;
+        boolean ownsPunt = g == PositionGroup.P;
+        out.thv = ownsThrow ? skill(base - 8, r) : specialistSkill(28, r);
+        out.thp = ownsThrow ? skill(base - 8, r) : specialistSkill(28, r);
+        out.tha = ownsThrow ? skill(base - 8, r) : specialistSkill(28, r);
+        out.kpw = ownsKick ? skill(base - 8, r) : specialistSkill(28, r);
+        out.kac = ownsKick ? skill(base - 8, r) : specialistSkill(28, r);
+        out.ppw = ownsPunt ? skill(base - 8, r) : specialistSkill(28, r);
+        out.pac = ownsPunt ? skill(base - 8, r) : specialistSkill(28, r);
+
+        applyArchetypeBoosts(out, g, base, r);
         return out;
     }
 
@@ -94,6 +105,7 @@ public final class PlayerFactory {
                 boost(out, "hnd", 4, r);
                 if (power) boost(out, "stre", 10, r);
                 else boost(out, "spd", 4, r);
+                maybeFormerHsQb(out, r);
                 break;
             }
             case FB:
@@ -108,6 +120,7 @@ public final class PlayerFactory {
                 boost(out, "rtr", 12, r);
                 boost(out, "spd", 10, r);
                 boost(out, "hgt", 6, r);
+                maybeFormerHsQb(out, r);
                 break;
             case TE:
                 boost(out, "hnd", 8, r);
@@ -115,6 +128,7 @@ public final class PlayerFactory {
                 boost(out, "pbk", 6, r);
                 boost(out, "hgt", 8, r);
                 boost(out, "rtr", 6, r);
+                maybeFormerHsQb(out, r);
                 break;
             case OL:
                 boost(out, "pbk", 12, r);
@@ -167,6 +181,15 @@ public final class PlayerFactory {
         out.hgt = PlayerRatings.clamp(out.hgt);
     }
 
+    /** Rare WR/RB/TE former HS QB — usable mid throw bag, not elite. */
+    private static void maybeFormerHsQb(PlayerRatings out, Random r) {
+        if (r.nextDouble() >= FORMER_HS_QB_RATE) return;
+        boost(out, "tha", 22, r);
+        boost(out, "thp", 18, r);
+        boost(out, "thv", 18, r);
+        boost(out, "elu", 4, r);
+    }
+
     private static void boost(PlayerRatings out, String key, int amount, Random r) {
         int jitter = (int) (r.nextDouble() * 8) - 3;
         out.bump(key, amount + jitter);
@@ -174,6 +197,12 @@ public final class PlayerFactory {
 
     private static int skill(int base, Random r) {
         return clampRoll(base - (int) (22 * r.nextDouble()), r);
+    }
+
+    /** Low fixed band for non-specialists (~18–38 around mean 28). */
+    private static int specialistSkill(int mean, Random r) {
+        int spread = (int) (20 * r.nextDouble()) - 10;
+        return clampRoll(mean + spread, r);
     }
 
     private static int clampRoll(int v, Random r) {

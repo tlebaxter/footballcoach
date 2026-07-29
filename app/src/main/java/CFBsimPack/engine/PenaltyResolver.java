@@ -43,7 +43,10 @@ public final class PenaltyResolver {
         int playGain = pending.after.yardLine - pending.before.yardLine;
 
         boolean accept;
-        if (foul.againstOffense) {
+        if (foul.phase == PenaltyCatalog.Phase.PRE_SNAP) {
+            // Dead-ball: no live play to keep — always enforce
+            accept = true;
+        } else if (foul.againstOffense) {
             // Defense accepts when the play gained enough / scored / turned over
             accept = playWasTd || playWasTurnover || playGain >= foul.yards;
         } else {

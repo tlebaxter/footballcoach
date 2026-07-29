@@ -116,17 +116,117 @@ public class PenaltyResolverTest {
 
     @Test
     public void catalogRollUsesInjectedRng() {
+        PlayResult passResult = thrownPassResult();
         Random a = new Random(5L);
         Random b = new Random(5L);
         for (int i = 0; i < 50; i++) {
             assertEquals(
-                    PenaltyCatalog.roll(a, OffensePlay.PASS),
-                    PenaltyCatalog.roll(b, OffensePlay.PASS));
+                    PenaltyCatalog.rollLive(a, OffensePlay.PASS, passResult, 1.0, false),
+                    PenaltyCatalog.rollLive(b, OffensePlay.PASS, passResult, 1.0, false));
+            assertEquals(
+                    PenaltyCatalog.rollPreSnap(a, OffensePlay.PASS, 1.0),
+                    PenaltyCatalog.rollPreSnap(b, OffensePlay.PASS, 1.0));
         }
         assertNotNull(PenaltyCatalog.Foul.HOLDING);
         assertTrue(PenaltyCatalog.Foul.DPI.enforcement == PenaltyCatalog.Enforcement.SPOT);
         assertTrue(PenaltyCatalog.Foul.TARGETING.ejects);
         assertTrue(PenaltyCatalog.Foul.HOLDING.triggersTenSecondRunoff);
+        assertEquals(PenaltyCatalog.Phase.PRE_SNAP, PenaltyCatalog.Foul.FALSE_START.phase);
+        assertEquals(PenaltyCatalog.Phase.LIVE, PenaltyCatalog.Foul.DPI.phase);
+    }
+
+    @Test
+    public void dpiIneligibleOnRunSpikeKneel() {
+        PlayResult unused = thrownPassResult();
+        assertEquals(0, PenaltyCatalog.rateFor(
+                PenaltyCatalog.Foul.DPI, OffensePlay.RUN, unused, 1.0, false), 0);
+        assertEquals(0, PenaltyCatalog.rateFor(
+                PenaltyCatalog.Foul.DPI, OffensePlay.SPIKE, unused, 1.0, false), 0);
+        assertEquals(0, PenaltyCatalog.rateFor(
+                PenaltyCatalog.Foul.DPI, OffensePlay.KNEEL, unused, 1.0, false), 0);
+    }
+
+    @Test
+    public void roughingIneligibleOnRun() {
+        assertEquals(0, PenaltyCatalog.rateFor(
+                PenaltyCatalog.Foul.ROUGHING_PASSER, OffensePlay.RUN, null, 1.0, false), 0);
+    }
+
+    @Test
+    public void dpiEligibleOnThrownPassNotSack() {
+        PlayResult thrown = thrownPassResult();
+        assertTrue(PenaltyCatalog.rateFor(
+                PenaltyCatalog.Foul.DPI, OffensePlay.PASS, thrown, 1.0, false) > 0);
+
+        PlayResult sack = new PlayResult();
+        sack.sack = true;
+        sack.yardsGained = -7;
+        assertEquals(0, PenaltyCatalog.rateFor(
+                PenaltyCatalog.Foul.DPI, OffensePlay.PASS, sack, 1.0, false), 0);
+    }
+
+    @Test
+    public void preSnapRollNeverReturnsLiveFouls() {
+        Random always = new Random() {
+            @Override
+            public double nextDouble() {
+                return 0.0;
+            }
+        };
+        for (int i = 0; i < 200; i++) {
+            PenaltyCatalog.Foul f = PenaltyCatalog.rollPreSnap(always, OffensePlay.PASS, 1.0);
+            assertNotNull(f);
+            assertEquals(PenaltyCatalog.Phase.PRE_SNAP, f.phase);
+            assertTrue(f == PenaltyCatalog.Foul.FALSE_START || f == PenaltyCatalog.Foul.OFFSIDES);
+        }
+    }
+
+    @Test
+    public void liveRollNeverReturnsPreSnapFouls() {
+        PlayResult thrown = thrownPassResult();
+        Random always = new Random() {
+            @Override
+            public double nextDouble() {
+                return 0.0;
+            }
+        };
+        for (int i = 0; i < 200; i++) {
+            PenaltyCatalog.Foul f = PenaltyCatalog.rollLive(always, OffensePlay.PASS, thrown, 1.0, true);
+            assertNotNull(f);
+            assertEquals(PenaltyCatalog.Phase.LIVE, f.phase);
+            assertFalse(f == PenaltyCatalog.Foul.FALSE_START);
+            assertFalse(f == PenaltyCatalog.Foul.OFFSIDES);
+        }
+    }
+
+    @Test
+    public void liveRollNeverReturnsDpiOnRun() {
+        Random always = new Random() {
+            @Override
+            public double nextDouble() {
+                return 0.0;
+            }
+        };
+        for (int i = 0; i < 500; i++) {
+            PenaltyCatalog.Foul f = PenaltyCatalog.rollLive(always, OffensePlay.RUN, null, 1.0, true);
+            assertFalse(f == PenaltyCatalog.Foul.DPI);
+            assertFalse(f == PenaltyCatalog.Foul.ROUGHING_PASSER);
+        }
+    }
+
+    @Test
+    public void falseStartAlwaysAcceptedAsDeadBall() {
+        PlayState before = baseState();
+        PlayState after = before.copy();
+        PlayResult result = new PlayResult();
+        result.logLine = "";
+        PendingPlay pending = new PendingPlay(result, before, after);
+        pending.foul = PenaltyCatalog.Foul.FALSE_START;
+        PenaltyResolver.resolve(pending);
+        assertTrue(pending.foulAccepted);
+        assertTrue(pending.after.yardLine < before.yardLine);
+        assertTrue(pending.result.logLine.contains("FALSE START"));
+        assertTrue(pending.result.logLine.contains("accepted"));
     }
 
     @Test
@@ -134,6 +234,13 @@ public class PenaltyResolverTest {
         assertEquals(15, PenaltyResolver.yardsTowardOpponentGoal(40, 15, true));
         assertEquals(5, PenaltyResolver.yardsTowardOpponentGoal(90, 15, true));
         assertEquals(5, PenaltyResolver.yardsTowardOwnGoal(10, 15, true));
+    }
+
+    private static PlayResult thrownPassResult() {
+        PlayResult r = new PlayResult();
+        r.incomplete = true;
+        r.passArriveYardLine = 52;
+        return r;
     }
 
     private static PlayState baseState() {
