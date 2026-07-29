@@ -42,7 +42,6 @@ import achijones.footballcoach.R
 @Composable
 fun HomeScreen(
     onNavigateToMain: () -> Unit,
-    onNavigateToTutorial: () -> Unit,
     viewModel: HomeViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -52,12 +51,6 @@ fun HomeScreen(
         if (state.navigateToMain) {
             viewModel.consumeNavigateToMain()
             onNavigateToMain()
-        }
-    }
-    LaunchedEffect(state.navigateToTutorial) {
-        if (state.navigateToTutorial) {
-            viewModel.consumeNavigateToTutorial()
-            onNavigateToTutorial()
         }
     }
 
@@ -100,11 +93,6 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
                 enabled = !state.loading,
             ) { Text("Load Game") }
-            Button(
-                onClick = viewModel::openTutorial,
-                modifier = Modifier.fillMaxWidth(),
-                enabled = !state.loading,
-            ) { Text("Tutorial") }
             OutlinedButton(
                 onClick = {
                     context.startActivity(

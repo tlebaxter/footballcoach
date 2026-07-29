@@ -11,7 +11,6 @@ import achijones.footballcoach.ui.main.MainScreen
 import achijones.footballcoach.ui.navigation.Routes
 import achijones.footballcoach.ui.schedule.ScheduleScreen
 import achijones.footballcoach.ui.talenthub.TalentHubScreen
-import achijones.footballcoach.ui.tutorial.TutorialScreen
 
 @Composable
 fun FootballCoachApp() {
@@ -26,13 +25,7 @@ fun FootballCoachApp() {
                         launchSingleTop = true
                     }
                 },
-                onNavigateToTutorial = {
-                    navController.navigate(Routes.TUTORIAL)
-                },
             )
-        }
-        composable(Routes.TUTORIAL) {
-            TutorialScreen(onBack = { navController.popBackStack() })
         }
         composable(Routes.MAIN) {
             MainScreen(

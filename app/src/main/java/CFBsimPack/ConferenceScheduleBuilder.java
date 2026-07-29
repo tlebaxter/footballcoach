@@ -280,7 +280,9 @@ public final class ConferenceScheduleBuilder {
 
         Set<Team> placed = new HashSet<>();
         if (teams.size() % 2 == 1) {
-            Team unmatched = findTeamWithoutStrongInConfRival(teams);
+            // Reserve circle-method bye slot 0 before seating pairs. Prefer a team that
+            // is not part of a Hot reciprocal rivalry so those pairs still get seats.
+            Team unmatched = findByeTeamForRivalSeating(teams);
             arranged.set(0, unmatched);
             placed.add(unmatched);
         }
@@ -378,28 +380,50 @@ public final class ConferenceScheduleBuilder {
         }
     }
 
-    private static Team findTeamWithoutStrongInConfRival(List<Team> teams) {
+    /**
+     * Pick the odd-conference bye team for rivalry seating.
+     * Prefer no seat-threshold rival, then no Hot rival, then weakest link.
+     */
+    private static Team findByeTeamForRivalSeating(List<Team> teams) {
         for (Team team : teams) {
-            boolean hasStrong = false;
-            if (team.rivalries != null) {
-                for (Rivalry r : team.rivalries) {
-                    Team rival = findTeamByAbbreviation(teams, r.opponentAbbr);
-                    if (rival == null) {
-                        continue;
-                    }
-                    Rivalry back = rival.rivalryWith(team.abbr);
-                    if (back != null
-                            && Math.min(r.strength, back.strength) >= Rivalry.SEAT_THRESHOLD) {
-                        hasStrong = true;
-                        break;
-                    }
-                }
-            }
-            if (!hasStrong) {
+            if (strongestReciprocalInConf(team, teams) < Rivalry.SEAT_THRESHOLD) {
                 return team;
             }
         }
-        return teams.get(0);
+        for (Team team : teams) {
+            if (strongestReciprocalInConf(team, teams) < Rivalry.HOT_THRESHOLD) {
+                return team;
+            }
+        }
+        Team best = teams.get(0);
+        int bestStrength = Integer.MAX_VALUE;
+        for (Team team : teams) {
+            int strength = strongestReciprocalInConf(team, teams);
+            if (strength < bestStrength) {
+                bestStrength = strength;
+                best = team;
+            }
+        }
+        return best;
+    }
+
+    private static int strongestReciprocalInConf(Team team, List<Team> teams) {
+        int best = 0;
+        if (team.rivalries == null) {
+            return best;
+        }
+        for (Rivalry r : team.rivalries) {
+            Team rival = findTeamByAbbreviation(teams, r.opponentAbbr);
+            if (rival == null) {
+                continue;
+            }
+            Rivalry back = rival.rivalryWith(team.abbr);
+            if (back == null) {
+                continue;
+            }
+            best = Math.max(best, Math.min(r.strength, back.strength));
+        }
+        return best;
     }
 
     private static Team findTeamByAbbreviation(List<Team> teams, String abbreviation) {

@@ -2477,10 +2477,12 @@ public class Team {
      * @return Offensive Talent Level
      */
     public int getOffTalent() {
-        return ( getQB(0).ratOvr*5 +
-                teamWRs.get(0).ratOvr + teamWRs.get(1).ratOvr + teamWRs.get(2).ratOvr +
-                teamRBs.get(0).ratOvr + teamRBs.get(1).ratOvr +
-                getCompositeOLPass() + getCompositeOLRush() ) / 12;
+        int qb = teamQBs.isEmpty() ? 0 : getQB(0).ratOvr;
+        // Sum (not average) of available depth so thin portal rosters don't crash.
+        int wrSum = sumOvr(teamWRs, 3);
+        int rbSum = sumOvr(teamRBs, 2);
+        // Keep the historical /12 divisor even when a mid-offseason portal thinned depth.
+        return (qb * 5 + wrSum + rbSum + getCompositeOLPass() + getCompositeOLRush()) / 12;
     }
 
     /**
@@ -2666,11 +2668,11 @@ public class Team {
     public String specialTeamsDepthSaveLine() {
         ensureSpecialTeamsDepth();
         return "ST_DEPTH,"
-                + nameOrEmpty(puntReturner) + ","
-                + nameOrEmpty(kickReturner) + ","
-                + nameOrEmpty(gunner1) + ","
-                + nameOrEmpty(gunner2) + ","
-                + nameOrEmpty(longSnapper);
+                + playerRefOrEmpty(puntReturner) + ","
+                + playerRefOrEmpty(kickReturner) + ","
+                + playerRefOrEmpty(gunner1) + ","
+                + playerRefOrEmpty(gunner2) + ","
+                + playerRefOrEmpty(longSnapper);
     }
 
     public void loadSpecialTeamsDepth(String line) {
@@ -2679,11 +2681,11 @@ public class Team {
             return;
         }
         String[] parts = line.split(",", -1);
-        puntReturner = findRosterPlayerByName(parts.length > 1 ? parts[1] : null);
-        kickReturner = findRosterPlayerByName(parts.length > 2 ? parts[2] : null);
-        gunner1 = findRosterPlayerByName(parts.length > 3 ? parts[3] : null);
-        gunner2 = findRosterPlayerByName(parts.length > 4 ? parts[4] : null);
-        longSnapper = findRosterPlayerByName(parts.length > 5 ? parts[5] : null);
+        puntReturner = findRosterPlayerRef(parts.length > 1 ? parts[1] : null);
+        kickReturner = findRosterPlayerRef(parts.length > 2 ? parts[2] : null);
+        gunner1 = findRosterPlayerRef(parts.length > 3 ? parts[3] : null);
+        gunner2 = findRosterPlayerRef(parts.length > 4 ? parts[4] : null);
+        longSnapper = findRosterPlayerRef(parts.length > 5 ? parts[5] : null);
         ensureSpecialTeamsDepth();
     }
 
@@ -2737,20 +2739,60 @@ public class Team {
         }
     }
 
-    private static String nameOrEmpty(Player p) {
-        return p != null && p.name != null ? p.name : "";
+    /** Save token: position:name:year (name-only still accepted on load). */
+    private static String playerRefOrEmpty(Player p) {
+        if (p == null || p.name == null || p.name.isEmpty()) {
+            return "";
+        }
+        String pos = p.position != null ? p.position : "";
+        return pos + ":" + p.name + ":" + p.year;
     }
 
     private boolean isHealthyOnRoster(Player p) {
         return p != null && !p.isInjured && getAllPlayers().contains(p);
     }
 
-    private Player findRosterPlayerByName(String name) {
-        if (name == null || name.isEmpty()) return null;
-        for (Player p : getAllPlayers()) {
-            if (name.equals(p.name)) return p;
+    private Player findRosterPlayerRef(String ref) {
+        if (ref == null || ref.isEmpty()) {
+            return null;
         }
-        return null;
+        String pos = null;
+        String name = ref;
+        int year = -1;
+        String[] bits = ref.split(":", -1);
+        if (bits.length >= 3) {
+            pos = bits[0];
+            // Name may contain ':' — year is the final segment.
+            year = parseTrailingInt(bits[bits.length - 1], -1);
+            StringBuilder nameSb = new StringBuilder(bits[1]);
+            for (int i = 2; i < bits.length - 1; i++) {
+                nameSb.append(':').append(bits[i]);
+            }
+            name = nameSb.toString();
+        }
+        Player namedOnly = null;
+        for (Player p : getAllPlayers()) {
+            if (p.name == null || !name.equals(p.name)) {
+                continue;
+            }
+            if (pos != null && year >= 0
+                    && pos.equals(p.position)
+                    && p.year == year) {
+                return p;
+            }
+            if (namedOnly == null) {
+                namedOnly = p;
+            }
+        }
+        return namedOnly;
+    }
+
+    private static int parseTrailingInt(String raw, int fallback) {
+        try {
+            return Integer.parseInt(raw);
+        } catch (Exception e) {
+            return fallback;
+        }
     }
 
     private static Player pickBestSpeed(ArrayList<Player> pool, Player excludeA, Player excludeB) {
@@ -2873,8 +2915,9 @@ public class Team {
      * @return integer of how good the team is at passing
      */
     public int getPassProf() {
-        int avgWRs = ( teamWRs.get(0).ratOvr + teamWRs.get(1).ratOvr + teamWRs.get(2).ratOvr)/3;
-        return (getCompositeOLPass() + getQB(0).ratOvr*2 + avgWRs)/4;
+        int avgWRs = averageOvr(teamWRs, 3);
+        int qb = teamQBs.isEmpty() ? 0 : getQB(0).ratOvr;
+        return (getCompositeOLPass() + qb * 2 + avgWRs) / 4;
     }
 
     /**
@@ -2882,8 +2925,8 @@ public class Team {
      * @return integer of how good the team is at rushing
      */
     public int getRushProf() {
-        int avgRBs = ( teamRBs.get(0).ratOvr + teamRBs.get(1).ratOvr )/2;
-        return (getCompositeOLRush() + avgRBs )/2;
+        int avgRBs = averageOvr(teamRBs, 2);
+        return (getCompositeOLRush() + avgRBs) / 2;
     }
 
     /**
@@ -2891,8 +2934,9 @@ public class Team {
      * @return integer of how good
      */
     public int getPassDef() {
-        int avgCBs = ( teamCBs.get(0).ratOvr + teamCBs.get(1).ratOvr + teamCBs.get(2).ratOvr)/3;
-        return (avgCBs*3 + teamSs.get(0).ratOvr + getCompositeFrontPass()*2)/6;
+        int avgCBs = averageOvr(teamCBs, 3);
+        int safety = teamSs.isEmpty() ? 0 : teamSs.get(0).ratOvr;
+        return (avgCBs * 3 + safety + getCompositeFrontPass() * 2) / 6;
     }
 
     /**
@@ -2908,12 +2952,36 @@ public class Team {
      * Is the average of power and pass blocking.
      * @return how good they are at blocking the pass.
      */
-    public int getCompositeOLPass() {
-        int compositeOL = 0;
-        for ( int i = 0; i < 5; ++i ) {
-            compositeOL += (teamOLs.get(i).ratings.stre + teamOLs.get(i).ratings.pbk)/2;
+    private static int sumOvr(List<? extends Player> players, int maxCount) {
+        if (players == null || players.isEmpty() || maxCount <= 0) {
+            return 0;
         }
-        return compositeOL / 5;
+        int n = Math.min(maxCount, players.size());
+        int sum = 0;
+        for (int i = 0; i < n; ++i) {
+            sum += players.get(i).ratOvr;
+        }
+        return sum;
+    }
+
+    private static int averageOvr(List<? extends Player> players, int maxCount) {
+        if (players == null || players.isEmpty() || maxCount <= 0) {
+            return 0;
+        }
+        int n = Math.min(maxCount, players.size());
+        return sumOvr(players, n) / n;
+    }
+
+    public int getCompositeOLPass() {
+        if (teamOLs == null || teamOLs.isEmpty()) {
+            return 0;
+        }
+        int n = Math.min(5, teamOLs.size());
+        int compositeOL = 0;
+        for (int i = 0; i < n; ++i) {
+            compositeOL += (teamOLs.get(i).ratings.stre + teamOLs.get(i).ratings.pbk) / 2;
+        }
+        return compositeOL / n;
     }
 
     /**
@@ -2922,11 +2990,15 @@ public class Team {
      * @return how good they are at blocking the rush.
      */
     public int getCompositeOLRush() {
-        int compositeOL = 0;
-        for ( int i = 0; i < 5; ++i ) {
-            compositeOL += (teamOLs.get(i).ratings.stre + teamOLs.get(i).ratings.rbk)/2;
+        if (teamOLs == null || teamOLs.isEmpty()) {
+            return 0;
         }
-        return compositeOL / 5;
+        int n = Math.min(5, teamOLs.size());
+        int compositeOL = 0;
+        for (int i = 0; i < n; ++i) {
+            compositeOL += (teamOLs.get(i).ratings.stre + teamOLs.get(i).ratings.rbk) / 2;
+        }
+        return compositeOL / n;
     }
 
     public int getCompositeFrontPass() {

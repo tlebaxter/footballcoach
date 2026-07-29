@@ -23,7 +23,6 @@ data class HomeUiState(
     val loading: Boolean = false,
     val errorMessage: String? = null,
     val navigateToMain: Boolean = false,
-    val navigateToTutorial: Boolean = false,
 )
 
 class HomeViewModel(application: Application) : AndroidViewModel(application) {
@@ -48,14 +47,6 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
 
     fun consumeNavigateToMain() {
         _uiState.update { it.copy(navigateToMain = false) }
-    }
-
-    fun consumeNavigateToTutorial() {
-        _uiState.update { it.copy(navigateToTutorial = false) }
-    }
-
-    fun openTutorial() {
-        _uiState.update { it.copy(navigateToTutorial = true) }
     }
 
     fun startNewLeague() {
