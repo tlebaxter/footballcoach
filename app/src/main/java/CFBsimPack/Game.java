@@ -17,6 +17,7 @@ import CFBsimPack.engine.PenaltyResolver;
 import CFBsimPack.engine.PendingPlay;
 import CFBsimPack.engine.PlayCall;
 import CFBsimPack.engine.PlayLogEntry;
+import CFBsimPack.engine.snap.SnapTrace;
 import CFBsimPack.engine.PlayResolver;
 import CFBsimPack.engine.PlayResult;
 import CFBsimPack.engine.PlayState;
@@ -60,6 +61,7 @@ public class Game implements Serializable {
     public transient List<PlayLogEntry> playLog = new ArrayList<>();
     public transient String lastOffenseConceptId;
     public transient String lastDefenseConceptId;
+    public transient SnapTrace lastSnapTrace;
 
     private transient PlayResolver resolver;
     private transient AiPlayCaller aiCaller;
@@ -294,6 +296,7 @@ public class Game implements Serializable {
         playLog = new ArrayList<>();
         lastOffenseConceptId = null;
         lastDefenseConceptId = null;
+        lastSnapTrace = null;
         playerGameStats = new PlayerGameStats();
         if (resolver != null) resolver.setGameStats(playerGameStats);
         String tossWinner = state.homeWonToss ? homeTeam.abbr : awayTeam.abbr;
@@ -444,7 +447,8 @@ public class Game implements Serializable {
                 state.pendingTry, state.tryAwaitingChoice, state.tryIsTwoPoint,
                 userChoosesTry, userDefendsTwoPoint,
                 canCallTimeout, state.clockRunning, state.pendingTenSecondRunoff,
-                state.crowdEnergy, AtmosphereEngine.band(state)
+                state.crowdEnergy, AtmosphereEngine.band(state),
+                lastSnapTrace
         );
     }
 
@@ -799,6 +803,9 @@ public class Game implements Serializable {
         ConceptFamily offenseFamily = call != null
                 ? call.resolvedOffenseConcept().family
                 : ConceptFamily.SPECIAL;
+        if (result != null) {
+            lastSnapTrace = result.snapTrace;
+        }
         playLog.add(new PlayLogEntry(
                 clockBefore,
                 quarter,
@@ -813,7 +820,8 @@ public class Game implements Serializable {
                 call != null ? call.resolvedDefenseConcept().id : null,
                 call != null ? call.resolvedDefenseConcept().displayName : "",
                 result != null ? result.logLine : "",
-                possessionHome
+                possessionHome,
+                result != null ? result.snapTrace : null
         ));
     }
 
@@ -832,7 +840,9 @@ public class Game implements Serializable {
             if (line.player == null) continue;
             boolean meaningful = line.passAtt > 0 || line.rushAtt > 0 || line.receptions > 0
                     || line.fgAtt > 0 || line.xpAtt > 0
-                    || line.prAtt > 0 || line.krAtt > 0 || line.puntAtt > 0;
+                    || line.prAtt > 0 || line.krAtt > 0 || line.puntAtt > 0
+                    || line.tackles > 0 || line.tfl > 0 || line.sacksDef > 0 || line.defInt > 0
+                    || line.passDef > 0 || line.forcedFumbles > 0 || line.fumbleRec > 0;
             if (!meaningful) continue;
             boolean home = line.player.team == homeTeam;
             lines.add(new BoxScoreLine(
@@ -861,7 +871,14 @@ public class Game implements Serializable {
                     line.xpMade,
                     line.xpAtt,
                     line.puntAtt,
-                    line.puntYards
+                    line.puntYards,
+                    line.tackles,
+                    line.tfl,
+                    line.sacksDef,
+                    line.defInt,
+                    line.passDef,
+                    line.forcedFumbles,
+                    line.fumbleRec
             ));
         }
         return lines;
@@ -905,7 +922,7 @@ public class Game implements Serializable {
                 if (state.possessionHome != startHomePoss) break;
             }
         }
-        if (state.gameOver && !hasPlayed) {
+        if (state.gameOver && isDecided() && !hasPlayed) {
             finalizeGame();
         }
     }
@@ -913,11 +930,46 @@ public class Game implements Serializable {
     public void playGame() {
         if (hasPlayed) return;
         startGame();
+        resolveUntilDecided();
+    }
+
+    /**
+     * Keep simulating (including OT recovery) until scores differ and the game is over,
+     * then finalize. Never invents a winner on a tie.
+     *
+     * @return true if the game was finalized with a winner
+     */
+    public boolean resolveUntilDecided() {
+        if (hasPlayed) return true;
+        if (state == null) startGame();
         if (state.awaitingCoinToss) {
             autoResolveCoinToss();
         }
+
         int guard = 0;
-        while (!state.gameOver && guard++ < 900) {
+        while (!hasPlayed && guard++ < 1800) {
+            syncPublicFields();
+            if (state.gameOver && isDecided()) {
+                finalizeGame();
+                return hasPlayed;
+            }
+            if (state.gameOver && !isDecided()) {
+                // Recover false completion while tied; resume OT or enter it.
+                state.gameOver = false;
+                if (!state.playingOT) {
+                    enterOT();
+                }
+            } else if (!state.playingOT
+                    && !state.gameOver
+                    && !state.awaitingCoinToss
+                    && state.gameTime <= 0
+                    && state.homeScore == state.awayScore) {
+                // Regulation expired tied without OT entry (guard exit / restore).
+                enterOT();
+            }
+            if (state.gameOver) {
+                continue;
+            }
             // Force: a user-controlled offense would otherwise leave the try pending forever.
             autoResolveTryIfNeeded(true);
             maybeAiAvoidTenSecondRunoff();
@@ -926,15 +978,53 @@ public class Game implements Serializable {
             executeSnap(aiCaller.choose(offense, defense, state));
             autoResolveTryIfNeeded(true);
         }
-        if (!hasPlayed) finalizeGame();
+
+        syncPublicFields();
+        if (state.gameOver && isDecided() && !hasPlayed) {
+            finalizeGame();
+        }
+        return hasPlayed;
+    }
+
+    /** True when scores are unequal (a winner exists). */
+    public boolean isDecided() {
+        return homeScore != awayScore;
+    }
+
+    /** True when home leads. Only meaningful when {@link #isDecided()}. */
+    public boolean homeWon() {
+        return homeScore > awayScore;
+    }
+
+    /** Winning team. Only valid when {@link #isDecided()}. */
+    public Team winningTeam() {
+        if (!isDecided()) {
+            throw new IllegalStateException("Game is not decided");
+        }
+        return homeWon() ? homeTeam : awayTeam;
+    }
+
+    /** Losing team. Only valid when {@link #isDecided()}. */
+    public Team losingTeam() {
+        if (!isDecided()) {
+            throw new IllegalStateException("Game is not decided");
+        }
+        return homeWon() ? awayTeam : homeTeam;
     }
 
     public void finalizeGame() {
         if (hasPlayed || state == null) return;
         syncPublicFields();
+        if (!isDecided()) {
+            // Never award a fake winner on a tie; leave unfinished for further OT resolution.
+            return;
+        }
         numOT = state.numOT;
 
-        if (homeScore > awayScore) {
+        final boolean homeIsWinner = homeWon();
+        final boolean awayIsWinner = !homeIsWinner;
+
+        if (homeIsWinner) {
             homeTeam.wins++;
             homeTeam.totalWins++;
             homeTeam.gameWLSchedule.add("W");
@@ -958,8 +1048,8 @@ public class Game implements Serializable {
             homeTeam.winStreak.resetStreak(homeTeam.league.getYear());
         }
 
-        homeTeam.addGamePlayedPlayers(homeScore > awayScore);
-        awayTeam.addGamePlayedPlayers(awayScore > homeScore);
+        homeTeam.addGamePlayedPlayers(homeIsWinner);
+        awayTeam.addGamePlayedPlayers(awayIsWinner);
 
         homeTeam.teamPoints += homeScore;
         awayTeam.teamPoints += awayScore;
@@ -976,12 +1066,11 @@ public class Game implements Serializable {
         homeTeam.teamTODiff += awayTOs - homeTOs;
         awayTeam.teamTODiff += homeTOs - awayTOs;
 
-        boolean homeWon = homeScore > awayScore;
         if (homeTeam.isRival(awayTeam.abbr)) {
-            homeTeam.recordRivalryResult(awayTeam.abbr, homeWon);
+            homeTeam.recordRivalryResult(awayTeam.abbr, homeIsWinner);
         }
         if (awayTeam.isRival(homeTeam.abbr)) {
-            awayTeam.recordRivalryResult(homeTeam.abbr, !homeWon);
+            awayTeam.recordRivalryResult(homeTeam.abbr, awayIsWinner);
         }
 
         if (homeTeam.league != null && homeTeam.league.oocContracts != null) {

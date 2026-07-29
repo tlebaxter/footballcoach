@@ -40,32 +40,29 @@ class TalentHubViewModelHandoffTest {
     }
 
     @Test
-    fun portalPrimarySetsPendingAndNavigatesMain() {
-        LeagueFixtures.beginOffseason(phase = OffseasonSession.Phase.PORTAL)
+    fun portalPrimaryAppliesTransitionAndNavigatesSchedule() {
+        val (league, off) = LeagueFixtures.beginOffseason(phase = OffseasonSession.Phase.PORTAL)
+        off.buildTransferPortal()
+        league.heismanHistory.add("QB Test [Sr], XXX (0-0)")
         val vm = TalentHubViewModel(app)
 
         vm.onPrimary()
+        waitUntil { vm.uiState.value.navigateToSchedule || vm.uiState.value.message != null }
 
-        assertEquals(
-            GameSession.OffseasonResult.DONE_TRANSFER_PORTAL,
-            GameSession.getPendingOffseasonResult(),
-        )
-        assertTrue(vm.uiState.value.navigateToMain)
+        assertEquals(OffseasonSession.Phase.SCHEDULE, OffseasonSession.phase)
+        assertTrue(vm.uiState.value.navigateToSchedule)
+        assertFalse(vm.uiState.value.navigateToMain)
     }
 
     @Test
-    fun hsPrimarySetsBudgetPendingAndNavigatesMain() {
-        val (league, _) = LeagueFixtures.beginOffseason(phase = OffseasonSession.Phase.HS)
-        league.userTeam.recruitMoney = 333_000
+    fun hsPrimaryFinishesRecruitingAndNavigatesMain() {
+        LeagueFixtures.beginOffseason(phase = OffseasonSession.Phase.HS)
         val vm = TalentHubViewModel(app)
 
         vm.onPrimary()
+        waitUntil { vm.uiState.value.navigateToMain || vm.uiState.value.message != null }
 
-        assertEquals(
-            GameSession.OffseasonResult.DONE_RECRUITING,
-            GameSession.getPendingOffseasonResult(),
-        )
-        assertEquals(333_000, GameSession.getPendingRemainingBudget())
+        assertFalse(OffseasonSession.ready())
         assertTrue(vm.uiState.value.navigateToMain)
     }
 
@@ -83,23 +80,28 @@ class TalentHubViewModelHandoffTest {
     }
 
     @Test
-    fun retentionPrimaryAppliesAndSetsDoneRetention() {
+    fun retentionPrimaryAppliesPortalAndStaysOnHub() {
         LeagueFixtures.beginOffseason(phase = OffseasonSession.Phase.RETENTION)
         val vm = TalentHubViewModel(app)
 
         vm.onPrimary()
-        // approveRetention uses Dispatchers.Default; poll until it resumes on Main.
+        waitUntil {
+            OffseasonSession.phase == OffseasonSession.Phase.PORTAL &&
+                vm.uiState.value.selectedTab == HubTab.PORTAL
+        }
+
+        assertEquals(OffseasonSession.Phase.PORTAL, OffseasonSession.phase)
+        assertEquals(HubTab.PORTAL, vm.uiState.value.selectedTab)
+        assertFalse(vm.uiState.value.navigateToMain)
+        assertTrue(OffseasonSession.offseason.transferPortal.isNotEmpty())
+    }
+
+    private fun waitUntil(predicate: () -> Boolean) {
         var waited = 0
-        while (!vm.uiState.value.navigateToMain && waited < 100) {
+        while (!predicate() && waited < 100) {
             Thread.sleep(20)
             waited++
         }
-
-        assertTrue(vm.uiState.value.navigateToMain)
-        assertEquals(
-            GameSession.OffseasonResult.DONE_RETENTION,
-            GameSession.getPendingOffseasonResult(),
-        )
-        assertEquals(OffseasonSession.Phase.PORTAL, OffseasonSession.phase)
+        assertTrue(predicate())
     }
 }

@@ -26,7 +26,7 @@ Relative to the original Football Coach codebase, Football Coach 3 notably inclu
 - Multi-factor **Program Profile**: tradition, fanbase, donors, recruiting footprint, NFL pipeline, and momentum
 - Modern Gradle / Kotlin project layout and unit tests around the new sim systems
 
-Program Profile saves use format version 5. Older careers are intentionally incompatible and must be restarted.
+Careers use save format **version 12** (JSON documents in a SQLite slot database wrapping the league CFB payload). Legacy `.cfb` slots (versions 6–9) and structured JSON versions 10–11 are migrated automatically on load.
 
 ---
 
@@ -55,7 +55,13 @@ After the season, eligibility attrition and transfers open spots. Player spendin
 
 ### Saving
 
-You can save during a season. Save format version 5 stores the full Program Profile and recent finish/draft history; older saves are rejected.
+Careers are stored in **10 SQLite slots** (`careers.db`) as version **12** JSON envelopes: metadata plus a gzip+Base64 league CFB payload (rosters, Program Profile, mid-season schedule/results, postseason/`POSTSEASON` block, offseason). The live career is process-scoped; disk is updated after every career-mutating action (week advance, coach results, Talent Hub offers/buyouts, offseason phase completes at the source screen). Background save on app stop is a backup flush only. Home offers **Resume** for the last active slot after process death.
+
+- Load/mapper failures do **not** mark an otherwise OK slot **CORRUPT** — Resume/Load and export stay available; only empty/missing payloads and failed legacy `.cfb` migrates use CORRUPT.
+- Incompatible versions are rejected but the payload remains exportable.
+- Export/import JSON from the Load dialog for backup/share/debug (export works whenever a payload exists).
+- Legacy `saveFileN.cfb` files are imported once into SQLite, then renamed `.cfb.migrated`. Structured v10/v11 JSON is upgraded to the v12 CFB envelope on read.
+
 
 ### Program seed data
 

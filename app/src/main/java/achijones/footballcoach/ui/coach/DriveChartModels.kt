@@ -23,6 +23,8 @@ data class DriveSegment(
     val yardsGained: Int,
     val logLine: String,
     val conceptName: String,
+    /** Coach why bullets from snap trace; empty for preview / specials. */
+    val whyBullets: List<String> = emptyList(),
 )
 
 const val PREVIEW_SEGMENT_ID = -1
@@ -88,6 +90,7 @@ fun buildDriveSegments(
                 yardsGained = entry.yardsGained,
                 logLine = entry.logLine,
                 conceptName = entry.offenseConceptName,
+                whyBullets = entry.snapTrace?.summaryBullets?.toList().orEmpty(),
             ),
         )
     }

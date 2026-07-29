@@ -395,15 +395,56 @@ fun MainScreen(
     }
     if (state.confirmOverwriteSlot != null) {
         val slot = state.confirmOverwriteSlot!!
+        val info = state.saveSlotInfos.getOrNull(slot)
         AlertDialog(
             onDismissRequest = viewModel::dismissOverwriteConfirm,
-            title = { Text("Overwrite Save?") },
-            text = { Text("Are you sure you want to overwrite this save file?\n\n${state.saveSlotInfos[slot]}") },
+            title = { Text(if (info?.status == achijones.footballcoach.save.SlotStatus.CORRUPT) "Replace damaged save?" else "Overwrite Save?") },
+            text = {
+                Text(
+                    "Are you sure you want to overwrite this save file?\n\n" +
+                        (info?.let { achijones.footballcoach.ui.util.SaveSlots.label(it) } ?: ""),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = viewModel::confirmOverwriteSave) { Text("Yes, Overwrite") }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissOverwriteConfirm) { Text("Cancel") }
+            },
+        )
+    }
+    state.confirmDeleteSlot?.let { slot ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDeleteSlot,
+            title = { Text("Delete slot ${slot + 1}?") },
+            text = { Text("This permanently removes the career in this slot.") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDeleteSlot) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissDeleteSlot) { Text("Cancel") }
+            },
+        )
+    }
+    if (state.showChooseSlotForNewCareer) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissChooseSlotForNewCareer,
+            title = { Text("Choose a save slot") },
+            text = {
+                Column {
+                    Text("All slots are full. Pick one to overwrite for this new career.")
+                    state.saveSlotInfos.forEach { info ->
+                        TextButton(
+                            onClick = { viewModel.chooseSlotForNewCareer(info.index) },
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Text(achijones.footballcoach.ui.util.SaveSlots.label(info))
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = viewModel::dismissChooseSlotForNewCareer) { Text("Cancel") }
             },
         )
     }
@@ -2786,17 +2827,34 @@ private fun RecruitingClassDialog(rows: List<RankingRowUi>, onDismiss: () -> Uni
 
 @Composable
 private fun SaveDialog(state: MainUiState, viewModel: MainViewModel) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     AlertDialog(
         onDismissRequest = viewModel::dismissSaveDialog,
-        title = { Text("Choose Save File to Overwrite:") },
+        title = { Text("Choose Save File:") },
         text = {
             LazyColumn {
                 items(state.saveSlotInfos.size) { i ->
                     val info = state.saveSlotInfos[i]
-                    TextButton(
-                        onClick = { viewModel.saveToSlot(i) },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) { Text(if (info == "EMPTY") "Slot $i — EMPTY" else info) }
+                    Row(modifier = Modifier.fillMaxWidth()) {
+                        TextButton(
+                            onClick = { viewModel.saveToSlot(i) },
+                            modifier = Modifier.weight(1f),
+                        ) {
+                            Text(achijones.footballcoach.ui.util.SaveSlots.label(info))
+                        }
+                        if (info.status == achijones.footballcoach.save.SlotStatus.OK) {
+                            TextButton(onClick = {
+                                viewModel.exportActiveOrSlot(i) { json ->
+                                    achijones.footballcoach.ui.util.SaveExportShare.shareJson(context, i, json)
+                                }
+                            }) { Text("Export") }
+                        }
+                        if (info.status != achijones.footballcoach.save.SlotStatus.EMPTY) {
+                            TextButton(onClick = { viewModel.requestDeleteSlot(i) }) {
+                                Text("Del")
+                            }
+                        }
+                    }
                 }
             }
         },

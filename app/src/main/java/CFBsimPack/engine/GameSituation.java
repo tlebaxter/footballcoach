@@ -1,5 +1,7 @@
 package CFBsimPack.engine;
 
+import CFBsimPack.engine.snap.SnapTrace;
+
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -92,6 +94,8 @@ public final class GameSituation {
     public final int crowdEnergy;
     /** Quiet / Steady / Loud / Electric / Hostile. */
     public final String crowdBand;
+    /** Structured why for the last resolved snap; null when unavailable. */
+    public final SnapTrace lastSnapTrace;
 
     public GameSituation(
             int homeScore, int awayScore, String homeAbbr, String awayAbbr,
@@ -115,7 +119,8 @@ public final class GameSituation {
             boolean pendingTry, boolean tryAwaitingChoice, boolean tryIsTwoPoint,
             boolean userChoosesTry, boolean userDefendsTwoPoint,
             boolean canCallTimeout, boolean clockRunning, boolean pendingTenSecondRunoff,
-            int crowdEnergy, String crowdBand
+            int crowdEnergy, String crowdBand,
+            SnapTrace lastSnapTrace
     ) {
         this.homeScore = homeScore;
         this.awayScore = awayScore;
@@ -186,5 +191,6 @@ public final class GameSituation {
         this.pendingTenSecondRunoff = pendingTenSecondRunoff;
         this.crowdEnergy = crowdEnergy;
         this.crowdBand = crowdBand != null ? crowdBand : AtmosphereEngine.band(crowdEnergy);
+        this.lastSnapTrace = lastSnapTrace;
     }
 }

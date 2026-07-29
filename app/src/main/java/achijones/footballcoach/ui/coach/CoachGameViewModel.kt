@@ -363,7 +363,7 @@ class CoachGameViewModel : ViewModel() {
 
         g.executeSnap(call)
         dismissedTipKey = null
-        if (g.state?.gameOver == true && !g.hasPlayed) g.finalizeGame()
+        if (g.state?.gameOver == true && g.isDecided && !g.hasPlayed) g.finalizeGame()
         refresh()
         suggestNextPlayIfNeeded(preserveAiCallMode = wasAiCallMode)
     }
@@ -392,7 +392,7 @@ class CoachGameViewModel : ViewModel() {
         if (g.state?.awaitingCoinToss == true) return
         val wasAiCallMode = _uiState.value.aiCallMode
         g.autoSimUntil(until)
-        if (g.state?.gameOver == true && !g.hasPlayed) g.finalizeGame()
+        if (g.state?.gameOver == true && g.isDecided && !g.hasPlayed) g.finalizeGame()
         refresh()
         _uiState.update { it.copy(showSimUntilMenu = false) }
         suggestNextPlayIfNeeded(preserveAiCallMode = wasAiCallMode)
@@ -401,8 +401,7 @@ class CoachGameViewModel : ViewModel() {
     fun finishAndClose() {
         val g = game ?: return
         if (!g.hasPlayed && g.state != null) {
-            if (!g.state.gameOver) g.autoSimUntil(AutoSimUntil.GAME)
-            if (!g.hasPlayed) g.finalizeGame()
+            g.resolveUntilDecided()
         }
         GameSession.finishCoachGame(g)
         _uiState.update { it.copy(finished = true) }

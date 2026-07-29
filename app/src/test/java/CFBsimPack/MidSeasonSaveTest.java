@@ -1,7 +1,5 @@
 package CFBsimPack;
 
-import CFBsimPack.engine.AutoSimUntil;
-
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -39,11 +37,9 @@ public class MidSeasonSaveTest {
         Game game = firstPlayableGame(user);
         assertNotNull(game);
         game.startGame();
-        game.autoSimUntil(AutoSimUntil.GAME);
-        if (!game.hasPlayed) {
-            game.finalizeGame();
-        }
+        game.resolveUntilDecided();
         assertTrue(game.hasPlayed);
+        assertTrue(game.isDecided());
         assertEquals(0, league.currentWeek);
 
         int homeScore = game.homeScore;
@@ -92,6 +88,56 @@ public class MidSeasonSaveTest {
         assertNotNull(loadedQb.injury);
         assertEquals(3, loadedQb.injury.getDuration());
         assertEquals("Knee", loadedQb.injury.getDescription());
+    }
+
+    @Test
+    public void postseasonBracketRoundTripsThroughCfb() throws Exception {
+        League league = createLeague();
+        league.userTeam = league.teamList.get(0);
+        league.userTeam.userControlled = true;
+        while (league.currentWeek < League.WEEK_CFP_FIRST_ROUND) {
+            league.playWeek();
+        }
+        assertTrue(league.hasScheduledBowls);
+        assertEquals(Postseason.CFP_FIELD_SIZE, league.cfpField.size());
+        assertNotNull(league.cfpFirstRound);
+        assertEquals(4, league.cfpFirstRound.length);
+
+        String seed0 = league.cfpField.get(0).abbr;
+        String fr0 = league.cfpFirstRound[0].gameName
+                + "|" + league.cfpFirstRound[0].homeTeam.abbr
+                + "|" + league.cfpFirstRound[0].awayTeam.abbr;
+        int bowlCount = league.bowlGames.length;
+
+        File saveFile = temporaryFolder.newFile("postseason.cfb");
+        assertTrue(league.saveLeague(saveFile));
+        String raw = new String(Files.readAllBytes(saveFile.toPath()), StandardCharsets.UTF_8);
+        assertTrue(raw.contains("POSTSEASON"));
+        assertTrue(raw.contains("\nFR\n"));
+        assertTrue(raw.contains("END_POSTSEASON"));
+
+        League loaded = new League(saveFile, FIRST_NAMES, LAST_NAMES);
+        assertEquals(League.WEEK_CFP_FIRST_ROUND, loaded.currentWeek);
+        assertTrue(loaded.hasScheduledBowls);
+        assertEquals(Postseason.CFP_FIELD_SIZE, loaded.cfpField.size());
+        assertEquals(seed0, loaded.cfpField.get(0).abbr);
+        assertNotNull(loaded.cfpFirstRound);
+        assertEquals(4, loaded.cfpFirstRound.length);
+        assertEquals(
+                fr0,
+                loaded.cfpFirstRound[0].gameName
+                        + "|" + loaded.cfpFirstRound[0].homeTeam.abbr
+                        + "|" + loaded.cfpFirstRound[0].awayTeam.abbr);
+        assertEquals(bowlCount, loaded.bowlGames.length);
+        assertTrue(loaded.cfpQuarters == null);
+        boolean anyCcg = false;
+        for (Conference c : loaded.conferences) {
+            if (c.getCcg() != null) {
+                anyCcg = true;
+                break;
+            }
+        }
+        assertTrue(anyCcg);
     }
 
     @Test

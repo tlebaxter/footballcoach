@@ -61,7 +61,6 @@ public final class IntResolver {
         int foot = qb.ratFootIQ;
         int depthYd = route.depthYards;
         boolean hurried = protection != null && throwTimeSec >= protection.earliestPressureSec - 0.05;
-        double intMod = cov != null ? cov.intMod : 1.0;
 
         double base = 2.6
                 + (hurried ? 1.6 : 0)
@@ -71,7 +70,7 @@ public final class IntResolver {
                 - (tha - 50) / 28.0
                 - (thv - 50) / 35.0
                 - (foot - 50) / 40.0;
-        base *= intMod;
+        base *= SafetyHelp.coverageIntPrior(cov);
         if (base < 0.4) base = 0.4;
         if (base > 14) base = 14;
 

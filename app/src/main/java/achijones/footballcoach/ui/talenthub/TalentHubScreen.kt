@@ -88,6 +88,7 @@ private val CompactFieldContentPadding = PaddingValues(horizontal = 10.dp, verti
 fun TalentHubScreen(
     onNavigateToMain: () -> Unit,
     onNavigateHome: () -> Unit,
+    onNavigateToSchedule: () -> Unit = {},
     viewModel: TalentHubViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -99,6 +100,12 @@ fun TalentHubScreen(
         if (state.navigateToMain) {
             viewModel.consumeNavigateToMain()
             onNavigateToMain()
+        }
+    }
+    LaunchedEffect(state.navigateToSchedule) {
+        if (state.navigateToSchedule) {
+            viewModel.consumeNavigateToSchedule()
+            onNavigateToSchedule()
         }
     }
     LaunchedEffect(state.navigateHome) {
@@ -225,19 +232,26 @@ fun TalentHubScreen(
     if (state.showSaveDialog) {
         AlertDialog(
             onDismissRequest = viewModel::dismissSaveDialog,
-            title = { Text("Choose Save File to Overwrite:") },
+            title = { Text("Choose Save File:") },
             text = {
                 Column {
-                    state.saveSlotInfos.forEachIndexed { index, info ->
-                        TextButton(
-                            onClick = { viewModel.pickSaveSlot(index) },
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(
-                                "${index + 1}. $info",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start,
-                            )
+                    state.saveSlotInfos.forEach { info ->
+                        Row(modifier = Modifier.fillMaxWidth()) {
+                            TextButton(
+                                onClick = { viewModel.pickSaveSlot(info.index) },
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    achijones.footballcoach.ui.util.SaveSlots.label(info),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start,
+                                )
+                            }
+                            if (info.status != achijones.footballcoach.save.SlotStatus.EMPTY) {
+                                TextButton(onClick = { viewModel.requestDeleteSlot(info.index) }) {
+                                    Text("Del")
+                                }
+                            }
                         }
                     }
                 }
@@ -249,15 +263,35 @@ fun TalentHubScreen(
     }
 
     state.confirmOverwriteIndex?.let {
+        val info = state.saveSlotInfos.getOrNull(it)
         AlertDialog(
             onDismissRequest = viewModel::dismissOverwrite,
             title = { Text("Overwrite?") },
-            text = { Text("Overwrite this save file?\n\n${state.saveSlotInfos[it]}") },
+            text = {
+                Text(
+                    "Overwrite this save file?\n\n" +
+                        (info?.let { s -> achijones.footballcoach.ui.util.SaveSlots.label(s) } ?: ""),
+                )
+            },
             confirmButton = {
                 TextButton(onClick = viewModel::confirmOverwrite) { Text("Overwrite") }
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissOverwrite) { Text("Cancel") }
+            },
+        )
+    }
+
+    state.confirmDeleteIndex?.let {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDelete,
+            title = { Text("Delete slot ${it + 1}?") },
+            text = { Text("This permanently removes the career in this slot.") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDelete) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissDelete) { Text("Cancel") }
             },
         )
     }

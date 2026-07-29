@@ -26,13 +26,7 @@ public final class PlayDefinitions {
             String personnel,
             DepthBand depth,
             String blurb,
-            TargetBias bias,
-            double completionMod,
-            double yardsMod,
-            double sackRiskMod,
-            double runYardsMod,
-            double fumbleMod,
-            double clockMultExtra
+            TargetBias bias
     ) {
         boolean empty = "10".equals(personnel) || (formation == Formation.EMPTY);
         boolean pa = id != null && (id.contains("_pa_") || id.contains("boot"));
@@ -51,13 +45,29 @@ public final class PlayDefinitions {
             rpo = id != null && id.contains("zone_read") ? RpoRules.zoneRead() : RpoRules.defaults();
         } else if (offensePlay == OffensePlay.PASS || family == ConceptFamily.PASS) {
             if (id != null && id.contains("screen")) {
-                protection = new ProtectionScheme(ProtectionType.BIG_ON_BIG, 0.9,
+                protection = new ProtectionScheme(ProtectionType.BIG_ON_BIG, 0.85,
                         java.util.Collections.emptySet(), false);
                 routes = screenRoutes();
             } else {
                 ProtectionScheme inferred = ProtectionScheme.infer(depth, empty, pa);
                 if (depth == DepthBand.DEEP && (id != null && id.contains("four_verts"))) {
                     protection = ProtectionScheme.maxProtect();
+                } else if (depth == DepthBand.DEEP) {
+                    // Deep shots develop longer — buy pocket via hotTime (old sackRiskMod ~1.1+)
+                    protection = new ProtectionScheme(
+                            inferred.type,
+                            Math.max(inferred.hotTimeSec, 1.35),
+                            inferred.maxProtectSlots,
+                            inferred.allowDoubleTeams
+                    );
+                } else if (depth == DepthBand.SHORT) {
+                    // Quick game: earlier hot (old sackRisk ~0.9)
+                    protection = new ProtectionScheme(
+                            inferred.type,
+                            Math.min(inferred.hotTimeSec, 1.0),
+                            inferred.maxProtectSlots,
+                            inferred.allowDoubleTeams
+                    );
                 } else {
                     protection = inferred;
                 }
@@ -94,8 +104,7 @@ public final class PlayDefinitions {
 
         return new PlayDefinition(
                 id, displayName, blurb, family, offensePlay, formation, personnel, depth, bias,
-                protection, routes, run, rpo,
-                completionMod, yardsMod, sackRiskMod, runYardsMod, fumbleMod, clockMultExtra
+                protection, routes, run, rpo
         );
     }
 
@@ -139,8 +148,9 @@ public final class PlayDefinitions {
 
     private static List<RouteAssignment> slantRoutes() {
         List<RouteAssignment> r = new ArrayList<>();
-        r.add(RouteAssignment.of(OffSlot.WR_X, RouteType.SLANT, 1, true));
-        r.add(RouteAssignment.of(OffSlot.WR_SLOT, RouteType.SLANT, 2, true));
+        // Quick open beats encode old high completionMod on slants/hitches
+        r.add(new RouteAssignment(OffSlot.WR_X, RouteType.SLANT, 0.85, 6, true, 1));
+        r.add(new RouteAssignment(OffSlot.WR_SLOT, RouteType.SLANT, 0.90, 6, true, 2));
         r.add(RouteAssignment.of(OffSlot.TE_L, RouteType.FLAT, 3, true));
         r.add(RouteAssignment.of(OffSlot.RB, RouteType.FLAT, 4, true));
         return r;
@@ -148,8 +158,9 @@ public final class PlayDefinitions {
 
     private static List<RouteAssignment> meshRoutes() {
         List<RouteAssignment> r = new ArrayList<>();
-        r.add(RouteAssignment.of(OffSlot.WR_X, RouteType.MESH_CROSS, 1, false));
-        r.add(RouteAssignment.of(OffSlot.WR_Z, RouteType.MESH_CROSS, 2, false));
+        // Mesh rubs open earlier vs man (old completionMod 1.10)
+        r.add(new RouteAssignment(OffSlot.WR_X, RouteType.MESH_CROSS, 1.05, 6, false, 1));
+        r.add(new RouteAssignment(OffSlot.WR_Z, RouteType.MESH_CROSS, 1.10, 6, false, 2));
         r.add(RouteAssignment.of(OffSlot.TE_L, RouteType.HITCH, 3, true));
         r.add(RouteAssignment.of(OffSlot.RB, RouteType.FLAT, 4, true));
         return r;
@@ -157,16 +168,17 @@ public final class PlayDefinitions {
 
     private static List<RouteAssignment> vertsRoutes() {
         List<RouteAssignment> r = new ArrayList<>();
-        r.add(RouteAssignment.of(OffSlot.WR_X, RouteType.VERT, 1, false));
-        r.add(RouteAssignment.of(OffSlot.WR_Z, RouteType.VERT, 2, false));
-        r.add(RouteAssignment.of(OffSlot.WR_SLOT, RouteType.SEAM, 3, false));
-        r.add(RouteAssignment.of(OffSlot.TE_L, RouteType.SEAM, 4, true));
+        // Deep verts: later openBeat + depth (old lower completion / higher yards)
+        r.add(new RouteAssignment(OffSlot.WR_X, RouteType.VERT, 1.85, 22, false, 1));
+        r.add(new RouteAssignment(OffSlot.WR_Z, RouteType.VERT, 1.90, 22, false, 2));
+        r.add(new RouteAssignment(OffSlot.WR_SLOT, RouteType.SEAM, 1.70, 18, false, 3));
+        r.add(new RouteAssignment(OffSlot.TE_L, RouteType.SEAM, 1.75, 16, true, 4));
         return r;
     }
 
     private static List<RouteAssignment> screenRoutes() {
         List<RouteAssignment> r = new ArrayList<>();
-        r.add(RouteAssignment.of(OffSlot.WR_X, RouteType.SCREEN, 1, true));
+        r.add(new RouteAssignment(OffSlot.WR_X, RouteType.SCREEN, 0.70, 1, true, 1));
         r.add(RouteAssignment.of(OffSlot.WR_Z, RouteType.GO_STOP, 2, false));
         r.add(RouteAssignment.of(OffSlot.RB, RouteType.FLAT, 3, true));
         return r;

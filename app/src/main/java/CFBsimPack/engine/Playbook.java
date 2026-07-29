@@ -27,123 +27,123 @@ public final class Playbook {
     static {
         // —— Shotgun ——
         addOff(run("gun_inside_zone", "Inside Zone", Formation.SHOTGUN, "11",
-                "Gap-scheme stretch; cutback lanes", 1.08, 0.95));
+                "Gap-scheme stretch; cutback lanes"));
         addOff(run("gun_outside_zone", "Outside Zone", Formation.SHOTGUN, "11",
-                "Wide stretch; bounce or cut", 1.12, 1.02));
+                "Wide stretch; bounce or cut"));
         addOff(run("gun_qb_draw", "QB Draw", Formation.SHOTGUN, "10",
-                "Delayed QB keep up A/B gap", 1.06, 0.90));
+                "Delayed QB keep up A/B gap"));
         addOff(pass("gun_mesh", "Mesh", Formation.SHOTGUN, "11", DepthBand.SHORT, TargetBias.WR,
-                "Crossing mesh under; rub vs man", 1.10, 0.88, 0.95));
+                "Crossing mesh under; rub vs man"));
         addOff(pass("gun_slants", "Slants", Formation.SHOTGUN, "11", DepthBand.SHORT, TargetBias.WR,
-                "Quick slants off release", 1.12, 0.85, 0.92));
+                "Quick slants off release"));
         addOff(pass("gun_stick", "Stick", Formation.SHOTGUN, "11", DepthBand.SHORT, TargetBias.TE,
-                "Stick / glance / flat triangle", 1.10, 0.86, 0.90));
+                "Stick / glance / flat triangle"));
         addOff(pass("gun_levels", "Levels", Formation.SHOTGUN, "11", DepthBand.MEDIUM, TargetBias.TE,
-                "High-low dig over sit", 1.06, 0.98, 0.98));
+                "High-low dig over sit"));
         addOff(pass("gun_smash", "Smash", Formation.SHOTGUN, "11", DepthBand.MEDIUM, TargetBias.WR,
-                "Hitch under corner", 1.04, 1.00, 1.00));
+                "Hitch under corner"));
         addOff(pass("gun_pa_comebacks", "PA Comebacks", Formation.SHOTGUN, "10", DepthBand.MEDIUM, TargetBias.WR,
-                "Play-action comebacks + crosser", 1.02, 1.05, 1.08));
+                "Play-action comebacks + crosser"));
         addOff(pass("gun_four_verts", "Four Verts", Formation.SHOTGUN, "10", DepthBand.DEEP, TargetBias.WR,
-                "All verticals; attack deep thirds", 0.88, 1.22, 1.18));
+                "All verticals; attack deep thirds"));
         addOff(pass("gun_post_corner", "Post-Corner", Formation.SHOTGUN, "11", DepthBand.DEEP, TargetBias.WR,
-                "Post clear + corner behind", 0.92, 1.18, 1.12));
+                "Post clear + corner behind"));
         addOff(pass("gun_screen", "WR Screen", Formation.SHOTGUN, "10", DepthBand.SHORT, TargetBias.WR,
-                "Tunnel/now screen to perimeter", 1.15, 0.92, 0.70));
+                "Tunnel/now screen to perimeter"));
         addOff(pass("gun_rb_angle", "RB Angle", Formation.SHOTGUN, "11", DepthBand.SHORT, TargetBias.RB,
-                "Back angle / option vs LB", 1.08, 0.90, 0.90));
+                "Back angle / option vs LB"));
         addOff(rpo("gun_rpo_peek", "RPO Peek", Formation.SHOTGUN, "11", DepthBand.SHORT,
-                "Zone run with bubble/peek", 1.04, 0.95, 1.02, 0.98));
+                "Zone run with bubble/peek"));
         addOff(rpo("gun_rpo_slant", "RPO Alert Slant", Formation.SHOTGUN, "11", DepthBand.SHORT,
-                "Zone + alert slant vs light box", 1.06, 0.92, 1.00, 0.96));
+                "Zone + alert slant vs light box"));
 
         // —— Pistol ——
         addOff(run("pistol_counter", "Counter", Formation.PISTOL, "11",
-                "Misdirection pull; cutback", 1.10, 0.98));
+                "Misdirection pull; cutback"));
         addOff(run("pistol_inside_zone", "Inside Zone", Formation.PISTOL, "11",
-                " downhill zone from pistol", 1.07, 0.95));
+                " downhill zone from pistol"));
         addOff(pass("pistol_pa_crossers", "PA Crossers", Formation.PISTOL, "11", DepthBand.MEDIUM, TargetBias.WR,
-                "Play-action deep crossers", 1.00, 1.08, 1.05));
+                "Play-action deep crossers"));
         addOff(pass("pistol_boot", "PA Boot", Formation.PISTOL, "11", DepthBand.MEDIUM, TargetBias.TE,
-                "Bootleg flood off fake", 0.98, 1.06, 1.10));
+                "Bootleg flood off fake"));
         addOff(rpo("pistol_zone_read", "Zone Read", Formation.PISTOL, "11", DepthBand.SHORT,
-                "Read end; give or keep", 1.02, 0.90, 0.95, 1.05));
+                "Read end; give or keep"));
 
         // —— I-Form ——
         addOff(run("i_power", "Power", Formation.I_FORM, "21",
-                "Down blocks + puller; lead FB", 1.05, 0.92));
+                "Down blocks + puller; lead FB"));
         addOff(run("i_iso", "Iso", Formation.I_FORM, "21",
-                "FB lead on LB; iso crease", 1.00, 0.90));
+                "FB lead on LB; iso crease"));
         addOff(run("i_dive", "Dive", Formation.I_FORM, "21",
-                "Straight ahead A-gap dive", 0.92, 0.88));
+                "Straight ahead A-gap dive"));
         addOff(pass("i_pa_boot", "PA Boot", Formation.I_FORM, "21", DepthBand.MEDIUM, TargetBias.TE,
-                "Boot off power fake", 0.97, 1.05, 1.08));
+                "Boot off power fake"));
         addOff(pass("i_flat_sail", "Flat-Sail", Formation.I_FORM, "12", DepthBand.MEDIUM, TargetBias.WR,
-                "Flat under sail / dig", 1.03, 0.98, 1.00));
+                "Flat under sail / dig"));
 
         // —— Singleback ——
         addOff(run("sb_inside_zone", "Inside Zone", Formation.SINGLEBACK, "11",
-                "One-back zone stretch", 1.08, 0.95));
+                "One-back zone stretch"));
         addOff(run("sb_duo", "Duo", Formation.SINGLEBACK, "11",
-                "Double teams; vertical double", 1.04, 0.93));
+                "Double teams; vertical double"));
         addOff(pass("sb_levels", "Levels", Formation.SINGLEBACK, "11", DepthBand.MEDIUM, TargetBias.TE,
-                "TE dig over shallow", 1.06, 0.98, 0.98));
+                "TE dig over shallow"));
         addOff(pass("sb_y_cross", "Y-Cross", Formation.SINGLEBACK, "11", DepthBand.MEDIUM, TargetBias.TE,
-                "TE cross + dig hierarchy", 1.02, 1.04, 1.02));
+                "TE cross + dig hierarchy"));
         addOff(pass("sb_curl_flat", "Curl-Flat", Formation.SINGLEBACK, "11", DepthBand.SHORT, TargetBias.WR,
-                "Curl / flat hi-lo", 1.08, 0.90, 0.94));
+                "Curl / flat hi-lo"));
 
         // —— Empty ——
         addOff(pass("empty_four_verts", "Four Verts", Formation.EMPTY, "10", DepthBand.DEEP, TargetBias.WR,
-                "5-wide verticals", 0.88, 1.22, 1.18));
+                "5-wide verticals"));
         addOff(pass("empty_mesh", "Mesh", Formation.EMPTY, "10", DepthBand.SHORT, TargetBias.WR,
-                "Empty mesh rubs", 1.10, 0.88, 0.95));
+                "Empty mesh rubs"));
         addOff(pass("empty_all_hitch", "All Hitch", Formation.EMPTY, "10", DepthBand.SHORT, TargetBias.WR,
-                "Quick game all hitches", 1.14, 0.82, 0.88));
+                "Quick game all hitches"));
         addOff(pass("empty_smash", "Smash", Formation.EMPTY, "10", DepthBand.MEDIUM, TargetBias.WR,
-                "Empty smash corners", 1.04, 1.00, 1.00));
+                "Empty smash corners"));
 
         // —— Trips ——
         addOff(pass("trips_flood", "Flood", Formation.TRIPS, "10", DepthBand.MEDIUM, TargetBias.WR,
-                "3-level flood to trips", 1.00, 1.06, 1.05));
+                "3-level flood to trips"));
         addOff(pass("trips_smash", "Smash", Formation.TRIPS, "10", DepthBand.MEDIUM, TargetBias.WR,
-                "Trips smash / hitch-corner", 1.04, 1.00, 1.00));
+                "Trips smash / hitch-corner"));
         addOff(pass("trips_stick_nod", "Stick-Nod", Formation.TRIPS, "11", DepthBand.MEDIUM, TargetBias.TE,
-                "Stick then nod vertical", 1.00, 1.08, 1.02));
+                "Stick then nod vertical"));
         addOff(run("trips_outside_zone", "Outside Zone", Formation.TRIPS, "10",
-                "Zone bounce to trips edge", 1.10, 1.00));
+                "Zone bounce to trips edge"));
 
         // —— Slot ——
         addOff(pass("slot_smash", "Smash", Formation.SLOT, "11", DepthBand.MEDIUM, TargetBias.WR,
-                "Slot smash corner", 1.04, 1.00, 1.00));
+                "Slot smash corner"));
         addOff(pass("slot_dagger", "Dagger", Formation.SLOT, "11", DepthBand.MEDIUM, TargetBias.WR,
-                "Deep dig over seam", 1.00, 1.08, 1.04));
+                "Deep dig over seam"));
         addOff(pass("slot_drive", "Drive", Formation.SLOT, "11", DepthBand.SHORT, TargetBias.WR,
-                "Shallow drive / dig", 1.08, 0.92, 0.96));
+                "Shallow drive / dig"));
 
         // —— Jumbo ——
         addOff(run("jumbo_power", "Power", Formation.JUMBO, "22",
-                "Heavy power; short yardage", 1.02, 0.90));
+                "Heavy power; short yardage"));
         addOff(run("jumbo_iso", "Iso", Formation.JUMBO, "22",
-                "Heavy iso / sneak look", 0.98, 0.88));
+                "Heavy iso / sneak look"));
         addOff(pass("jumbo_te_seam", "TE Seam", Formation.JUMBO, "22", DepthBand.MEDIUM, TargetBias.TE,
-                "Play-action TE seam", 1.00, 1.08, 1.00));
+                "Play-action TE seam"));
 
         // —— Wishbone ——
         addOff(run("bone_sweep", "Sweep", Formation.WISHBONE, "20",
-                "Triple-option sweep edge", 1.15, 1.05));
+                "Triple-option sweep edge"));
         addOff(run("bone_dive", "Dive", Formation.WISHBONE, "20",
-                "Fullback dive", 0.95, 0.90));
+                "Fullback dive"));
         addOff(run("bone_option", "Triple Option", Formation.WISHBONE, "20",
-                "Dive / keep / pitch read", 1.08, 1.02));
+                "Dive / keep / pitch read"));
 
         // —— Ace ——
         addOff(pass("ace_te_seam", "TE Seam", Formation.ACE, "12", DepthBand.MEDIUM, TargetBias.TE,
-                "2-TE seam vertical", 1.02, 1.10, 1.02));
+                "2-TE seam vertical"));
         addOff(pass("ace_levels", "Levels", Formation.ACE, "12", DepthBand.MEDIUM, TargetBias.TE,
-                "TE levels high-low", 1.05, 0.98, 0.98));
+                "TE levels high-low"));
         addOff(run("ace_duo", "Duo", Formation.ACE, "12",
-                "2-TE duo downhill", 1.04, 0.92));
+                "2-TE duo downhill"));
 
         // —— Specials (Ace / Shotgun shells) ——
         addOff(special("field_goal", "Field Goal", OffensePlay.FIELD_GOAL, Formation.ACE, "11",
@@ -354,33 +354,31 @@ public final class Playbook {
     }
 
     private static OffenseConcept run(
-            String id, String name, Formation form, String pers, String concept,
-            double runYards, double fumble
+            String id, String name, Formation form, String pers, String concept
     ) {
         return new OffenseConcept(id, name, ConceptFamily.RUN, OffensePlay.RUN, form, pers,
-                DepthBand.NONE, concept, 1.0, 1.0, 1.0, runYards, fumble, TargetBias.RB, 0.0);
+                DepthBand.NONE, concept, TargetBias.RB, 0.0);
     }
 
     private static OffenseConcept pass(
             String id, String name, Formation form, String pers, DepthBand depth, TargetBias bias,
-            String concept, double completion, double yards, double sack
+            String concept
     ) {
         return new OffenseConcept(id, name, ConceptFamily.PASS, OffensePlay.PASS, form, pers,
-                depth, concept, completion, yards, sack, 1.0, 1.0, bias, 0.0);
+                depth, concept, bias, 0.0);
     }
 
     private static OffenseConcept rpo(
-            String id, String name, Formation form, String pers, DepthBand depth, String concept,
-            double completion, double passYards, double sack, double runYards
+            String id, String name, Formation form, String pers, DepthBand depth, String concept
     ) {
         return new OffenseConcept(id, name, ConceptFamily.RPO, OffensePlay.PASS, form, pers,
-                depth, concept, completion, passYards, sack, runYards, 1.0, TargetBias.WR, -0.05);
+                depth, concept, TargetBias.WR, -0.05);
     }
 
     private static OffenseConcept special(
             String id, String name, OffensePlay play, Formation form, String pers, String concept
     ) {
         return new OffenseConcept(id, name, ConceptFamily.SPECIAL, play, form, pers,
-                DepthBand.NONE, concept, 1.0, 1.0, 1.0, 1.0, 1.0, TargetBias.ANY, 0.0);
+                DepthBand.NONE, concept, TargetBias.ANY, 0.0);
     }
 }

@@ -1,5 +1,7 @@
 package CFBsimPack.engine;
 
+import CFBsimPack.engine.snap.SnapTrace;
+
 public final class PlayResult {
     public int yardsGained;
     public int clockBurned;
@@ -27,6 +29,8 @@ public final class PlayResult {
      * 0 when unset / not a pass.
      */
     public int passArriveYardLine;
+    /** Structured snap diagnostics for coach why UI; null for specials / log-only. */
+    public SnapTrace snapTrace;
 
     public static PlayResult logOnly(String line, int clock) {
         PlayResult r = new PlayResult();

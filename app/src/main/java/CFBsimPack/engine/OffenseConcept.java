@@ -5,7 +5,7 @@ import CFBsimPack.engine.playdef.PlayDefinition;
 import CFBsimPack.engine.playdef.PlayDefinitions;
 
 /**
- * Named offensive play concept with engine modifiers.
+ * Named offensive play concept.
  * Display is text-only: formation + popular call name + concept tagline.
  * Wraps a {@link PlayDefinition} for assignment snap resolution.
  */
@@ -19,12 +19,8 @@ public final class OffenseConcept {
     public final DepthBand depth;
     /** Short coach-speak description of the concept (routes / scheme). */
     public final String concept;
-    public final double completionMod;
-    public final double yardsMod;
-    public final double sackRiskMod;
-    public final double runYardsMod;
-    public final double fumbleMod;
     public final TargetBias targetBias;
+    /** Tempo clock multiplier extra (not an outcome scaler). */
     public final double clockMultExtra;
     /** Structured play data for the snap engine. */
     public final PlayDefinition definition;
@@ -38,11 +34,6 @@ public final class OffenseConcept {
             String personnel,
             DepthBand depth,
             String concept,
-            double completionMod,
-            double yardsMod,
-            double sackRiskMod,
-            double runYardsMod,
-            double fumbleMod,
             TargetBias targetBias,
             double clockMultExtra
     ) {
@@ -54,18 +45,11 @@ public final class OffenseConcept {
         this.personnel = personnel != null ? personnel : "11";
         this.depth = depth != null ? depth : DepthBand.NONE;
         this.concept = concept != null ? concept : "";
-        this.completionMod = completionMod;
-        this.yardsMod = yardsMod;
-        this.sackRiskMod = sackRiskMod;
-        this.runYardsMod = runYardsMod;
-        this.fumbleMod = fumbleMod;
         this.targetBias = targetBias != null ? targetBias : TargetBias.ANY;
         this.clockMultExtra = clockMultExtra;
         this.definition = PlayDefinitions.build(
                 this.id, this.displayName, this.family, this.offensePlay, this.formation,
-                this.personnel, this.depth, this.concept, this.targetBias,
-                this.completionMod, this.yardsMod, this.sackRiskMod,
-                this.runYardsMod, this.fumbleMod, this.clockMultExtra
+                this.personnel, this.depth, this.concept, this.targetBias
         );
     }
 
@@ -96,55 +80,5 @@ public final class OffenseConcept {
 
     public String metaLine() {
         return formation.displayName + " · " + personnel + " pers · " + typeLabel();
-    }
-
-    /**
-     * Soft capped matchup adjustment added to completion (pass) or block advantage (run).
-     */
-    public double matchupBonus(CoverageCall cov) {
-        return matchupBonus(cov, null);
-    }
-
-    /**
-     * Situation-aware matchup adjustment (red zone / short yardage / late deep).
-     */
-    public double matchupBonus(CoverageCall cov, GameState state) {
-        if (cov == null) return 0;
-        boolean shortOrGoal = state != null
-                && (state.yardsNeed <= 2 || state.yardLine >= 95);
-        boolean redZoneDeep = state != null && state.yardLine >= 85;
-        boolean lateDeep = state != null && state.gameTime <= 40;
-
-        double bonus = 0;
-        if (family == ConceptFamily.RUN || offensePlay == OffensePlay.RUN) {
-            if (cov == CoverageCall.STACK_BOX) bonus -= shortOrGoal ? 2 : 5;
-            else if (cov == CoverageCall.COVER_4 || cov == CoverageCall.OFF_COVERAGE) bonus += 3.5;
-            else if (cov == CoverageCall.COVER_0 || cov == CoverageCall.PRESS) bonus += 2;
-        } else if (offensePlay == OffensePlay.PASS || family == ConceptFamily.RPO) {
-            if (depth == DepthBand.DEEP) {
-                if (cov == CoverageCall.COVER_0 || cov == CoverageCall.MAN || cov == CoverageCall.PRESS) {
-                    if (redZoneDeep && (cov == CoverageCall.MAN || cov == CoverageCall.PRESS)) {
-                        bonus += 1.5;
-                    } else {
-                        bonus += lateDeep && (cov == CoverageCall.COVER_0 || cov == CoverageCall.MAN)
-                                ? 5 : 4;
-                    }
-                }
-                if (cov == CoverageCall.COVER_4 || cov == CoverageCall.COVER_2) {
-                    bonus -= lateDeep ? 5 : 3.5;
-                }
-                if (cov == CoverageCall.SPY) bonus -= 1.5;
-            } else if (depth == DepthBand.MEDIUM) {
-                if (cov == CoverageCall.COVER_3 || cov == CoverageCall.ZONE) bonus += 1.5;
-                if (cov == CoverageCall.COVER_0) bonus -= 1;
-            } else if (depth == DepthBand.SHORT) {
-                if (cov == CoverageCall.COVER_4 || cov == CoverageCall.OFF_COVERAGE) bonus += 2.5;
-                if (cov == CoverageCall.PRESS || cov == CoverageCall.MAN) bonus -= 1.5;
-                if (cov == CoverageCall.STACK_BOX && targetBias == TargetBias.RB) bonus -= 2;
-            }
-        }
-        if (bonus > 6) bonus = 6;
-        if (bonus < -6) bonus = -6;
-        return bonus;
     }
 }

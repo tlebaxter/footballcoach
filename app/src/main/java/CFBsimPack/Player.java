@@ -397,13 +397,16 @@ public class Player {
                 return (int) ((s.fgMade * 5 + s.xpMade) * ((double) s.fgMade / s.fgAtt)) + ratOvr;
             case P:
                 return ratOvr + s.puntYards / 20;
-            case FB:
-            case OL:
             case CB:
             case S:
             case DL:
             case EDGE:
             case LB:
+                return s.tackles * 8 + s.tfl * 40 + s.sacksDef * 80 + s.defInt * 120
+                        + s.passDef * 25 + s.forcedFumbles * 50 + s.fumbleRec * 40
+                        + ratOvr * gamesPlayed / 2;
+            case FB:
+            case OL:
                 return ratOvr * gamesPlayed;
             default: {
                 int adjGames = gamesPlayed;
@@ -539,6 +542,16 @@ public class Player {
                 }
                 pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
                 break;
+            case CB:
+            case S:
+            case DL:
+            case EDGE:
+            case LB:
+                pStats.add("Tackles: " + s.tackles + ">TFL: " + s.tfl);
+                pStats.add("Sacks: " + s.sacksDef + ">INT: " + s.defInt);
+                pStats.add("PD: " + s.passDef + ">FF/FR: " + s.forcedFumbles + "/" + s.fumbleRec);
+                pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
+                break;
             default:
                 pStats.add("Games: " + gamesPlayed + " (" + statsWins + "-" + (gamesPlayed - statsWins) + ")> ");
                 break;
@@ -580,6 +593,16 @@ public class Player {
                 pStats.add(att > 0 ? "Punts: " + att + ">Avg: " + (yds / att) + " yds" : "Punts: 0>Avg: 0 yds");
                 break;
             }
+            case CB:
+            case S:
+            case DL:
+            case EDGE:
+            case LB:
+                pStats.add("Tackles: " + (s.tackles + c.tackles) + ">TFL: " + (s.tfl + c.tfl));
+                pStats.add("Sacks: " + (s.sacksDef + c.sacksDef) + ">INT: " + (s.defInt + c.defInt));
+                pStats.add("PD: " + (s.passDef + c.passDef) + ">FF/FR: "
+                        + (s.forcedFumbles + c.forcedFumbles) + "/" + (s.fumbleRec + c.fumbleRec));
+                break;
             default:
                 break;
         }

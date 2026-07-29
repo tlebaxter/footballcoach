@@ -38,6 +38,38 @@ public class SnapEngineIntegrationTest {
     }
 
     @Test
+    public void passAndRunAttachSnapTraceWithWhyBullets() throws Exception {
+        League league = createLeague();
+        Team offense = league.teamList.get(0);
+        Team defense = league.teamList.get(1);
+
+        PlayResult pass = new PlayResolver(new Random(42L)).resolve(
+                offense, defense, state(), PlayCall.fromConcepts(
+                        Playbook.offenseById("gun_mesh"),
+                        Playbook.defenseFor(CoverageCall.MAN),
+                        TempoCall.NORMAL
+                ));
+        assertNotNull(pass.snapTrace);
+        assertTrue(pass.snapTrace.summaryBullets.size() >= 1);
+        if (!pass.incomplete && !pass.turnover && !pass.sack && !pass.throwaway
+                && pass.logLine != null && pass.logLine.contains("pass")) {
+            assertTrue(pass.snapTrace.completionChance >= 0);
+            assertTrue(pass.snapTrace.separation > 0);
+        }
+
+        PlayResult run = new PlayResolver(new Random(43L)).resolve(
+                offense, defense, state(), PlayCall.fromConcepts(
+                        Playbook.offenseById("gun_inside_zone"),
+                        Playbook.defenseFor(CoverageCall.COVER_3),
+                        TempoCall.NORMAL
+                ));
+        assertNotNull(run.snapTrace);
+        assertTrue(run.snapTrace.summaryBullets.size() >= 1);
+        assertTrue(run.snapTrace.gapUsed != null && !run.snapTrace.gapUsed.isEmpty()
+                || run.snapTrace.summaryBullets.stream().anyMatch(b -> b.contains("Crease") || b.contains("gap") || b.contains("Gap") || b.contains("A_") || b.contains("B_")));
+    }
+
+    @Test
     public void meshCompletesMoreVsManThanCover2() throws Exception {
         League league = createLeague();
         Team offense = league.teamList.get(0);

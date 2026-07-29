@@ -14,13 +14,16 @@ import CFBsimPack.engine.playdef.ProtectionScheme;
 import CFBsimPack.engine.playdef.RpoRules;
 import CFBsimPack.engine.playdef.RunScheme;
 import CFBsimPack.engine.playdef.RunTrack;
+import CFBsimPack.engine.playdef.ExplosiveProfile;
 import CFBsimPack.engine.snap.IntResolver;
 import CFBsimPack.engine.snap.PassTimeline;
 import CFBsimPack.engine.snap.ProtectionResolver;
 import CFBsimPack.engine.snap.ProtectionResult;
 import CFBsimPack.engine.snap.RunGapResolver;
 import CFBsimPack.engine.snap.RunGapResult;
+import CFBsimPack.engine.snap.SafetyHelp;
 import CFBsimPack.engine.snap.SituationMods;
+import CFBsimPack.engine.snap.SnapTrace;
 import CFBsimPack.engine.snap.ThrowWindow;
 
 import java.util.List;
@@ -142,7 +145,7 @@ public final class PlayResolver {
     RpoBranch chooseRpoBranch(Player qb, OffenseConcept concept, CoverageCall cov) {
         int spd = rating(qb, x -> x.spd, 55);
         int elu = rating(qb, x -> x.elu, 55);
-        double scrambleMod = cov != null ? cov.scrambleMod : 1.0;
+        double contain = SafetyHelp.containFactor(cov);
         RpoRules rules = concept != null && concept.definition != null && concept.definition.rpoRules != null
                 ? concept.definition.rpoRules
                 : RpoRules.defaults();
@@ -150,9 +153,9 @@ public final class PlayResolver {
         double give = rules.giveWeight;
         if (cov == CoverageCall.STACK_BOX) give += 0.18;
 
-        double keep = (rules.keepWeightBase + spd / 400.0 + elu / 500.0) * scrambleMod;
+        double keep = (rules.keepWeightBase + spd / 400.0 + elu / 500.0) * contain;
         if (rules.zoneReadBoost || (concept != null && "pistol_zone_read".equals(concept.id))) {
-            keep += 0.12 * scrambleMod;
+            keep += 0.12 * contain;
         }
         if (keep < 0.02) keep = 0.02;
 
@@ -197,10 +200,11 @@ public final class PlayResolver {
             thvScale -= (qbSpd - 50) / 400.0 + (qbElu - 50) / 500.0;
         }
         if (thvScale < 0.55) thvScale = 0.55;
-        double sackMod = concept.sackRiskMod * sys.passWeight;
+        // Defensive system pass weight slightly accelerates pressure (scheme owns pocket length)
+        double thvWithSystem = thvScale / Math.max(0.85, Math.min(1.2, sys.passWeight));
         ProtectionResult protection = protectionResolver.resolve(
-                off, def, scheme, sit, fatigue, sackMod,
-                AtmosphereEngine.roadPressureAdd(state), thvScale);
+                off, def, scheme, sit, fatigue,
+                AtmosphereEngine.roadPressureAdd(state), thvWithSystem);
 
         boolean pressJam = cov == CoverageCall.PRESS;
         PassTimeline.TimelineState timeline = passTimeline.run(
@@ -209,10 +213,12 @@ public final class PlayResolver {
                 cov, fatigue, pressJam);
         ThrowWindow decision = timeline.decision;
 
+        SafetyHelp.Shell shell = SafetyHelp.shell(cov);
+
         // Pressure won the pocket before a throw — reuse existing scramble policy
         if (decision == null || decision.decision == ThrowWindow.Decision.PRESSURE_OUT) {
             return resolvePressure(offense, defense, state, call, r, qb, concept, cov,
-                    tempo, rpoThrow, qbSpd, qbElu, thv);
+                    tempo, rpoThrow, qbSpd, qbElu, thv, protection, def, shell);
         }
 
         Player target = decision.target;
@@ -241,8 +247,16 @@ public final class PlayResolver {
             r.stoppedClock = true;
             r.clockBurned = (int) (5 + 6 * rng.nextDouble() * tempo);
             state.down++;
+            defStats().creditPassDef(intHit.tipper);
             String tip = intHit.tipper != null ? intHit.tipper.name : "DL";
             r.logLine = "Batted down at the line by " + tip + " (" + concept.displayName + ").";
+            r.snapTrace = SnapTrace.builder(concept.family)
+                    .protection(protection)
+                    .throwWindow(decision)
+                    .shell(shell)
+                    .tipper(tip)
+                    .intSource(intHit.source)
+                    .build();
             return r;
         }
         if (intHit.isInt()) {
@@ -258,9 +272,10 @@ public final class PlayResolver {
                 line.passInt++;
             }
             Player interceptor = intHit.interceptor;
-            if (interceptor != null) {
-                interceptor.seasonStats.defInt++;
-                if (gameStats != null) gameStats.line(interceptor).defInt++;
+            DefStatAttribution attrs = defStats();
+            attrs.creditDefInt(interceptor);
+            if (intHit.source == IntResolver.Source.DL_TIP && intHit.tipper != null) {
+                attrs.creditPassDef(intHit.tipper);
             }
             String who = interceptor != null ? interceptor.name : "defense";
             if (intHit.source == IntResolver.Source.DL_TIP && intHit.tipper != null) {
@@ -271,6 +286,13 @@ public final class PlayResolver {
             } else {
                 r.logLine = "INTERCEPTION! " + who + " (" + concept.displayName + ").";
             }
+            SnapTrace.Builder tb = SnapTrace.builder(concept.family)
+                    .protection(protection)
+                    .throwWindow(decision)
+                    .shell(shell)
+                    .intSource(intHit.source);
+            if (intHit.tipper != null) tb.tipper(intHit.tipper.name);
+            r.snapTrace = tb.build();
             return r;
         }
 
@@ -286,9 +308,6 @@ public final class PlayResolver {
             double mobBump = Math.min(4.0, (qbElu + thv - 100) / 25.0);
             if (mobBump > 0) completion += mobBump;
         }
-        completion *= cov.completionMod * concept.completionMod;
-        completion += cov.passFitBonus();
-        completion += concept.matchupBonus(cov, state);
 
         qb.seasonStats.passAtt++;
         if (gameStats != null) gameStats.line(qb).passAtt++;
@@ -296,13 +315,24 @@ public final class PlayResolver {
             target.seasonStats.targets++;
         }
 
-        if (100 * rng.nextDouble() >= completion) {
+        double completionRoll = 100 * rng.nextDouble();
+        if (completionRoll >= completion) {
             r.incomplete = true;
             r.stoppedClock = true;
             r.clockBurned = (int) (6 + 10 * rng.nextDouble() * tempo);
             state.down++;
+            Player coverage = decision.coverage != null ? decision.coverage.defender : cb;
+            if (coverage != null && DefStatAttribution.rollContestedPassDef(decision.separation, rng)) {
+                defStats().creditPassDef(coverage);
+            }
             r.logLine = offense.abbr + " incomplete pass" + (target != null ? " intended for " + target.name : "")
                     + " (" + concept.displayName + " · " + call.formation.displayName + ").";
+            r.snapTrace = SnapTrace.builder(concept.family)
+                    .protection(protection)
+                    .throwWindow(decision)
+                    .shell(shell)
+                    .completion(completion, completionRoll, false)
+                    .build();
             return r;
         }
 
@@ -317,14 +347,25 @@ public final class PlayResolver {
             }
             r.logLine = "Drop! " + (target != null ? target.name : "Receiver") + " couldn't hang on ("
                     + concept.displayName + ").";
+            r.snapTrace = SnapTrace.builder(concept.family)
+                    .protection(protection)
+                    .throwWindow(decision)
+                    .shell(shell)
+                    .completion(completion, completionRoll, true)
+                    .bullet("Drop after catch contest")
+                    .build();
             return r;
         }
 
+        // Yards from attrs + sep + route depth (shell brakes deep YAC)
+        double yacShell = shell == SafetyHelp.Shell.TWO_HIGH ? 0.88
+                : shell == SafetyHelp.Shell.SOFT ? 1.08 : 1.0;
         int yards = (int) ((normalize(rating(qb, x -> x.thp, 55)) + normalize(spd) - normalize(cbSpd))
-                * rng.nextDouble() / 3.7 * cov.yardsMod * concept.yardsMod);
+                * rng.nextDouble() / 3.7 * yacShell);
         yards = (int) (yards * (0.85 + decision.separation / 40.0));
         if (routeDepth >= 18) {
             int deepBonus = (int) (4 + 8 * rng.nextDouble());
+            if (shell == SafetyHelp.Shell.TWO_HIGH) deepBonus = (int) (deepBonus * 0.75);
             deepBonus = Math.min(deepBonus, Math.max(0, yardsToGoal - 1));
             yards += deepBonus;
         } else if (routeDepth <= 7) {
@@ -340,7 +381,18 @@ public final class PlayResolver {
             yards += (int) (3 + spd * rng.nextDouble() / 3);
         }
 
-        return applyGain(offense, defense, state, call, r, qb, target, yards, true);
+        Player coverage = decision.coverage != null ? decision.coverage.defender : cb;
+        Player help = s != null ? s : def != null ? def.firstOf(PositionGroup.LB) : null;
+        SnapTrace passTrace = SnapTrace.builder(concept.family)
+                .protection(protection)
+                .throwWindow(decision)
+                .shell(shell)
+                .completion(completion, completionRoll, true)
+                .yardsNotes("depth " + routeDepth + " · shell " + shell.name())
+                .build();
+        r.snapTrace = passTrace;
+        return applyGain(offense, defense, def, state, call, r, qb, target, yards, true, null,
+                TackleContext.pass(coverage, help));
     }
 
     private PlayResult rush(Team offense, Team defense, OnFieldEleven off, OnFieldEleven def,
@@ -361,22 +413,20 @@ public final class PlayResolver {
 
         RunGapResult gap = runGapResolver.resolve(
                 off, def, carrier, runScheme, cov, sit, fatigue,
-                concept.runYardsMod,
-                (int) (cov.runFitBonus() + concept.matchupBonus(cov, state)),
                 AtmosphereEngine.offenseBonus(state),
                 sys.runWeight
         );
-        return applyGain(offense, defense, state, call, r, null, carrier, gap.yards, false, null);
+        r.snapTrace = SnapTrace.builder(concept.family)
+                .runGap(gap, carrier != null ? carrier.name : null)
+                .shell(SafetyHelp.shell(cov))
+                .build();
+        return applyGain(offense, defense, def, state, call, r, null, carrier, gap.yards, false, null,
+                TackleContext.run(gap.firstLevel, gap.secondLevel));
     }
 
-    private PlayResult applyGain(Team offense, Team defense, GameState state, PlayCall call, PlayResult r,
-                                 Player qb, Player ballCarrier, int yards, boolean wasPass) {
-        return applyGain(offense, defense, state, call, r, qb, ballCarrier, yards, wasPass, null);
-    }
-
-    private PlayResult applyGain(Team offense, Team defense, GameState state, PlayCall call, PlayResult r,
-                                 Player qb, Player ballCarrier, int yards, boolean wasPass,
-                                 ScrambleIntent scramble) {
+    private PlayResult applyGain(Team offense, Team defense, OnFieldEleven def, GameState state, PlayCall call,
+                                 PlayResult r, Player qb, Player ballCarrier, int yards, boolean wasPass,
+                                 ScrambleIntent scramble, TackleContext tackleCtx) {
         OffenseConcept concept = call.resolvedOffenseConcept();
         double tempo = call.tempo.clockMult * (1.0 + concept.clockMultExtra);
         if (yards < -5) yards = -5;
@@ -420,13 +470,22 @@ public final class PlayResolver {
 
         creditYards(offense, state, qb, ballCarrier, yards, wasPass);
 
+        DefStatAttribution attrs = defStats();
+        Player tackler = DefStatAttribution.pickTackle(def, tackleCtx, yards, wasPass, rng);
+
         // Fumble check — ball security lowers forced-fumble chance
-        Player safety = defense.getS(0);
+        Player safety = tackleCtx != null && tackleCtx.secondary != null
+                ? tackleCtx.secondary
+                : (def != null ? onFieldS(def, defense) : defense.getS(0));
         int sTkl = safety != null ? rating(safety, x -> x.tck, 70) : 70;
         double fum = isPos(ballCarrier, PositionGroup.RB)
                 ? (sTkl + defRun(defense)) / 2.0
                 : sTkl / 2.0;
-        fum *= concept.fumbleMod;
+        ExplosiveProfile fumProfile = concept != null && concept.definition != null
+                && concept.definition.run != null && concept.definition.run.explosive != null
+                ? concept.definition.run.explosive
+                : null;
+        fum *= fumProfile != null ? fumProfile.fumbleRisk : 1.0;
         int bsc = rating(ballCarrier, x -> x.bsc, 70);
         double bscScale = (120.0 - bsc) / 50.0;
         if (bscScale < 0.2) bscScale = 0.2;
@@ -446,10 +505,24 @@ public final class PlayResolver {
             if (isPos(ballCarrier, PositionGroup.WR) || isPos(ballCarrier, PositionGroup.TE)) {
                 ballCarrier.seasonStats.recFumbles++;
             }
+            if (tackler != null) {
+                attrs.creditTackle(tackler, yards < 0);
+                attrs.creditForcedFumble(tackler);
+            }
+            Player recoverer = DefStatAttribution.pickFumbleRecoverer(def, ballCarrier, rng);
+            if (recoverer == null) recoverer = tackler;
+            attrs.creditFumbleRec(recoverer);
+            String forcer = tackler != null ? tackler.name : "defense";
+            String recName = recoverer != null ? recoverer.name : "defense";
             r.logLine = "FUMBLE! " + offense.abbr + " " + (ballCarrier != null ? ballCarrier.name : "")
-                    + " lost it (" + concept.displayName + ").";
+                    + " stripped by " + forcer + ", recovered by " + recName
+                    + " (" + concept.displayName + ").";
+            attachTacklerToTrace(r, tackler);
             return r;
         }
+
+        attrs.creditTackle(tackler, yards < 0);
+        attachTacklerToTrace(r, tackler);
 
         if (scramble != null) {
             boolean stopClock = scramble == ScrambleIntent.FORCE_OOB
@@ -477,18 +550,39 @@ public final class PlayResolver {
         return r;
     }
 
+    private void attachTacklerToTrace(PlayResult r, Player tackler) {
+        if (r == null || r.snapTrace == null || tackler == null || tackler.name == null) return;
+        SnapTrace prev = r.snapTrace;
+        SnapTrace.Builder b = SnapTrace.builder(prev.family).tackler(tackler.name);
+        for (String bullet : prev.summaryBullets) {
+            if (bullet != null && !bullet.startsWith("Tackled by ")) {
+                b.bullet(bullet);
+            }
+        }
+        b.bullet("Tackled by " + tackler.name);
+        r.snapTrace = b.build();
+    }
+
     private PlayResult resolvePressure(Team offense, Team defense, GameState state, PlayCall call,
                                        PlayResult r, Player qb, OffenseConcept concept, CoverageCall cov,
-                                       double tempo, boolean rpoThrow, int qbSpd, int qbElu, int thv) {
+                                       double tempo, boolean rpoThrow, int qbSpd, int qbElu, int thv,
+                                       ProtectionResult protection, OnFieldEleven def,
+                                       SafetyHelp.Shell shell) {
         QbPressurePolicy.Slot bucket = classifyPressureBucket(offense, state);
         PressureResponse pref = preferenceForBucket(offense, bucket);
         ScrambleIntent intent = intentFor(pref, bucket, qbSpd, state);
 
         if (intent == ScrambleIntent.THROW_AWAY) {
-            return throwAway(offense, state, call, qb, tempo);
+            PlayResult away = throwAway(offense, state, call, qb, tempo);
+            away.snapTrace = SnapTrace.builder(concept.family)
+                    .protection(protection)
+                    .shell(shell)
+                    .bullet("Pressure — throwaway")
+                    .build();
+            return away;
         }
 
-        double escapeChance = (0.22 + qbSpd / 500.0 + (thv - 50) / 400.0) * cov.scrambleMod;
+        double escapeChance = (0.22 + qbSpd / 500.0 + (thv - 50) / 400.0) * SafetyHelp.containFactor(cov);
         if (rpoThrow) {
             escapeChance += qbElu / 800.0;
         }
@@ -498,14 +592,29 @@ public final class PlayResolver {
 
         if (rng.nextDouble() < escapeChance) {
             int scrambleYds = sampleScrambleYards(intent, state, qbSpd, qbElu, cov, rpoThrow);
-            return applyGain(offense, defense, state, call, r, null, qb, scrambleYds, false, intent);
+            Player edge = def != null ? def.firstOf(PositionGroup.EDGE) : null;
+            if (edge == null && def != null) edge = def.firstWithRole(RoleTag.EDGE);
+            Player lb = def != null ? def.firstOf(PositionGroup.LB) : null;
+            r.snapTrace = SnapTrace.builder(concept.family)
+                    .protection(protection)
+                    .shell(shell)
+                    .bullet("Pressure escape scramble")
+                    .build();
+            return applyGain(offense, defense, def, state, call, r, null, qb, scrambleYds, false, intent,
+                    TackleContext.scramble(edge, lb));
         }
 
         double throwChance = secondaryThrowawayChance(intent, bucket, pref, thv, qb);
         if (rng.nextDouble() < throwChance) {
-            return throwAway(offense, state, call, qb, tempo);
+            PlayResult away = throwAway(offense, state, call, qb, tempo);
+            away.snapTrace = SnapTrace.builder(concept.family)
+                    .protection(protection)
+                    .shell(shell)
+                    .bullet("Pressure — throwaway")
+                    .build();
+            return away;
         }
-        return sack(offense, state, call, qb);
+        return sack(offense, state, call, qb, protection, shell);
     }
 
     private PlayResult throwAway(Team offense, GameState state, PlayCall call, Player qb, double tempo) {
@@ -612,7 +721,7 @@ public final class PlayResolver {
 
     private int sampleScrambleYards(ScrambleIntent intent, GameState state, int qbSpd, int qbElu,
                                     CoverageCall cov, boolean rpoThrow) {
-        double scrambleScale = cov != null ? cov.scrambleMod : 1.0;
+        double scrambleScale = SafetyHelp.containFactor(cov);
         if (rpoThrow) scrambleScale *= 1.0 + qbElu / 400.0;
         int raw = (int) ((qbSpd + qbElu) / 18.0 * rng.nextDouble() * scrambleScale);
         if (raw < 1) raw = 1;
@@ -669,7 +778,8 @@ public final class PlayResolver {
         FORCE_OOB
     }
 
-    private PlayResult sack(Team offense, GameState state, PlayCall call, Player qb) {
+    private PlayResult sack(Team offense, GameState state, PlayCall call, Player qb,
+                            ProtectionResult protection, SafetyHelp.Shell shell) {
         PlayResult r = new PlayResult();
         OffenseConcept concept = call.resolvedOffenseConcept();
         double tempo = call.tempo.clockMult * (1.0 + concept.clockMultExtra);
@@ -681,18 +791,30 @@ public final class PlayResolver {
         state.down++;
         qb.seasonStats.sacked++;
         if (gameStats != null) gameStats.line(qb).sacks++;
+        Player sacker = DefStatAttribution.pickSackRusher(protection, rng);
+        defStats().creditSack(sacker);
         r.clockBurned = (int) (20 + 10 * rng.nextDouble() * tempo);
+        String by = sacker != null ? " by " + sacker.name : "";
+        SnapTrace.Builder tb = SnapTrace.builder(concept.family)
+                .protection(protection)
+                .shell(shell);
+        if (sacker != null) tb.sacker(sacker.name);
+        r.snapTrace = tb.build();
         if (state.yardLine < 0) {
             r.safety = true;
             r.possessionChanged = true;
-            r.logLine = "SAFETY! " + offense.abbr + " sacked in the end zone ("
+            r.logLine = "SAFETY! " + offense.abbr + " sacked in the end zone" + by + " ("
                     + concept.displayName + ").";
             state.yardLine = 0;
             return r;
         }
-        r.logLine = "SACK! " + offense.abbr + " QB " + qb.name + " taken down ("
+        r.logLine = "SACK! " + offense.abbr + " QB " + qb.name + " taken down" + by + " ("
                 + concept.displayName + ").";
         return r;
+    }
+
+    private DefStatAttribution defStats() {
+        return new DefStatAttribution(gameStats);
     }
 
     private PlayResult fieldGoal(Team offense, Team defense, GameState state, PlayCall call) {

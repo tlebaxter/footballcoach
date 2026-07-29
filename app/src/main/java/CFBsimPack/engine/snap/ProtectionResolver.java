@@ -35,7 +35,6 @@ public final class ProtectionResolver {
             ProtectionScheme scheme,
             SituationMods sit,
             FatigueTracker fatigue,
-            double sackRiskMod,
             int roadPressureAdd,
             double thvScale
     ) {
@@ -58,7 +57,7 @@ public final class ProtectionResolver {
 
         List<OffSlot> blockers = blockersFor(scheme, offMap);
         if (blockers.isEmpty() || rusherSlots.isEmpty()) {
-            return fallback(sackRiskMod, roadPressureAdd, thvScale);
+            return fallback(scheme, roadPressureAdd, thvScale);
         }
 
         // Optional double on stud interior
@@ -104,7 +103,7 @@ public final class ProtectionResolver {
             if (b == null) {
                 // Unblocked
                 Player rusher = defMap.get(rs);
-                double arr = arrivalFor(DuelOutcome.Result.LOSS, 1.2, true, sackRiskMod, roadPressureAdd, thvScale);
+                double arr = arrivalFor(DuelOutcome.Result.LOSS, 1.2, true, scheme, roadPressureAdd, thvScale);
                 if (scheme.type == ProtectionType.PLAY_ACTION) arr += 0.25;
                 matchups.add(new PassRushMatchup(null, null, rusher, rs,
                         new DuelOutcome(DuelOutcome.Result.LOSS, -1.2), arr, false, true));
@@ -136,7 +135,7 @@ public final class ProtectionResolver {
                 if (isEdge(rs)) defR -= 8;
             }
             DuelOutcome duel = duels.contest(offR, defR);
-            Double arr = arrivalFor(duel.result, duel.margin, false, sackRiskMod, roadPressureAdd, thvScale);
+            Double arr = arrivalFor(duel.result, duel.margin, false, scheme, roadPressureAdd, thvScale);
             if (scheme.type == ProtectionType.PLAY_ACTION && arr != null) arr += 0.30;
             if (scheme.type == ProtectionType.MAX_PROTECT && arr != null) arr += 0.35;
             if (scheme.type == ProtectionType.EMPTY_FIVE && arr != null) arr -= 0.15;
@@ -156,8 +155,9 @@ public final class ProtectionResolver {
         return new ProtectionResult(matchups, earliest, hotForced, freeRusher, false);
     }
 
-    private ProtectionResult fallback(double sackRiskMod, int roadPressureAdd, double thvScale) {
-        double arr = 2.4 * sackRiskMod - roadPressureAdd / 40.0;
+    private ProtectionResult fallback(ProtectionScheme scheme, int roadPressureAdd, double thvScale) {
+        double hot = scheme != null ? scheme.hotTimeSec : 1.15;
+        double arr = (2.0 + hot * 0.35) - roadPressureAdd / 40.0;
         arr *= thvScale;
         if (arr < 1.2) arr = 1.2;
         List<PassRushMatchup> m = new ArrayList<>();
@@ -228,7 +228,7 @@ public final class ProtectionResolver {
             DuelOutcome.Result result,
             double margin,
             boolean unblocked,
-            double sackRiskMod,
+            ProtectionScheme scheme,
             int roadPressureAdd,
             double thvScale
     ) {
@@ -242,7 +242,9 @@ public final class ProtectionResolver {
         } else {
             base = 1.4 + rng.nextDouble() * 1.2 - Math.min(0.5, Math.abs(margin) * 0.25);
         }
-        base *= Math.max(0.75, sackRiskMod);
+        // Longer hotTime schemes buy a bit more pocket (replaces sackRiskMod)
+        double hot = scheme != null ? scheme.hotTimeSec : 1.15;
+        base *= Math.max(0.85, Math.min(1.2, 0.75 + hot * 0.22));
         base -= roadPressureAdd / 50.0;
         // thvScale < 1 for high-thv QBs (same meaning as old pressureScale): buy time
         base /= Math.max(0.7, Math.min(1.25, thvScale));

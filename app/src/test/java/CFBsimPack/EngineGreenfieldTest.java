@@ -66,6 +66,7 @@ public class EngineGreenfieldTest {
         g.setRandom(new Random(42L));
         g.playGame();
         assertTrue(g.hasPlayed);
+        assertTrue(g.isDecided());
         assertTrue(home.gameWLSchedule.size() >= 1 || away.gameWLSchedule.size() >= 1);
     }
 

@@ -255,15 +255,11 @@ public final class Postseason {
     /** Plays a CFP game, applies tags/counters, returns winner. */
     public static Team playCfpGame(Game g, String winTag, String loseTag) {
         g.playGame();
-        Team winner;
-        Team loser;
-        if (g.homeScore > g.awayScore) {
-            winner = g.homeTeam;
-            loser = g.awayTeam;
-        } else {
-            winner = g.awayTeam;
-            loser = g.homeTeam;
+        if (!g.hasPlayed || !g.isDecided()) {
+            throw new IllegalStateException("CFP game did not produce a winner");
         }
+        Team winner = g.winningTeam();
+        Team loser = g.losingTeam();
         winner.semiFinalWL = winTag;
         loser.semiFinalWL = loseTag;
         winner.totalBowls++;
@@ -274,7 +270,10 @@ public final class Postseason {
     /** Plays a non-CFP bowl and tags BW/BL. */
     public static void playBowl(Game g) {
         g.playGame();
-        if (g.homeScore > g.awayScore) {
+        if (!g.hasPlayed || !g.isDecided()) {
+            return;
+        }
+        if (g.homeWon()) {
             g.homeTeam.semiFinalWL = "BW";
             g.awayTeam.semiFinalWL = "BL";
             g.homeTeam.totalBowls++;
@@ -293,10 +292,10 @@ public final class Postseason {
             return winners;
         }
         for (Game g : games) {
-            if (g == null || !g.hasPlayed) {
+            if (g == null || !g.hasPlayed || !g.isDecided()) {
                 continue;
             }
-            winners.add(g.homeScore > g.awayScore ? g.homeTeam : g.awayTeam);
+            winners.add(g.winningTeam());
         }
         return winners;
     }

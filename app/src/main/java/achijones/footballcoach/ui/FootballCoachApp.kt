@@ -30,13 +30,17 @@ fun FootballCoachApp() {
         coachGame = { onFinished ->
             CoachGameScreen(onFinished = onFinished)
         },
-        schedule = { onNavigateToMain ->
-            ScheduleScreen(onNavigateToMain = onNavigateToMain)
+        schedule = { onNavigateToMain, onNavigateToTalentHub ->
+            ScheduleScreen(
+                onNavigateToMain = onNavigateToMain,
+                onNavigateToTalentHub = onNavigateToTalentHub,
+            )
         },
-        talentHub = { onNavigateToMain, onNavigateHome ->
+        talentHub = { onNavigateToMain, onNavigateHome, onNavigateToSchedule ->
             TalentHubScreen(
                 onNavigateToMain = onNavigateToMain,
                 onNavigateHome = onNavigateHome,
+                onNavigateToSchedule = onNavigateToSchedule,
             )
         },
     )

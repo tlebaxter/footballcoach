@@ -148,5 +148,6 @@ class DriveChartModelsTest {
         "Cover 3",
         line,
         true,
+        null,
     )
 }

@@ -1,5 +1,7 @@
 package CFBsimPack.engine;
 
+import CFBsimPack.engine.snap.SnapTrace;
+
 /**
  * Structured play log row for coach HUD.
  */
@@ -19,6 +21,8 @@ public final class PlayLogEntry {
     public final String defenseConceptName;
     public final String logLine;
     public final boolean possessionHome;
+    /** Structured snap why; null for specials / log-only. */
+    public final SnapTrace snapTrace;
 
     public PlayLogEntry(
             String clockLabel,
@@ -34,7 +38,8 @@ public final class PlayLogEntry {
             String defenseConceptId,
             String defenseConceptName,
             String logLine,
-            boolean possessionHome
+            boolean possessionHome,
+            SnapTrace snapTrace
     ) {
         this.clockLabel = clockLabel != null ? clockLabel : "";
         this.quarter = quarter;
@@ -50,5 +55,6 @@ public final class PlayLogEntry {
         this.defenseConceptName = defenseConceptName != null ? defenseConceptName : "";
         this.logLine = logLine != null ? logLine : "";
         this.possessionHome = possessionHome;
+        this.snapTrace = snapTrace;
     }
 }

@@ -417,6 +417,10 @@ public class League {
                 restoreTeamSeasonBlock(bufferedReader);
                 line = bufferedReader.readLine();
             }
+            if (line != null && line.equals("POSTSEASON")) {
+                restorePostseasonBlock(bufferedReader);
+                line = bufferedReader.readLine();
+            }
             if (line != null && line.equals("OOC_CONTRACTS")) {
                 oocContracts.restore(bufferedReader);
                 line = bufferedReader.readLine();
@@ -1153,6 +1157,9 @@ public class League {
             } else if ("K".equals(p.position)) {
                 allAmerican.append(" K " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
                         "FGs: " + p.seasonStats.fgMade + "/" + p.seasonStats.fgAtt + ", XPs: " + p.seasonStats.xpMade + "/" + p.seasonStats.xpAtt + "\n");
+            } else if (isDefenseAwardPos(p.position)) {
+                allAmerican.append(" " + p.position + " " + p.name + " [" + p.getYrStr() + "]\n \t\t"
+                        + defenseAwardLine(p.seasonStats) + "\n");
             } else {
                 allAmerican.append(" " + p.position + " " + p.name + " [" + p.getYrStr() + "]\n");
             }
@@ -1186,6 +1193,9 @@ public class League {
             } else if ("K".equals(p.position)) {
                 sb.append(" K " + p.name + " [" + p.getYrStr() + "]\n \t\t" +
                         "FGs: " + p.seasonStats.fgMade + "/" + p.seasonStats.fgAtt + ", XPs: " + p.seasonStats.xpMade + "/" + p.seasonStats.xpAtt + "\n");
+            } else if (isDefenseAwardPos(p.position)) {
+                sb.append(" " + p.position + " " + p.name + " [" + p.getYrStr() + "]\n \t\t"
+                        + defenseAwardLine(p.seasonStats) + "\n");
             } else {
                 sb.append(" " + p.position + " " + p.name + " [" + p.getYrStr() + "]\n");
             }
@@ -1193,6 +1203,16 @@ public class League {
         }
 
         return sb.toString();
+    }
+
+    private static boolean isDefenseAwardPos(String position) {
+        return "CB".equals(position) || "S".equals(position) || "EDGE".equals(position)
+                || "DL".equals(position) || "LB".equals(position);
+    }
+
+    private static String defenseAwardLine(PlayerSkillStats s) {
+        return s.tackles + " Tck, " + s.tfl + " TFL, " + s.sacksDef + " Sk, "
+                + s.defInt + " INT, " + s.passDef + " PD";
     }
 
     /**
@@ -1498,20 +1518,17 @@ public class League {
      */
     public String getGameSummaryBowl(Game g) {
         StringBuilder sb = new StringBuilder();
-        Team winner, loser;
-        if (!g.hasPlayed) {
+        if (!g.hasPlayed || !g.isDecided()) {
             return g.homeTeam.strRep() + " vs " + g.awayTeam.strRep();
         } else {
-            if (g.homeScore > g.awayScore) {
-                winner = g.homeTeam;
-                loser = g.awayTeam;
+            Team winner = g.winningTeam();
+            Team loser = g.losingTeam();
+            if (g.homeWon()) {
                 sb.append(winner.strRep() + " W ");
                 sb.append(g.homeScore + "-" + g.awayScore + " ");
                 sb.append("vs " + loser.strRep());
                 return sb.toString();
             } else {
-                winner = g.awayTeam;
-                loser = g.homeTeam;
                 sb.append(winner.strRep() + " W ");
                 sb.append(g.awayScore + "-" + g.homeScore + " ");
                 sb.append("@ " + loser.strRep());
@@ -1664,6 +1681,19 @@ public class League {
      * @return true if successful
      */
     public boolean saveLeague(File saveFile) {
+        try (Writer writer = new BufferedWriter(new OutputStreamWriter(
+                new FileOutputStream(saveFile), "utf-8"))) {
+            writer.write(buildSaveString());
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Full SAVE_VERSION 9 career text (same payload {@link #saveLeague(File)} writes).
+     */
+    public String buildSaveString() {
         StringBuilder sb = new StringBuilder();
 
         // Save information about the save file, user team info
@@ -1756,6 +1786,7 @@ public class League {
         appendSeasonProgressBlock(sb);
         appendScheduleBlock(sb);
         appendTeamSeasonBlock(sb);
+        appendPostseasonBlock(sb);
         if (oocContracts != null) {
             oocContracts.appendSave(sb);
         }
@@ -1764,13 +1795,23 @@ public class League {
             appendOffseasonBlock(sb);
         }
 
-        // Actually write to the file
-        try (Writer writer = new BufferedWriter(new OutputStreamWriter(
-                new FileOutputStream(saveFile), "utf-8"))) {
-            writer.write(sb.toString());
-            return true;
-        } catch (Exception e) {
-            return false;
+        return sb.toString();
+    }
+
+    /**
+     * Load a league from {@link #buildSaveString()} / SAVE_VERSION 9 text.
+     */
+    public static League fromSaveString(String saveText, String namesCSV, String lastNamesCSV) throws IOException {
+        File tmp = File.createTempFile("fc-save-", ".cfb");
+        try {
+            try (Writer writer = new BufferedWriter(new OutputStreamWriter(
+                    new FileOutputStream(tmp), "utf-8"))) {
+                writer.write(saveText);
+            }
+            return new League(tmp, namesCSV, lastNamesCSV);
+        } finally {
+            //noinspection ResultOfMethodCallIgnored
+            tmp.delete();
         }
     }
 
@@ -1969,7 +2010,10 @@ public class League {
                     .append('|')
                     .append(encodeGameWl(t)).append('|')
                     .append(encodeWinsAgainst(t)).append('|')
-                    .append(encodeRivalryResults(t))
+                    .append(encodeRivalryResults(t)).append('|')
+                    .append(t.confChampion != null ? t.confChampion : "").append('|')
+                    .append(t.semiFinalWL != null ? t.semiFinalWL : "").append('|')
+                    .append(t.natChampWL != null ? t.natChampWL : "")
                     .append('\n');
         }
         sb.append("END_TEAM_SEASON\n");
@@ -2070,10 +2114,238 @@ public class League {
                         t.rivalryResults.put(abbr, won);
                     }
                 }
+                if (parts.length > 16) {
+                    t.confChampion = parts[16] != null ? parts[16] : "";
+                }
+                if (parts.length > 17) {
+                    t.semiFinalWL = parts[17] != null ? parts[17] : "";
+                }
+                if (parts.length > 18) {
+                    t.natChampWL = parts[18] != null ? parts[18] : "";
+                }
             } catch (Exception ignored) {
                 // Skip corrupt team season rows.
             }
         }
+    }
+
+    private void appendPostseasonBlock(StringBuilder sb) {
+        sb.append("POSTSEASON\n");
+        sb.append("FIELD");
+        if (cfpField != null) {
+            for (Team t : cfpField) {
+                if (t != null) {
+                    sb.append(',').append(t.abbr);
+                }
+            }
+        }
+        sb.append('\n');
+        sb.append("AUTO");
+        if (cfpAutoBids != null) {
+            for (Team t : cfpAutoBids) {
+                if (t != null) {
+                    sb.append(',').append(t.abbr);
+                }
+            }
+        }
+        sb.append('\n');
+        if (cfpFirstRound != null) {
+            appendPostseasonRound(sb, "FR", cfpFirstRound);
+        }
+        if (cfpQuarters != null) {
+            appendPostseasonRound(sb, "QF", cfpQuarters);
+        }
+        if (cfpSemis != null) {
+            appendPostseasonRound(sb, "SF", cfpSemis);
+        }
+        if (ncg != null) {
+            sb.append("NCG\n");
+            sb.append(encodePostseasonGame(ncg)).append('\n');
+            sb.append("END_NCG\n");
+        }
+        sb.append("BOWLS\n");
+        if (bowlGames != null) {
+            for (Game g : bowlGames) {
+                if (g != null) {
+                    sb.append(encodePostseasonGame(g)).append('\n');
+                }
+            }
+        }
+        sb.append("END_BOWLS\n");
+        sb.append("CCG\n");
+        for (Conference c : conferences) {
+            Game ccg = c.getCcg();
+            if (ccg != null) {
+                sb.append(c.confName).append('|').append(encodePostseasonGame(ccg)).append('\n');
+            }
+        }
+        sb.append("END_CCG\n");
+        sb.append("END_POSTSEASON\n");
+    }
+
+    private static void appendPostseasonRound(StringBuilder sb, String tag, Game[] games) {
+        sb.append(tag).append('\n');
+        for (Game g : games) {
+            if (g != null) {
+                sb.append(encodePostseasonGame(g)).append('\n');
+            }
+        }
+        sb.append("END_").append(tag).append('\n');
+    }
+
+    private static String encodePostseasonGame(Game game) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(game.gameName != null ? game.gameName : "")
+                .append('|').append(game.homeTeam.abbr)
+                .append('|').append(game.awayTeam.abbr)
+                .append('|').append(game.hasPlayed ? 1 : 0);
+        if (game.hasPlayed) {
+            sb.append('|').append(game.homeScore).append('|').append(game.awayScore)
+                    .append('|').append(game.homeYards).append('|').append(game.awayYards)
+                    .append('|').append(game.homeTOs).append('|').append(game.awayTOs)
+                    .append('|').append(game.numOT)
+                    .append('|').append(encodeQuarterScores(game.homeQScore))
+                    .append('|').append(encodeQuarterScores(game.awayQScore));
+        }
+        return sb.toString();
+    }
+
+    private void restorePostseasonBlock(BufferedReader reader) throws IOException {
+        cfpField = new ArrayList<>();
+        cfpAutoBids = new HashSet<>();
+        cfpFirstRound = null;
+        cfpQuarters = null;
+        cfpSemis = null;
+        ncg = null;
+        bowlGames = new Game[0];
+
+        String line;
+        while ((line = reader.readLine()) != null && !line.equals("END_POSTSEASON")) {
+            if (line.startsWith("FIELD")) {
+                String[] parts = line.split(",", -1);
+                for (int i = 1; i < parts.length; i++) {
+                    if (parts[i].isEmpty()) continue;
+                    Team t = findTeamAbbrExact(parts[i]);
+                    if (t != null) {
+                        cfpField.add(t);
+                    }
+                }
+            } else if (line.startsWith("AUTO")) {
+                String[] parts = line.split(",", -1);
+                for (int i = 1; i < parts.length; i++) {
+                    if (parts[i].isEmpty()) continue;
+                    Team t = findTeamAbbrExact(parts[i]);
+                    if (t != null) {
+                        cfpAutoBids.add(t);
+                    }
+                }
+            } else if (line.equals("FR")) {
+                cfpFirstRound = restorePostseasonRound(reader, "END_FR");
+            } else if (line.equals("QF")) {
+                cfpQuarters = restorePostseasonRound(reader, "END_QF");
+            } else if (line.equals("SF")) {
+                cfpSemis = restorePostseasonRound(reader, "END_SF");
+            } else if (line.equals("NCG")) {
+                while ((line = reader.readLine()) != null && !line.equals("END_NCG")) {
+                    if (!line.isEmpty()) {
+                        ncg = decodePostseasonGame(line);
+                    }
+                }
+            } else if (line.equals("BOWLS")) {
+                ArrayList<Game> bowls = new ArrayList<>();
+                while ((line = reader.readLine()) != null && !line.equals("END_BOWLS")) {
+                    if (line.isEmpty()) continue;
+                    Game g = decodePostseasonGame(line);
+                    if (g != null) {
+                        bowls.add(g);
+                    }
+                }
+                bowlGames = bowls.toArray(new Game[0]);
+            } else if (line.equals("CCG")) {
+                while ((line = reader.readLine()) != null && !line.equals("END_CCG")) {
+                    if (line.isEmpty()) continue;
+                    int firstPipe = line.indexOf('|');
+                    if (firstPipe <= 0) continue;
+                    String confName = line.substring(0, firstPipe);
+                    String gamePayload = line.substring(firstPipe + 1);
+                    Conference conf = findConferenceExact(confName);
+                    if (conf == null) continue;
+                    Game g = decodePostseasonGame(gamePayload);
+                    if (g != null) {
+                        conf.restoreCcg(g);
+                    }
+                }
+            }
+        }
+    }
+
+    private Game[] restorePostseasonRound(BufferedReader reader, String endTag) throws IOException {
+        ArrayList<Game> games = new ArrayList<>();
+        String line;
+        while ((line = reader.readLine()) != null && !line.equals(endTag)) {
+            if (line.isEmpty()) continue;
+            Game g = decodePostseasonGame(line);
+            if (g != null) {
+                games.add(g);
+            }
+        }
+        return games.toArray(new Game[0]);
+    }
+
+    private Game decodePostseasonGame(String line) {
+        String[] pipe = line.split("\\|", -1);
+        if (pipe.length < 4) {
+            return null;
+        }
+        Team home = findTeamAbbrExact(pipe[1]);
+        Team away = findTeamAbbrExact(pipe[2]);
+        if (home == null || away == null) {
+            return null;
+        }
+        Game game = new Game(home, away, pipe[0]);
+        if ("1".equals(pipe[3]) && pipe.length >= 13) {
+            try {
+                game.homeScore = Integer.parseInt(pipe[4]);
+                game.awayScore = Integer.parseInt(pipe[5]);
+                game.homeYards = Integer.parseInt(pipe[6]);
+                game.awayYards = Integer.parseInt(pipe[7]);
+                game.homeTOs = Integer.parseInt(pipe[8]);
+                game.awayTOs = Integer.parseInt(pipe[9]);
+                game.numOT = Integer.parseInt(pipe[10]);
+                decodeQuarterScores(game.homeQScore, pipe[11]);
+                decodeQuarterScores(game.awayQScore, pipe[12]);
+                game.hasPlayed = true;
+            } catch (Exception ignored) {
+                // Leave unplayed if payload is corrupt.
+            }
+        }
+        home.gameSchedule.add(game);
+        away.gameSchedule.add(game);
+        return game;
+    }
+
+    private Team findTeamAbbrExact(String abbr) {
+        if (abbr == null) {
+            return null;
+        }
+        for (int i = 0; i < teamList.size(); i++) {
+            if (teamList.get(i).abbr.equals(abbr)) {
+                return teamList.get(i);
+            }
+        }
+        return null;
+    }
+
+    private Conference findConferenceExact(String name) {
+        if (name == null) {
+            return null;
+        }
+        for (int i = 0; i < conferences.size(); i++) {
+            if (conferences.get(i).confName.equals(name)) {
+                return conferences.get(i);
+            }
+        }
+        return null;
     }
 
     private void appendOffseasonBlock(StringBuilder sb) {

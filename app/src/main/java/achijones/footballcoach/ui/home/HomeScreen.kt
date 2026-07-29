@@ -3,9 +3,12 @@ package achijones.footballcoach.ui.home
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -37,6 +40,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import achijones.footballcoach.R
+import achijones.footballcoach.save.SlotStatus
+import achijones.footballcoach.ui.util.SaveExportShare
+import achijones.footballcoach.ui.util.SaveSlots
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -47,10 +53,35 @@ fun HomeScreen(
     val state by viewModel.uiState.collectAsState()
     val context = LocalContext.current
 
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri == null) {
+            viewModel.dismissImport()
+            return@rememberLauncherForActivityResult
+        }
+        try {
+            val json = context.contentResolver.openInputStream(uri)?.bufferedReader()?.use { it.readText() }
+            if (json != null) {
+                viewModel.onImportJsonRead(json)
+            } else {
+                viewModel.dismissImport()
+            }
+        } catch (_: Exception) {
+            viewModel.dismissImport()
+        }
+    }
+
     LaunchedEffect(state.navigateToMain) {
         if (state.navigateToMain) {
             viewModel.consumeNavigateToMain()
             onNavigateToMain()
+        }
+    }
+
+    LaunchedEffect(state.showImportPicker) {
+        if (state.showImportPicker) {
+            importLauncher.launch(arrayOf("application/json", "text/*", "*/*"))
         }
     }
 
@@ -74,7 +105,7 @@ fun HomeScreen(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Spacer(Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(16.dp))
             Image(
                 painter = painterResource(R.drawable.main_menu_logo),
                 contentDescription = null,
@@ -82,7 +113,14 @@ fun HomeScreen(
                     .fillMaxWidth(0.7f)
                     .height(160.dp),
             )
-            Spacer(Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(8.dp))
+            state.resumeSlot?.let { resume ->
+                Button(
+                    onClick = viewModel::resumeCareer,
+                    modifier = Modifier.fillMaxWidth(),
+                    enabled = !state.loading,
+                ) { Text("Resume: ${resume.summary}") }
+            }
             Button(
                 onClick = viewModel::startNewLeague,
                 modifier = Modifier.fillMaxWidth(),
@@ -114,10 +152,10 @@ fun HomeScreen(
                 modifier = Modifier.fillMaxWidth(),
             ) { Text("Pro Football Coach") }
             if (state.loading) {
-                Spacer(Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(16.dp))
                 CircularProgressIndicator()
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(24.dp))
         }
     }
 
@@ -127,22 +165,71 @@ fun HomeScreen(
             title = { Text("Choose File to Load:") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    state.saveSlotInfos.forEachIndexed { index, info ->
-                        TextButton(
-                            onClick = { viewModel.loadSlot(index) },
+                    state.saveSlots.forEach { info ->
+                        Row(
                             modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
                         ) {
-                            Text(
-                                text = "${index + 1}. $info",
-                                modifier = Modifier.fillMaxWidth(),
-                                textAlign = TextAlign.Start,
-                            )
+                            TextButton(
+                                onClick = { viewModel.loadSlot(info.index) },
+                                enabled = SaveSlots.canLoad(info),
+                                modifier = Modifier.weight(1f),
+                            ) {
+                                Text(
+                                    text = SaveSlots.label(info),
+                                    modifier = Modifier.fillMaxWidth(),
+                                    textAlign = TextAlign.Start,
+                                )
+                            }
+                            if (info.status == SlotStatus.OK) {
+                                TextButton(onClick = {
+                                    viewModel.exportSlot(info.index) { json ->
+                                        SaveExportShare.shareJson(context, info.index, json)
+                                    }
+                                }) { Text("Export") }
+                            }
+                            if (info.status != SlotStatus.EMPTY) {
+                                TextButton(onClick = { viewModel.requestDeleteSlot(info.index) }) {
+                                    Text("Del")
+                                }
+                            }
+                            TextButton(onClick = { viewModel.beginImportToSlot(info.index) }) {
+                                Text("Import")
+                            }
                         }
                     }
                 }
             },
             confirmButton = {
                 TextButton(onClick = viewModel::dismissLoadDialog) { Text("Cancel") }
+            },
+        )
+    }
+
+    state.confirmDeleteSlot?.let { index ->
+        AlertDialog(
+            onDismissRequest = viewModel::dismissDeleteConfirm,
+            title = { Text("Delete slot ${index + 1}?") },
+            text = { Text("This permanently removes the career in this slot.") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmDeleteSlot) { Text("Delete") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissDeleteConfirm) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (state.confirmImportOverwrite) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissImport,
+            title = { Text("Overwrite slot?") },
+            text = { Text("Import will replace the save in slot ${(state.importTargetSlot ?: 0) + 1}.") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmImportOverwrite) { Text("Import") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissImport) { Text("Cancel") }
             },
         )
     }

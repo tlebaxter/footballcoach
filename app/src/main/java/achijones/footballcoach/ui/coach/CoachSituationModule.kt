@@ -97,6 +97,7 @@ fun CoachSituationModule(
                 DrivePlayDetailChip(
                     conceptName = selectedSegment.conceptName,
                     logLine = selectedSegment.logLine,
+                    whyBullets = selectedSegment.whyBullets,
                     modifier = Modifier.padding(horizontal = 12.dp),
                 )
             }
@@ -108,6 +109,7 @@ fun CoachSituationModule(
 private fun DrivePlayDetailChip(
     conceptName: String,
     logLine: String,
+    whyBullets: List<String> = emptyList(),
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -145,9 +147,21 @@ private fun DrivePlayDetailChip(
                 overflow = TextOverflow.Ellipsis,
             )
         }
+
+        if (whyBullets.isNotEmpty()) {
+            Spacer(modifier.height(6.dp))
+            whyBullets.take(4).forEach { bullet ->
+                Text(
+                    "- $bullet",
+                    color = MutedText,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
     }
 }
-
 @Composable
 private fun CompactScoreboard(sit: GameSituation) {
     Column(

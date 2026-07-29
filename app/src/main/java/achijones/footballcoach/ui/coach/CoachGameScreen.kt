@@ -277,7 +277,7 @@ private fun CallPlaysTab(
 }
 
 @Composable
-private fun LastPlayBanner(sit: GameSituation) {
+private fun LastPlayBanner(sit: GameSituation, modifier: Modifier = Modifier) {
     val lastOff = sit.lastOffenseConceptId?.let { Playbook.offenseById(it) }
     val lastDef = sit.lastDefenseConceptId?.let { Playbook.defenseById(it) }
     Column(
@@ -316,6 +316,19 @@ private fun LastPlayBanner(sit: GameSituation) {
             )
             if (lastOff?.concept?.isNotBlank() == true) {
                 Text(lastOff.concept, color = Color(0xFFD1D5DB), style = MaterialTheme.typography.bodySmall)
+            }
+        }
+        val why = sit.lastSnapTrace?.summaryBullets.orEmpty()
+        if (why.isNotEmpty()) {
+            Spacer(modifier.height(6.dp))
+            why.take(4).forEach { bullet ->
+                Text(
+                    "- $bullet",
+                    color = MutedText,
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }

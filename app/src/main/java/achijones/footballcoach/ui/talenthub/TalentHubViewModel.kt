@@ -14,8 +14,12 @@ import CFBsimPack.PositionOvr
 import CFBsimPack.ProgramOffers
 import CFBsimPack.RosterStatus
 import CFBsimPack.Team
+import achijones.footballcoach.save.CareerPersistence
+import achijones.footballcoach.save.CareerSessionRestorer
+import achijones.footballcoach.save.OffseasonFlow
+import achijones.footballcoach.save.SaveRepository
+import achijones.footballcoach.save.SlotStatus
 import achijones.footballcoach.ui.theme.UserBrandTheme
-import achijones.footballcoach.ui.util.SaveSlots
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -86,16 +90,20 @@ data class TalentHubUiState(
     val message: String? = null,
     val offerSheet: OfferSheetState? = null,
     val showSaveDialog: Boolean = false,
-    val saveSlotInfos: List<String> = emptyList(),
+    val saveSlotInfos: List<achijones.footballcoach.save.SlotInfo> = emptyList(),
     val confirmOverwriteIndex: Int? = null,
+    val confirmDeleteIndex: Int? = null,
     val showBuyoutConfirm: Boolean = false,
     val buyoutPlayerName: String? = null,
     val buyoutCostLabel: String? = null,
     val navigateToMain: Boolean = false,
+    val navigateToSchedule: Boolean = false,
     val navigateHome: Boolean = false,
 )
 
 class TalentHubViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repo = SaveRepository.get(application)
 
     private val _uiState = MutableStateFlow(TalentHubUiState())
     val uiState: StateFlow<TalentHubUiState> = _uiState.asStateFlow()
@@ -114,23 +122,40 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     private fun bootstrap() {
-        if (!GameSession.readyOffseason()) {
-            _uiState.update { it.copy(missingSession = true, ready = false) }
-            return
+        viewModelScope.launch {
+            if (!GameSession.readyOffseason()) {
+                val result = withContext(Dispatchers.IO) {
+                    CareerSessionRestorer.resumeIfNeeded(getApplication(), repo)
+                }
+                val ok = result is CareerSessionRestorer.ResumeResult.Success ||
+                    result is CareerSessionRestorer.ResumeResult.AlreadyLoaded
+                if (!ok || !GameSession.readyOffseason()) {
+                    val msg = (result as? CareerSessionRestorer.ResumeResult.Failed)?.message
+                    _uiState.update {
+                        it.copy(
+                            missingSession = true,
+                            ready = false,
+                            navigateHome = true,
+                            message = msg,
+                        )
+                    }
+                    return@launch
+                }
+            }
+            GameSession.setStayingOnMainDuringOffseason(false)
+            league = OffseasonSession.league
+            offseason = OffseasonSession.offseason
+            user = league?.userTeam
+            UserBrandTheme.setFrom(user)
+            if (OffseasonSession.phase == null) {
+                OffseasonSession.phase = OffseasonSession.Phase.RETENTION
+            }
+            val tab = tabForPhase(OffseasonSession.phase)
+            _uiState.update {
+                it.copy(ready = true, missingSession = false, selectedTab = tab)
+            }
+            reloadTab()
         }
-        GameSession.setStayingOnMainDuringOffseason(false)
-        league = OffseasonSession.league
-        offseason = OffseasonSession.offseason
-        user = league?.userTeam
-        UserBrandTheme.setFrom(user)
-        if (OffseasonSession.phase == null) {
-            OffseasonSession.phase = OffseasonSession.Phase.RETENTION
-        }
-        val tab = tabForPhase(OffseasonSession.phase)
-        _uiState.update {
-            it.copy(ready = true, missingSession = false, selectedTab = tab)
-        }
-        reloadTab()
     }
 
     fun selectTab(tab: HubTab) {
@@ -166,8 +191,20 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update { it.copy(navigateToMain = false) }
     }
 
+    fun consumeNavigateToSchedule() {
+        _uiState.update { it.copy(navigateToSchedule = false) }
+    }
+
     fun consumeNavigateHome() {
         _uiState.update { it.copy(navigateHome = false) }
+    }
+
+    private suspend fun autosaveLive(): Boolean {
+        val l = league ?: OffseasonSession.league ?: return false
+        if (!GameSession.hasActiveSaveSlot()) return false
+        return withContext(Dispatchers.IO) {
+            CareerPersistence.saveActive(l, repo).isSuccess
+        }
     }
 
     /** Leaves for Main without discarding the live offseason session. */
@@ -177,23 +214,28 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
     }
 
     fun openSaveDialog() {
-        _uiState.update {
-            it.copy(
-                showSaveDialog = true,
-                saveSlotInfos = SaveSlots.infos(getApplication()),
-                confirmOverwriteIndex = null,
-            )
+        viewModelScope.launch {
+            val slots = repo.listSlots()
+            _uiState.update {
+                it.copy(
+                    showSaveDialog = true,
+                    saveSlotInfos = slots,
+                    confirmOverwriteIndex = null,
+                )
+            }
         }
     }
 
     fun dismissSaveDialog() {
-        _uiState.update { it.copy(showSaveDialog = false, confirmOverwriteIndex = null) }
+        _uiState.update {
+            it.copy(showSaveDialog = false, confirmOverwriteIndex = null, confirmDeleteIndex = null)
+        }
     }
 
     fun pickSaveSlot(index: Int) {
         val infos = _uiState.value.saveSlotInfos
         if (index < 0 || index >= infos.size) return
-        if (infos[index] == "EMPTY") {
+        if (infos[index].status == SlotStatus.EMPTY) {
             writeSave(index)
         } else {
             _uiState.update { it.copy(confirmOverwriteIndex = index) }
@@ -209,19 +251,48 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         _uiState.update { it.copy(confirmOverwriteIndex = null) }
     }
 
+    fun requestDeleteSlot(index: Int) {
+        _uiState.update { it.copy(confirmDeleteIndex = index) }
+    }
+
+    fun dismissDelete() {
+        _uiState.update { it.copy(confirmDeleteIndex = null) }
+    }
+
+    fun confirmDelete() {
+        val index = _uiState.value.confirmDeleteIndex ?: return
+        viewModelScope.launch {
+            repo.delete(index)
+            val slots = repo.listSlots()
+            _uiState.update {
+                it.copy(confirmDeleteIndex = null, saveSlotInfos = slots, message = "Slot ${index + 1} deleted")
+            }
+        }
+    }
+
     private fun writeSave(index: Int) {
         val l = league ?: return
-        val file = SaveSlots.file(getApplication(), index)
-        val ok = l.saveLeague(file)
-        if (ok) {
-            GameSession.setActiveSaveSlot(index)
+        viewModelScope.launch {
+            val ok = withContext(Dispatchers.IO) { repo.save(index, l).isSuccess }
+            if (ok) {
+                GameSession.setActiveSaveSlot(index)
+            }
+            _uiState.update {
+                it.copy(
+                    showSaveDialog = false,
+                    confirmOverwriteIndex = null,
+                    message = if (ok) "Saved league!" else "Save failed.",
+                )
+            }
         }
-        _uiState.update {
-            it.copy(
-                showSaveDialog = false,
-                confirmOverwriteIndex = null,
-                message = if (ok) "Saved league!" else "Save failed.",
-            )
+    }
+
+    private fun persistAfterMutation() {
+        viewModelScope.launch {
+            val ok = autosaveLive()
+            if (!ok && GameSession.hasActiveSaveSlot()) {
+                _uiState.update { it.copy(message = "Signed — save failed") }
+            }
         }
     }
 
@@ -354,6 +425,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             }
             dismissOfferSheet()
             reloadTab()
+            persistAfterMutation()
             return
         }
         val st = sheet.status
@@ -373,6 +445,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             }
             dismissOfferSheet()
             reloadTab()
+            persistAfterMutation()
             return
         }
         val ok = if (sheet.portal) {
@@ -388,6 +461,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             )
         }
         reloadTab()
+        if (ok) persistAfterMutation()
     }
 
     fun requestBuyout() {
@@ -431,48 +505,109 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             )
         }
         reloadTab()
+        if (ok) persistAfterMutation()
     }
 
     fun onPrimary() {
         when (OffseasonSession.phase) {
             OffseasonSession.Phase.RETENTION -> approveRetention()
-            OffseasonSession.Phase.PORTAL -> {
-                GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_TRANSFER_PORTAL)
-                _uiState.update { it.copy(navigateToMain = true) }
-            }
+            OffseasonSession.Phase.PORTAL -> finishPortalPhase()
             OffseasonSession.Phase.SCHEDULE -> {
                 // Scheduling moved to ScheduleScreen; bounce back to Main.
                 _uiState.update { it.copy(navigateToMain = true) }
             }
-            OffseasonSession.Phase.HS -> {
-                val budget = user?.recruitMoney ?: 0
-                GameSession.setPendingRemainingBudget(budget)
-                GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_RECRUITING)
-                _uiState.update { it.copy(navigateToMain = true) }
-            }
+            OffseasonSession.Phase.HS -> finishRecruitingPhase()
         }
     }
 
     private fun approveRetention() {
         viewModelScope.launch {
-            val off = offseason ?: return@launch
-            val u = user ?: return@launch
-            val applied = withContext(Dispatchers.Default) {
-                var count = 0
-                for (s in suggestions) {
-                    if (!s.selected) continue
-                    if (off.applyUserRetain(u, s)) count++
+            try {
+                val off = offseason ?: return@launch
+                val u = user ?: return@launch
+                val applied = withContext(Dispatchers.Default) {
+                    var count = 0
+                    for (s in suggestions) {
+                        if (!s.selected) continue
+                        if (off.applyUserRetain(u, s)) count++
+                    }
+                    off.finalizeDraftDeclares(u)
+                    count
                 }
-                off.finalizeDraftDeclares(u)
-                count
+                OffseasonFlow.finishRetention()
+                league = OffseasonSession.league
+                offseason = OffseasonSession.offseason
+                user = league?.userTeam
+                val saved = autosaveLive()
+                val tab = HubTab.PORTAL
+                _uiState.update {
+                    it.copy(
+                        selectedTab = tab,
+                        message = if (saved || !GameSession.hasActiveSaveSlot()) {
+                            "Retention applied ($applied). Opening portal…"
+                        } else {
+                            "Retention applied ($applied) — save failed"
+                        },
+                    )
+                }
+                reloadTab()
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(message = e.message ?: "Could not finish retention")
+                }
             }
-            OffseasonSession.phase = OffseasonSession.Phase.PORTAL
-            GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_RETENTION)
-            _uiState.update {
-                it.copy(
-                    message = "Retention applied ($applied). Opening portal…",
-                    navigateToMain = true,
-                )
+        }
+    }
+
+    private fun finishPortalPhase() {
+        viewModelScope.launch {
+            try {
+                withContext(Dispatchers.Default) { OffseasonFlow.finishPortal() }
+                league = OffseasonSession.league
+                offseason = OffseasonSession.offseason
+                user = league?.userTeam
+                val saved = autosaveLive()
+                _uiState.update {
+                    it.copy(
+                        navigateToSchedule = true,
+                        message = if (!saved && GameSession.hasActiveSaveSlot()) {
+                            "Portal closed — save failed"
+                        } else {
+                            null
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(message = e.message ?: "Could not finish portal")
+                }
+            }
+        }
+    }
+
+    private fun finishRecruitingPhase() {
+        viewModelScope.launch {
+            try {
+                val budget = user?.recruitMoney ?: 0
+                withContext(Dispatchers.Default) { OffseasonFlow.finishRecruiting(budget) }
+                league = GameSession.getLeague()
+                user = league?.userTeam
+                offseason = null
+                val saved = autosaveLive()
+                _uiState.update {
+                    it.copy(
+                        navigateToMain = true,
+                        message = if (!saved && GameSession.hasActiveSaveSlot()) {
+                            "Recruiting done — save failed"
+                        } else {
+                            null
+                        },
+                    )
+                }
+            } catch (e: Exception) {
+                _uiState.update {
+                    it.copy(message = e.message ?: "Could not finish recruiting")
+                }
             }
         }
     }

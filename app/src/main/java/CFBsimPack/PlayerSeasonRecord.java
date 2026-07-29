@@ -22,6 +22,7 @@ public class PlayerSeasonRecord {
     public int xpAtt, xpMade, fgAtt, fgMade;
     public int prAtt, prYards, prTd, krAtt, krYards, krTd, fairCatches;
     public int puntAtt, puntYards;
+    public int tackles, tfl, sacksDef, defInt, passDef, forcedFumbles, fumbleRec;
 
     public PlayerSeasonRecord() {}
 
@@ -81,6 +82,14 @@ public class PlayerSeasonRecord {
         } else if (g == PositionGroup.P) {
             puntAtt = s.puntAtt;
             puntYards = s.puntYards;
+        } else if (g != null && (g.isSecondary() || g.isDefensiveFront())) {
+            tackles = s.tackles;
+            tfl = s.tfl;
+            sacksDef = s.sacksDef;
+            defInt = s.defInt;
+            passDef = s.passDef;
+            forcedFumbles = s.forcedFumbles;
+            fumbleRec = s.fumbleRec;
         }
     }
 
@@ -115,6 +124,11 @@ public class PlayerSeasonRecord {
             }
         } else if ("P".equals(position) && puntAtt > 0) {
             sb.append("  Punt ").append(puntAtt).append("/").append(puntYards);
+        } else if ("CB".equals(position) || "S".equals(position)
+                || "EDGE".equals(position) || "DL".equals(position) || "LB".equals(position)) {
+            sb.append("  ").append(tackles).append(" Tck, ").append(tfl).append(" TFL, ")
+                    .append(sacksDef).append(" Sk, ").append(defInt).append(" INT, ")
+                    .append(passDef).append(" PD");
         }
         if (prAtt > 0 || krAtt > 0) {
             if (prAtt > 0) sb.append("  PR ").append(prYards).append(" yds");
@@ -134,7 +148,9 @@ public class PlayerSeasonRecord {
                 + targets + ":" + receptions + ":" + recYards + ":" + recTd + ":" + drops + ":" + recFumbles + ":"
                 + xpAtt + ":" + xpMade + ":" + fgAtt + ":" + fgMade + ":"
                 + prAtt + ":" + prYards + ":" + prTd + ":" + krAtt + ":" + krYards + ":" + krTd + ":"
-                + fairCatches + ":" + puntAtt + ":" + puntYards;
+                + fairCatches + ":" + puntAtt + ":" + puntYards + ":"
+                + tackles + ":" + tfl + ":" + sacksDef + ":" + defInt + ":"
+                + passDef + ":" + forcedFumbles + ":" + fumbleRec;
     }
 
     public static PlayerSeasonRecord fromSaveToken(String token) {
@@ -185,6 +201,15 @@ public class PlayerSeasonRecord {
                 r.fairCatches = Integer.parseInt(p[34]);
                 r.puntAtt = Integer.parseInt(p[35]);
                 r.puntYards = Integer.parseInt(p[36]);
+            }
+            if (p.length > 43) {
+                r.tackles = Integer.parseInt(p[37]);
+                r.tfl = Integer.parseInt(p[38]);
+                r.sacksDef = Integer.parseInt(p[39]);
+                r.defInt = Integer.parseInt(p[40]);
+                r.passDef = Integer.parseInt(p[41]);
+                r.forcedFumbles = Integer.parseInt(p[42]);
+                r.fumbleRec = Integer.parseInt(p[43]);
             }
         } catch (Exception e) {
             return null;

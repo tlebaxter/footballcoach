@@ -34,8 +34,6 @@ public final class RunGapResolver {
             CoverageCall cov,
             SituationMods sit,
             FatigueTracker fatigue,
-            double runYardsMod,
-            int matchupBonus,
             int atmosphereBonus,
             double sysRunWeight
     ) {
@@ -68,9 +66,9 @@ public final class RunGapResolver {
             }
         }
 
-        crease += matchupBonus / 3.0;
+        crease += SafetyHelp.runCreaseAdjust(cov);
+        crease += sit.duelOffenseBoost / 3.0;
         crease -= (sysRunWeight - 1.0) * 3.0;
-        if (cov == CoverageCall.STACK_BOX) crease -= 2.5;
 
         int spd = rate(carrier, fatigue, x -> x.spd, 55);
         int stre = rate(carrier, fatigue, x -> x.stre, 55);
@@ -95,14 +93,16 @@ public final class RunGapResolver {
                 break;
         }
 
+        ExplosiveProfile exp = scheme.explosive != null
+                ? scheme.explosive
+                : ExplosiveProfile.forTrack(scheme.track);
         int yards = (int) ((attr * 0.35 + crease * 2.2 + atmosphereBonus)
-                * (0.35 + rng.nextDouble() * 0.85) / 8.5 * runYardsMod);
+                * (0.35 + rng.nextDouble() * 0.85) / 8.5 * exp.yardScale);
         if (yards < 2 && (scheme.track == RunTrack.POWER || scheme.track == RunTrack.DIVE
                 || scheme.track == RunTrack.ISO)) {
             yards += stre / 22 - 2;
         }
 
-        ExplosiveProfile exp = scheme.explosive;
         SafetyHelp.Shell shell = SafetyHelp.shell(cov);
         boolean inside = used.isInterior();
         double burstP = exp.baseBurstChance * Math.max(0.2, (crease + 6) / 12.0);
@@ -122,10 +122,18 @@ public final class RunGapResolver {
         }
 
         if (cov != null && isQb(carrier)) {
-            yards = (int) (yards * cov.scrambleMod);
+            yards = (int) (yards * SafetyHelp.containFactor(cov));
         }
         if (yards < -4) yards = -4;
-        return new RunGapResult(used, cutback, crease, yards, explosive);
+
+        Player firstLevel = defMap.get(firstLevelFor(used));
+        if (firstLevel == null) firstLevel = defMap.get(DefSlot.DT);
+        if (firstLevel == null) firstLevel = defMap.get(DefSlot.NT);
+        Player secondLevel = defMap.get(secondLevelFor(used));
+        if (secondLevel == null) secondLevel = defMap.get(DefSlot.MIKE);
+        if (secondLevel == null) secondLevel = defMap.get(DefSlot.LB);
+
+        return new RunGapResult(used, cutback, crease, yards, explosive, firstLevel, secondLevel);
     }
 
     private double resolveGapCrease(

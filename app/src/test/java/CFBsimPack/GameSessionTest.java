@@ -82,57 +82,29 @@ public class GameSessionTest {
     }
 
     @Test
-    public void pendingOffseasonResultIsOneShot() {
-        GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_RETENTION);
-        assertEquals(
-                GameSession.OffseasonResult.DONE_RETENTION,
-                GameSession.consumePendingOffseasonResult());
-        assertEquals(
-                GameSession.OffseasonResult.NONE,
-                GameSession.consumePendingOffseasonResult());
-    }
-
-    @Test
-    public void beginOffseasonClearsPendingResultAndStayingFlag() throws Exception {
+    public void beginOffseasonClearsStayingFlag() throws Exception {
         League league = createLeague();
         LeagueOffseason off = new LeagueOffseason(league);
-        GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_SCHEDULE);
         GameSession.setStayingOnMainDuringOffseason(true);
 
         GameSession.beginOffseason(league, off, OffseasonSession.Phase.PORTAL);
 
-        assertEquals(GameSession.OffseasonResult.NONE, GameSession.getPendingOffseasonResult());
         assertFalse(GameSession.isStayingOnMainDuringOffseason());
         assertTrue(OffseasonSession.ready());
         assertEquals(OffseasonSession.Phase.PORTAL, OffseasonSession.phase);
     }
 
     @Test
-    public void clearOffseasonResetsPendingBudgetAndStayingFlag() throws Exception {
+    public void clearOffseasonResetsStayingFlag() throws Exception {
         League league = createLeague();
         LeagueOffseason off = new LeagueOffseason(league);
         GameSession.beginOffseason(league, off);
-        GameSession.setPendingRemainingBudget(123456);
-        GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_RECRUITING);
         GameSession.setStayingOnMainDuringOffseason(true);
 
         GameSession.clearOffseason();
 
         assertFalse(OffseasonSession.ready());
-        assertEquals(GameSession.OffseasonResult.NONE, GameSession.getPendingOffseasonResult());
-        assertEquals(-1, GameSession.getPendingRemainingBudget());
         assertFalse(GameSession.isStayingOnMainDuringOffseason());
-    }
-
-    @Test
-    public void pendingRemainingBudgetSurvivesOffseasonResultConsume() {
-        GameSession.setPendingRemainingBudget(500000);
-        GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_RECRUITING);
-
-        assertEquals(
-                GameSession.OffseasonResult.DONE_RECRUITING,
-                GameSession.consumePendingOffseasonResult());
-        assertEquals(500000, GameSession.getPendingRemainingBudget());
     }
 
     @Test
@@ -143,8 +115,6 @@ public class GameSessionTest {
         GameSession.setNeedsOocScheduling(true);
         GameSession.setNeedsTeamPicker(true);
         GameSession.setStayingOnMainDuringOffseason(true);
-        GameSession.setPendingRemainingBudget(9);
-        GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_TRANSFER_PORTAL);
         GameSession.finishCoachGame(playedStub(league));
         LeagueOffseason off = new LeagueOffseason(league);
         GameSession.beginOffseason(league, off);
@@ -156,8 +126,6 @@ public class GameSessionTest {
         assertFalse(GameSession.needsOocScheduling());
         assertFalse(GameSession.needsTeamPicker());
         assertFalse(GameSession.isStayingOnMainDuringOffseason());
-        assertEquals(-1, GameSession.getPendingRemainingBudget());
-        assertEquals(GameSession.OffseasonResult.NONE, GameSession.getPendingOffseasonResult());
         assertFalse(GameSession.consumePendingCoachResultSave());
         assertFalse(OffseasonSession.ready());
     }

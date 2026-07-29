@@ -78,6 +78,65 @@ public class PlayerSeasonRecordTest {
     }
 
     @Test
+    public void defenseSaveTokenRoundTrip() {
+        PlayerSeasonRecord original = new PlayerSeasonRecord();
+        original.seasonYear = 2027;
+        original.teamAbbr = "DEF";
+        original.teamName = "Defense U";
+        original.classYear = 4;
+        original.gamesPlayed = 13;
+        original.wins = 10;
+        original.position = "EDGE";
+        original.puntAtt = 0;
+        original.puntYards = 0;
+        original.tackles = 55;
+        original.tfl = 14;
+        original.sacksDef = 11;
+        original.defInt = 0;
+        original.passDef = 2;
+        original.forcedFumbles = 3;
+        original.fumbleRec = 1;
+
+        PlayerSeasonRecord loaded = PlayerSeasonRecord.fromSaveToken(original.toSaveToken());
+        assertNotNull(loaded);
+        assertEquals(55, loaded.tackles);
+        assertEquals(14, loaded.tfl);
+        assertEquals(11, loaded.sacksDef);
+        assertEquals(0, loaded.defInt);
+        assertEquals(2, loaded.passDef);
+        assertEquals(3, loaded.forcedFumbles);
+        assertEquals(1, loaded.fumbleRec);
+        assertTrue(loaded.summaryLine().contains("55 Tck"));
+    }
+
+    @Test
+    public void oldTokenWithoutDefenseFieldsLoadsZeros() {
+        PlayerSeasonRecord original = new PlayerSeasonRecord();
+        original.seasonYear = 2025;
+        original.teamAbbr = "OLD";
+        original.teamName = "Old School";
+        original.classYear = 2;
+        original.gamesPlayed = 11;
+        original.wins = 4;
+        original.position = "CB";
+        original.puntAtt = 0;
+        original.puntYards = 0;
+        String full = original.toSaveToken();
+        // Strip trailing defense fields (7 ints after puntYards)
+        String[] parts = full.split(":");
+        StringBuilder old = new StringBuilder();
+        for (int i = 0; i <= 36; i++) {
+            if (i > 0) old.append(':');
+            old.append(parts[i]);
+        }
+        PlayerSeasonRecord loaded = PlayerSeasonRecord.fromSaveToken(old.toString());
+        assertNotNull(loaded);
+        assertEquals(0, loaded.tackles);
+        assertEquals(0, loaded.sacksDef);
+        assertEquals(0, loaded.defInt);
+    }
+
+    @Test
     public void fromSaveTokenRejectsShortTokens() {
         assertNull(PlayerSeasonRecord.fromSaveToken("too:short"));
     }

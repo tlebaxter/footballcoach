@@ -2,10 +2,12 @@ package achijones.footballcoach.ui.main
 
 import CFBsimPack.Game
 import CFBsimPack.GameSession
+import achijones.footballcoach.save.SaveRepository
+import achijones.footballcoach.save.SlotStatus
 import achijones.footballcoach.testing.LeagueFixtures
-import achijones.footballcoach.ui.util.SaveSlots
 import android.app.Application
 import androidx.test.core.app.ApplicationProvider
+import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -21,15 +23,17 @@ import org.robolectric.annotation.Config
 class MainViewModelCoachAutosaveTest {
 
     private val app: Application = ApplicationProvider.getApplicationContext()
+    private val repo = SaveRepository.get(app)
 
     @After
-    fun tearDown() {
+    fun tearDown() = runBlocking {
         LeagueFixtures.clearSessions()
-        SaveSlots.file(app, 0).delete()
+        repo.delete(0)
+        repo.setLastActiveSlot(null)
     }
 
     @Test
-    fun coachFinishWithActiveSlotAutosavesAndSnackbars() {
+    fun coachFinishWithActiveSlotAutosavesAndSnackbars() = runBlocking {
         val league = LeagueFixtures.createLeagueWithUser()
         GameSession.setLeague(league)
         GameSession.setActiveSaveSlot(0)
@@ -45,12 +49,13 @@ class MainViewModelCoachAutosaveTest {
         vm.onScreenEntered()
 
         assertEquals("Game saved · 28-14", vm.uiState.value.snackbarMessage)
-        assertTrue(SaveSlots.file(app, 0).exists())
+        val slot = repo.listSlots()[0]
+        assertEquals(SlotStatus.OK, slot.status)
         assertFalse(GameSession.consumePendingCoachResultSave())
     }
 
     @Test
-    fun coachFinishWithoutSlotPromptsCareerSave() {
+    fun coachFinishWithoutSlotPromptsCareerSave() = runBlocking {
         val league = LeagueFixtures.createLeagueWithUser()
         GameSession.setLeague(league)
         val vm = MainViewModel(app)
@@ -68,7 +73,7 @@ class MainViewModelCoachAutosaveTest {
             "Result applied · 21-17 — save your career to keep it",
             vm.uiState.value.snackbarMessage,
         )
-        assertFalse(SaveSlots.file(app, 0).exists())
+        assertEquals(SlotStatus.EMPTY, repo.listSlots()[0].status)
     }
 
     @Test

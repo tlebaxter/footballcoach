@@ -3,24 +3,15 @@ package CFBsimPack;
 /**
  * Process-scoped holder for the live League used by Compose screens.
  * Offseason state continues to live in {@link OffseasonSession} so League save/load
- * paths stay untouched.
+ * paths stay untouched. Phase transitions are applied at the source screen via
+ * OffseasonFlow; this class does not carry pending offseason side effects.
  */
 public final class GameSession {
-
-    public enum OffseasonResult {
-        NONE,
-        DONE_RETENTION,
-        DONE_TRANSFER_PORTAL,
-        DONE_SCHEDULE,
-        DONE_RECRUITING
-    }
 
     /** True when a new career still needs the user to finish OOC scheduling. */
     private static boolean needsOocScheduling = false;
 
     private static League league;
-    private static OffseasonResult pendingOffseasonResult = OffseasonResult.NONE;
-    private static int pendingRemainingBudget = -1;
     /** True when a brand-new league still needs the user to pick a team. */
     private static boolean needsTeamPicker = false;
     /** Active live-coach game (optional HC mode). */
@@ -77,8 +68,6 @@ public final class GameSession {
 
     public static void clearAll() {
         league = null;
-        pendingOffseasonResult = OffseasonResult.NONE;
-        pendingRemainingBudget = -1;
         needsTeamPicker = false;
         needsOocScheduling = false;
         activeCoachGame = null;
@@ -161,43 +150,17 @@ public final class GameSession {
     public static void beginOffseason(League l, LeagueOffseason off) {
         setLeague(l);
         OffseasonSession.begin(l, off);
-        pendingOffseasonResult = OffseasonResult.NONE;
         stayingOnMainDuringOffseason = false;
     }
 
     public static void beginOffseason(League l, LeagueOffseason off, OffseasonSession.Phase startPhase) {
         setLeague(l);
         OffseasonSession.begin(l, off, startPhase);
-        pendingOffseasonResult = OffseasonResult.NONE;
         stayingOnMainDuringOffseason = false;
     }
 
     public static void clearOffseason() {
         OffseasonSession.clear();
-        pendingOffseasonResult = OffseasonResult.NONE;
-        pendingRemainingBudget = -1;
         stayingOnMainDuringOffseason = false;
-    }
-
-    public static void setPendingOffseasonResult(OffseasonResult result) {
-        pendingOffseasonResult = result != null ? result : OffseasonResult.NONE;
-    }
-
-    public static OffseasonResult getPendingOffseasonResult() {
-        return pendingOffseasonResult;
-    }
-
-    public static void setPendingRemainingBudget(int budget) {
-        pendingRemainingBudget = budget;
-    }
-
-    public static int getPendingRemainingBudget() {
-        return pendingRemainingBudget;
-    }
-
-    public static OffseasonResult consumePendingOffseasonResult() {
-        OffseasonResult r = pendingOffseasonResult;
-        pendingOffseasonResult = OffseasonResult.NONE;
-        return r;
     }
 }

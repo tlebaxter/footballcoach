@@ -23,8 +23,11 @@ import CFBsimPack.QbPressurePolicy
 import CFBsimPack.Rivalry
 import CFBsimPack.Team
 import CFBsimPack.TransferReason
+import achijones.footballcoach.save.CareerPersistence
+import achijones.footballcoach.save.CareerSessionRestorer
+import achijones.footballcoach.save.SaveRepository
+import achijones.footballcoach.save.SlotStatus
 import achijones.footballcoach.ui.theme.UserBrandTheme
-import achijones.footballcoach.ui.util.SaveSlots
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -32,9 +35,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.io.File
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repo = SaveRepository.get(application)
 
     private val _uiState = MutableStateFlow(MainUiState())
     val uiState: StateFlow<MainUiState> = _uiState.asStateFlow()
@@ -92,24 +96,32 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         bootstrap()
     }
 
-    /** Call whenever Main becomes visible so pending TalentHub results are applied. */
+    /** Call whenever Main becomes visible (sync live session; offseason transitions apply at source). */
     fun onScreenEntered() {
-        if (!GameSession.hasLeague()) {
-            _uiState.update { it.copy(navigateHome = true) }
+        if (GameSession.hasLeague()) {
+            continueOnScreenEntered()
             return
         }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                CareerSessionRestorer.resumeIfNeeded(getApplication(), repo)
+            }
+            when (result) {
+                CareerSessionRestorer.ResumeResult.Success,
+                CareerSessionRestorer.ResumeResult.AlreadyLoaded,
+                -> continueOnScreenEntered()
+                CareerSessionRestorer.ResumeResult.NoSlot ->
+                    _uiState.update { it.copy(navigateHome = true) }
+                is CareerSessionRestorer.ResumeResult.Failed ->
+                    _uiState.update {
+                        it.copy(navigateHome = true, snackbarMessage = result.message)
+                    }
+            }
+        }
+    }
+
+    private fun continueOnScreenEntered() {
         league = GameSession.getLeague()
-        val before = GameSession.getPendingOffseasonResult()
-        handlePendingOffseasonResult()
-        if (before != GameSession.OffseasonResult.NONE) {
-            val l = league ?: return
-            if (_uiState.value.navigateToTalentHub || _uiState.value.navigateToSchedule) return
-            userTeam = l.userTeam
-            currentTeam = userTeam
-            currentConference = l.findConference(userTeam!!.conference)
-            rebuildSnapshot(ready = true)
-            return
-        }
         if (GameSession.isStayingOnMainDuringOffseason() && OffseasonSession.ready()) {
             syncFromOffseasonSession()
             return
@@ -131,10 +143,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     private fun handlePendingCoachResult(): String? {
         if (!GameSession.consumePendingCoachResultSave()) return null
         val summary = GameSession.consumePendingCoachResultSummary()
-        val slot = GameSession.getActiveSaveSlot()
         val l = league
-        if (slot != null && l != null) {
-            val ok = l.saveLeague(SaveSlots.file(getApplication(), slot))
+        if (GameSession.hasActiveSaveSlot() && l != null) {
+            val ok = CareerPersistence.saveActiveBlocking(l, repo)
             return if (ok) {
                 if (summary != null) "Game saved · $summary" else "Game saved"
             } else {
@@ -165,12 +176,33 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun bootstrap() {
-        if (!GameSession.hasLeague()) {
-            _uiState.update { it.copy(navigateHome = true) }
-            return
+        viewModelScope.launch {
+            if (!GameSession.hasLeague()) {
+                val result = withContext(Dispatchers.IO) {
+                    CareerSessionRestorer.resumeIfNeeded(getApplication(), repo)
+                }
+                when (result) {
+                    CareerSessionRestorer.ResumeResult.Success,
+                    CareerSessionRestorer.ResumeResult.AlreadyLoaded,
+                    -> Unit
+                    CareerSessionRestorer.ResumeResult.NoSlot -> {
+                        _uiState.update { it.copy(navigateHome = true) }
+                        return@launch
+                    }
+                    is CareerSessionRestorer.ResumeResult.Failed -> {
+                        _uiState.update {
+                            it.copy(navigateHome = true, snackbarMessage = result.message)
+                        }
+                        return@launch
+                    }
+                }
+            }
+            finishBootstrap()
         }
+    }
+
+    private fun finishBootstrap() {
         league = GameSession.getLeague()
-        handlePendingOffseasonResult()
         val l = league ?: return
         if (l.loadedInOffseason && OffseasonSession.ready() &&
             !GameSession.isStayingOnMainDuringOffseason()
@@ -208,83 +240,6 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             showRecruitingClassDialogInternal()
         }
         rebuildSnapshot(ready = true)
-    }
-
-    private fun handlePendingOffseasonResult() {
-        val l = league ?: return
-        when (GameSession.consumePendingOffseasonResult()) {
-            GameSession.OffseasonResult.DONE_RETENTION -> {
-                if (!OffseasonSession.ready()) return
-                league = OffseasonSession.league
-                userTeam = league!!.userTeam
-                GameSession.setLeague(league)
-                OffseasonSession.offseason.buildTransferPortal()
-                OffseasonSession.phase = OffseasonSession.Phase.PORTAL
-                val file = File(getApplication<Application>().filesDir, "saveLeaguePortal.cfb")
-                league!!.saveLeague(file)
-                currentTeam = userTeam
-                currentConference = league!!.findConference(userTeam!!.conference)
-                _uiState.update { it.copy(navigateToTalentHub = true) }
-            }
-            GameSession.OffseasonResult.DONE_TRANSFER_PORTAL -> {
-                if (!OffseasonSession.ready()) return
-                league = OffseasonSession.league
-                userTeam = league!!.userTeam
-                GameSession.setLeague(league)
-                val off = OffseasonSession.offseason
-                off.aiClaimRemainingPortal()
-                league!!.updateTeamHistories()
-                league!!.updateLeagueHistory()
-                userTeam!!.resetStats()
-                league!!.advanceSeasonForScheduling()
-                OffseasonSession.phase = OffseasonSession.Phase.SCHEDULE
-                val file = File(getApplication<Application>().filesDir, "saveLeagueSchedule.cfb")
-                league!!.saveLeague(file)
-                currentTeam = userTeam
-                currentConference = league!!.findConference(userTeam!!.conference)
-                _uiState.update { it.copy(navigateToSchedule = true) }
-            }
-            GameSession.OffseasonResult.DONE_SCHEDULE -> {
-                if (!OffseasonSession.ready()) return
-                league = OffseasonSession.league
-                userTeam = league!!.userTeam
-                GameSession.setLeague(league)
-                val off = OffseasonSession.offseason
-                league!!.completeOocSchedule()
-                val yearOneScheduling = GameSession.needsOocScheduling()
-                GameSession.setNeedsOocScheduling(false)
-                currentTeam = userTeam
-                currentConference = league!!.findConference(userTeam!!.conference)
-                if (yearOneScheduling) {
-                    GameSession.clearOffseason()
-                    league!!.updateTeamTalentRatings()
-                    rebuildSnapshot()
-                } else {
-                    off.generateHsClass()
-                    OffseasonSession.phase = OffseasonSession.Phase.HS
-                    val file = File(getApplication<Application>().filesDir, "saveLeagueRecruiting.cfb")
-                    league!!.saveLeague(file)
-                    _uiState.update { it.copy(navigateToTalentHub = true) }
-                }
-            }
-            GameSession.OffseasonResult.DONE_RECRUITING -> {
-                if (OffseasonSession.ready()) {
-                    league = OffseasonSession.league
-                    userTeam = league!!.userTeam
-                    GameSession.setLeague(league)
-                    val budget = GameSession.getPendingRemainingBudget()
-                    if (budget >= 0) {
-                        userTeam!!.recruitMoney = budget
-                    }
-                    OffseasonSession.offseason.aiSignHsClass()
-                    GameSession.clearOffseason()
-                }
-                league!!.updateTeamTalentRatings()
-                currentTeam = userTeam
-                currentConference = league!!.findConference(userTeam!!.conference)
-            }
-            GameSession.OffseasonResult.NONE -> Unit
-        }
     }
 
     fun consumeNavigateHome() {
@@ -608,14 +563,45 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 off.aiRetainAll()
                 off.scorePortalRiskForTeam(l.userTeam)
                 GameSession.beginOffseason(l, off)
-                val file = File(getApplication<Application>().filesDir, "saveLeagueRetention.cfb")
-                l.saveLeague(file)
+                autosaveActiveSlot()
             }
             _uiState.update { it.copy(navigateToTalentHub = true) }
         }
     }
 
     fun pickTeam(abbr: String) {
+        viewModelScope.launch {
+            val empty = withContext(Dispatchers.IO) { repo.findFirstEmptySlot() }
+            if (empty == null && !GameSession.hasActiveSaveSlot()) {
+                val slots = withContext(Dispatchers.IO) { repo.listSlots() }
+                _uiState.update {
+                    it.copy(
+                        showChooseSlotForNewCareer = true,
+                        pendingPickTeamAbbr = abbr,
+                        saveSlotInfos = slots,
+                    )
+                }
+                return@launch
+            }
+            applyPickTeam(abbr, empty)
+        }
+    }
+
+    fun dismissChooseSlotForNewCareer() {
+        _uiState.update {
+            it.copy(showChooseSlotForNewCareer = false, pendingPickTeamAbbr = null)
+        }
+    }
+
+    fun chooseSlotForNewCareer(index: Int) {
+        val abbr = _uiState.value.pendingPickTeamAbbr ?: return
+        _uiState.update {
+            it.copy(showChooseSlotForNewCareer = false, pendingPickTeamAbbr = null)
+        }
+        viewModelScope.launch { applyPickTeam(abbr, index) }
+    }
+
+    private suspend fun applyPickTeam(abbr: String, bindSlot: Int?) {
         val l = league ?: return
         val picked = l.teamList.firstOrNull { it.abbr == abbr } ?: return
         userTeam?.userControlled = false
@@ -634,6 +620,17 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         l.offseason = off
         GameSession.beginOffseason(l, off, OffseasonSession.Phase.SCHEDULE)
         GameSession.setNeedsOocScheduling(true)
+
+        val slot = GameSession.getActiveSaveSlot() ?: bindSlot
+        if (slot != null) {
+            val ok = withContext(Dispatchers.IO) { repo.save(slot, l).isSuccess }
+            if (ok) {
+                GameSession.setActiveSaveSlot(slot)
+            } else {
+                postSnackbar("Could not create save slot — progress may be lost if the app closes")
+            }
+        }
+
         // Keep showTeamPicker true until navigation starts so MainScreen does not
         // briefly paint the roster under the outgoing picker.
         _uiState.update { it.copy(navigateToSchedule = true) }
@@ -879,28 +876,37 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun confirmExit() {
-        GameSession.clearAll()
-        UserBrandTheme.clear()
-        _uiState.update { it.copy(showExitConfirm = false, navigateHome = true) }
+        viewModelScope.launch {
+            repo.setLastActiveSlot(null)
+            GameSession.clearAll()
+            UserBrandTheme.clear()
+            _uiState.update { it.copy(showExitConfirm = false, navigateHome = true) }
+        }
     }
 
     fun openSaveDialog() {
-        _uiState.update {
-            it.copy(
-                showSaveDialog = true,
-                saveSlotInfos = SaveSlots.infos(getApplication()),
-            )
+        viewModelScope.launch {
+            val slots = repo.listSlots()
+            _uiState.update {
+                it.copy(
+                    showSaveDialog = true,
+                    saveSlotInfos = slots,
+                )
+            }
         }
     }
 
     fun dismissSaveDialog() {
-        _uiState.update { it.copy(showSaveDialog = false, confirmOverwriteSlot = null) }
+        _uiState.update {
+            it.copy(showSaveDialog = false, confirmOverwriteSlot = null, confirmDeleteSlot = null)
+        }
     }
 
     fun saveToSlot(index: Int) {
         val infos = _uiState.value.saveSlotInfos
         if (index < 0 || index >= infos.size) return
-        if (infos[index] == "EMPTY") {
+        val info = infos[index]
+        if (info.status == SlotStatus.EMPTY) {
             performSave(index)
         } else {
             _uiState.update { it.copy(confirmOverwriteSlot = index) }
@@ -917,20 +923,64 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         _uiState.update { it.copy(confirmOverwriteSlot = null, showSaveDialog = false) }
     }
 
+    fun requestDeleteSlot(index: Int) {
+        _uiState.update { it.copy(confirmDeleteSlot = index) }
+    }
+
+    fun dismissDeleteSlot() {
+        _uiState.update { it.copy(confirmDeleteSlot = null) }
+    }
+
+    fun confirmDeleteSlot() {
+        val index = _uiState.value.confirmDeleteSlot ?: return
+        viewModelScope.launch {
+            repo.delete(index)
+            if (GameSession.getActiveSaveSlot() == index) {
+                GameSession.setActiveSaveSlot(null)
+            }
+            val slots = repo.listSlots()
+            _uiState.update {
+                it.copy(confirmDeleteSlot = null, saveSlotInfos = slots)
+            }
+            postSnackbar("Slot ${index + 1} deleted")
+        }
+    }
+
+    fun exportActiveOrSlot(index: Int, onJson: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                onJson(repo.exportJson(index))
+            } catch (e: Exception) {
+                postSnackbar(e.message ?: "Export failed")
+            }
+        }
+    }
+
     private fun performSave(index: Int) {
         val l = league ?: return
-        val file = SaveSlots.file(getApplication(), index)
-        l.saveLeague(file)
-        GameSession.setActiveSaveSlot(index)
-        postSnackbar("Saved league!")
-        _uiState.update { it.copy(showSaveDialog = false) }
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { repo.save(index, l) }
+            if (result.isSuccess) {
+                GameSession.setActiveSaveSlot(index)
+                postSnackbar("Saved league!")
+                _uiState.update { it.copy(showSaveDialog = false) }
+            } else {
+                postSnackbar(result.exceptionOrNull()?.message ?: "Save failed")
+            }
+        }
     }
 
     /** Writes the live league to the active slot when one is known. */
     private fun autosaveIfPossible(): Boolean {
-        val slot = GameSession.getActiveSaveSlot() ?: return false
         val l = league ?: return false
-        return l.saveLeague(SaveSlots.file(getApplication(), slot))
+        if (!GameSession.hasActiveSaveSlot()) return false
+        return CareerPersistence.saveActiveBlocking(l, repo)
+    }
+
+    private fun autosaveActiveSlot() {
+        val l = league ?: return
+        if (!GameSession.hasActiveSaveSlot()) return
+        CareerPersistence.saveActiveBlocking(l, repo)
     }
 
     fun openRankingsDialog(modeIndex: Int = 0) {
@@ -2040,6 +2090,15 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             "K" -> mutableListOf(
                 StatChipUi("FG", "${record.fgMade}/${record.fgAtt}"),
                 StatChipUi("XP", "${record.xpMade}/${record.xpAtt}"),
+            )
+            "CB", "S", "EDGE", "DL", "LB" -> mutableListOf(
+                StatChipUi("Tck", record.tackles.toString()),
+                StatChipUi("TFL", record.tfl.toString()),
+                StatChipUi("Sacks", record.sacksDef.toString()),
+                StatChipUi("INT", record.defInt.toString()),
+                StatChipUi("PD", record.passDef.toString()),
+                StatChipUi("FF", record.forcedFumbles.toString()),
+                StatChipUi("FR", record.fumbleRec.toString()),
             )
             else -> mutableListOf()
         }

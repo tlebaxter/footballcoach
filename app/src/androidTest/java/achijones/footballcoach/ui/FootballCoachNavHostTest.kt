@@ -103,12 +103,12 @@ class FootballCoachNavHostTest {
                         Button(onClick = onFinished) { Text("Finish Coach") }
                     }
                 },
-                schedule = { onNavigateToMain ->
+                schedule = { onNavigateToMain, _ ->
                     Column {
                         Button(onClick = onNavigateToMain) { Text("Schedule to Main") }
                     }
                 },
-                talentHub = { onNavigateToMain, _ ->
+                talentHub = { onNavigateToMain, _, _ ->
                     Column {
                         Button(onClick = onNavigateToMain) { Text("Hub to Main") }
                     }

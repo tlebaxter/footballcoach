@@ -1,39 +1,23 @@
 package achijones.footballcoach.ui.util
 
-import android.content.Context
-import java.io.BufferedReader
-import java.io.File
-import java.io.FileReader
+import achijones.footballcoach.save.SlotInfo
+import achijones.footballcoach.save.SlotStatus
 
+/** Display helpers for save-slot UI. Persistence lives in [achijones.footballcoach.save.SaveRepository]. */
 object SaveSlots {
-    const val SLOT_COUNT = 10
+    const val SLOT_COUNT: Int = achijones.footballcoach.save.SLOT_COUNT
 
-    fun infos(context: Context): List<String> {
-        val infos = ArrayList<String>(SLOT_COUNT)
-        for (i in 0 until SLOT_COUNT) {
-            val saveFile = File(context.filesDir, "saveFile$i.cfb")
-            if (saveFile.exists()) {
-                try {
-                    BufferedReader(FileReader(saveFile)).use { reader ->
-                        val line = reader.readLine()
-                        infos.add(
-                            if (line != null && line.isNotEmpty()) {
-                                line.substring(0, line.length - 1)
-                            } else {
-                                "EMPTY"
-                            }
-                        )
-                    }
-                } catch (_: Exception) {
-                    infos.add("EMPTY")
-                }
-            } else {
-                infos.add("EMPTY")
-            }
+    fun label(info: SlotInfo): String {
+        val n = info.index + 1
+        return when (info.status) {
+            SlotStatus.EMPTY -> "Slot $n — EMPTY"
+            SlotStatus.OK -> "$n. ${info.summary}"
+            SlotStatus.CORRUPT -> "$n. CORRUPT — cannot load"
+            SlotStatus.INCOMPATIBLE -> "$n. Incompatible save"
         }
-        return infos
     }
 
-    fun file(context: Context, index: Int): File =
-        File(context.filesDir, "saveFile$index.cfb")
+    fun canLoad(info: SlotInfo): Boolean = info.status == SlotStatus.OK
+
+    fun isEmpty(info: SlotInfo): Boolean = info.status == SlotStatus.EMPTY
 }

@@ -16,7 +16,7 @@ import java.util.Random;
 import static org.junit.Assert.assertTrue;
 
 /**
- * Directional Monte Carlo checks that thv / rtr / bsc / scrambleMod affect snap outcomes.
+ * Directional Monte Carlo checks that thv / rtr / bsc / spy contain affect snap outcomes.
  */
 public class PlayResolverRatingsTest {
 

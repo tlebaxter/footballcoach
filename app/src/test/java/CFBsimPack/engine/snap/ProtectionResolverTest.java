@@ -53,9 +53,9 @@ public class ProtectionResolverTest {
             ProtectionResolver r = new ProtectionResolver(new Random(500L + i));
             ProtectionResult empty = r.resolve(off, def,
                     new ProtectionScheme(ProtectionType.EMPTY_FIVE, 1.0, Collections.emptySet(), false),
-                    sit, null, 1.0, 0, 1.0);
+                    sit, null, 0, 1.0);
             ProtectionResult max = r.resolve(off, def, ProtectionScheme.maxProtect(),
-                    sit, null, 1.0, 0, 1.0);
+                    sit, null, 0, 1.0);
             emptySum += empty.earliestPressureSec;
             maxSum += max.earliestPressureSec;
         }
@@ -92,7 +92,7 @@ public class ProtectionResolverTest {
             ProtectionResult res = new ProtectionResolver(new Random(seed + i)).resolve(
                     off, def, ProtectionScheme.infer(null, false, false),
                     new SituationMods(0, 0, false, false, false, 0, false),
-                    null, 1.0, 0, 1.0);
+                    null, 0, 1.0);
             assertNotNull(res);
             samples[i] = res.earliestPressureSec;
         }

@@ -84,6 +84,16 @@ public class Conference {
         ccg = null;
         allConfPlayers.clear();
     }
+
+    /** Accessor for save/load and Awards UI. */
+    public Game getCcg() {
+        return ccg;
+    }
+
+    /** Restore a CCG from save without re-scheduling or re-playing. */
+    void restoreCcg(Game game) {
+        ccg = game;
+    }
     
     /**
      * Plays week for each team. If CCG week, play the CCG.
@@ -179,12 +189,15 @@ public class Conference {
         }
         // Play CCG between top 2 teams
         ccg.playGame();
-        if ( ccg.homeScore > ccg.awayScore ) {
+        if (!ccg.hasPlayed || !ccg.isDecided()) {
+            return;
+        }
+        if (ccg.homeWon()) {
             confTeams.get(0).confChampion = "CC";
             confTeams.get(0).totalCCs++;
             confTeams.get(1).totalCCLosses++;
-        } else { 
-            confTeams.get(1).confChampion = "CC"; 
+        } else {
+            confTeams.get(1).confChampion = "CC";
             confTeams.get(1).totalCCs++;
             confTeams.get(0).totalCCLosses++;
         }
@@ -218,23 +231,20 @@ public class Conference {
             return confName + " Conference Championship:\n\t\t" +
                     team1.strRep() + " vs " + team2.strRep();
         } else {
-            if (!ccg.hasPlayed) {
+            if (!ccg.hasPlayed || !ccg.isDecided()) {
                 return confName + " Conference Championship:\n\t\t" +
                         ccg.homeTeam.strRep() + " vs " + ccg.awayTeam.strRep();
             } else {
                 StringBuilder sb = new StringBuilder();
-                Team winner, loser;
+                Team winner = ccg.winningTeam();
+                Team loser = ccg.losingTeam();
                 sb.append(confName + " Conference Championship:\n");
-                if (ccg.homeScore > ccg.awayScore) {
-                    winner = ccg.homeTeam;
-                    loser = ccg.awayTeam;
+                if (ccg.homeWon()) {
                     sb.append(winner.strRep() + " W ");
                     sb.append(ccg.homeScore + "-" + ccg.awayScore + " ");
                     sb.append("vs " + loser.strRep());
                     return sb.toString();
                 } else {
-                    winner = ccg.awayTeam;
-                    loser = ccg.homeTeam;
                     sb.append(winner.strRep() + " W ");
                     sb.append(ccg.awayScore + "-" + ccg.homeScore + " ");
                     sb.append("@ " + loser.strRep());

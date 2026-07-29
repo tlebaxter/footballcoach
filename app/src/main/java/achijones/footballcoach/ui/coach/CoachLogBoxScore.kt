@@ -2,6 +2,7 @@ package achijones.footballcoach.ui.coach
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,6 +17,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
@@ -48,13 +53,22 @@ fun CoachLogTab(situation: GameSituation) {
 }
 
 @Composable
-private fun PlayLogRow(entry: PlayLogEntry) {
+private fun PlayLogRow(entry: PlayLogEntry, modifier: Modifier = Modifier) {
+    val why = entry.snapTrace?.summaryBullets.orEmpty()
+    var expanded by remember(entry.clockLabel, entry.logLine, entry.yardsGained) { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
             .clip(CardShape)
             .background(Color(0xFF121A14))
             .border(1.dp, Color(0xFF3A4A3C), CardShape)
+            .then(
+                if (why.isNotEmpty()) {
+                    Modifier.clickable { expanded = !expanded }
+                } else {
+                    Modifier
+                },
+            )
             .padding(12.dp),
     ) {
         val distanceLabel = if (entry.yardLineBefore + entry.distance >= 100) "Goal" else "${entry.distance}"
@@ -64,15 +78,34 @@ private fun PlayLogRow(entry: PlayLogEntry) {
             style = MaterialTheme.typography.labelMedium,
             fontWeight = FontWeight.Bold,
         )
-        Spacer(Modifier.height(4.dp))
+        Spacer(modifier.height(4.dp))
         Text(entry.logLine, color = Color(0xFFE5E7EB), style = MaterialTheme.typography.bodyMedium)
         if (entry.offenseConceptName.isNotBlank()) {
-            Spacer(Modifier.height(4.dp))
+            Spacer(modifier.height(4.dp))
             Text(
                 "${entry.offenseConceptName} vs ${entry.defenseConceptName}",
                 color = Muted,
                 style = MaterialTheme.typography.labelSmall,
             )
+        }
+        if (why.isNotEmpty()) {
+            Spacer(modifier.height(4.dp))
+            Text(
+                if (expanded) "Why (hide)" else "Why (show)",
+                color = MaterialTheme.colorScheme.primary,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.SemiBold,
+            )
+            if (expanded) {
+                Spacer(modifier.height(4.dp))
+                why.take(4).forEach { bullet ->
+                    Text(
+                        "- $bullet",
+                        color = Muted,
+                        style = MaterialTheme.typography.labelSmall,
+                    )
+                }
+            }
         }
     }
 }
@@ -164,6 +197,19 @@ private fun BoxScoreRow(line: BoxScoreLine) {
         }
         if (line.xpAtt > 0) {
             parts += "XP ${line.xpMade}/${line.xpAtt}"
+        }
+        if (line.tackles > 0 || line.tfl > 0 || line.sacksDef > 0 || line.defInt > 0
+            || line.passDef > 0 || line.forcedFumbles > 0 || line.fumbleRec > 0
+        ) {
+            val def = mutableListOf<String>()
+            if (line.tackles > 0) def += "${line.tackles} Tck"
+            if (line.tfl > 0) def += "${line.tfl} TFL"
+            if (line.sacksDef > 0) def += "${line.sacksDef} Sk"
+            if (line.defInt > 0) def += "${line.defInt} INT"
+            if (line.passDef > 0) def += "${line.passDef} PD"
+            if (line.forcedFumbles > 0) def += "${line.forcedFumbles} FF"
+            if (line.fumbleRec > 0) def += "${line.fumbleRec} FR"
+            parts += def.joinToString(", ")
         }
         Text(parts.joinToString(" · "), color = Muted, style = MaterialTheme.typography.bodySmall)
     }

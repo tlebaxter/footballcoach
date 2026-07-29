@@ -47,13 +47,13 @@ public final class PlayerSaveCodec {
         p.gamesPlayed = parse(f, idx++, 0);
         p.statsWins = parse(f, idx++, 0);
         PositionGroup g = PositionGroup.fromToken(p.position);
-        int skillCount = skillFieldCount(g);
+        int skillCount = effectiveSeasonSkillCount(g, f.length - idx);
         // v8: gp,wins,snaps,skills...,injury — v7: gp,wins,skills...,injury
         int remaining = f.length - idx;
         if (remaining >= skillCount + 2) {
             p.seasonSnaps = parse(f, idx++, 0);
         }
-        idx = loadSkill(p.seasonStats, g, f, idx);
+        idx = loadSkill(p.seasonStats, g, f, idx, skillCount);
         applyInjuryToken(p, idx < f.length ? f[idx] : "none");
         idx++;
         p.isEjected = idx < f.length && parse(f, idx, 0) != 0;
@@ -110,6 +110,9 @@ public final class PlayerSaveCodec {
             return c.xpAtt + "," + c.xpMade + "," + c.fgAtt + "," + c.fgMade;
         } else if (g == PositionGroup.P) {
             return c.puntAtt + "," + c.puntYards;
+        } else if (isDefenseSkill(g)) {
+            return c.tackles + "," + c.tfl + "," + c.sacksDef + "," + c.defInt + ","
+                    + c.passDef + "," + c.forcedFumbles + "," + c.fumbleRec;
         }
         return "";
     }
@@ -118,17 +121,21 @@ public final class PlayerSaveCodec {
         p.careerGamesPlayed = parse(f, idx++, 0);
         PlayerSkillStats c = p.careerStats;
         PositionGroup g = PositionGroup.fromToken(p.position);
-        int skillCount = skillFieldCount(g);
+        int skillCount = effectiveCareerSkillCount(g, f.length - idx);
         // v8: games,snaps,skills,awards(+roster) — v7: games,skills,awards(+roster)
         int remaining = f.length - idx;
         if (remaining >= skillCount + 6) {
             p.careerSnaps = parse(f, idx++, 0);
         }
-        idx = loadSkill(c, g, f, idx);
+        idx = loadSkill(c, g, f, idx, skillCount);
         p.careerHeismans = parse(f, idx++, 0);
         p.careerAllAmerican = parse(f, idx++, 0);
         p.careerAllConference = parse(f, idx++, 0);
         p.careerWins = parse(f, idx, 0);
+    }
+
+    private static boolean isDefenseSkill(PositionGroup g) {
+        return g != null && (g.isSecondary() || g.isDefensiveFront());
     }
 
     private static int skillFieldCount(PositionGroup g) {
@@ -139,10 +146,34 @@ public final class PlayerSaveCodec {
         if (g == PositionGroup.FB) return 3;
         if (g == PositionGroup.K) return 4;
         if (g == PositionGroup.P) return 2;
+        if (isDefenseSkill(g)) return 7;
         return 0;
     }
 
-    private static int loadSkill(PlayerSkillStats c, PositionGroup g, String[] f, int idx) {
+    /**
+     * Old defense mid-season lines had no skill fields (injury + ejected only).
+     * Detect those by remaining length so we do not misread injury tokens as skills.
+     */
+    private static int effectiveSeasonSkillCount(PositionGroup g, int remainingAfterWins) {
+        int skillCount = skillFieldCount(g);
+        if (!isDefenseSkill(g) || skillCount == 0) return skillCount;
+        // Old: snaps,injury,ejected (3) or injury,ejected (2)
+        if (remainingAfterWins == 2 || remainingAfterWins == 3) return 0;
+        return skillCount;
+    }
+
+    /** Old defense career lines had no skill fields before awards. */
+    private static int effectiveCareerSkillCount(PositionGroup g, int remainingAfterGames) {
+        int skillCount = skillFieldCount(g);
+        if (!isDefenseSkill(g) || skillCount == 0) return skillCount;
+        // New: snaps + 7 skills + 4 awards (+ optional roster) >= 12
+        // Old: snaps + 4 awards (+ optional roster) <= 6
+        if (remainingAfterGames < skillCount + 4) return 0;
+        return skillCount;
+    }
+
+    private static int loadSkill(PlayerSkillStats c, PositionGroup g, String[] f, int idx, int skillCount) {
+        if (skillCount <= 0) return idx;
         if (g == PositionGroup.QB) {
             c.passAtt = parse(f, idx++, 0);
             c.passComp = parse(f, idx++, 0);
@@ -182,6 +213,14 @@ public final class PlayerSaveCodec {
         } else if (g == PositionGroup.P) {
             c.puntAtt = parse(f, idx++, 0);
             c.puntYards = parse(f, idx++, 0);
+        } else if (isDefenseSkill(g)) {
+            c.tackles = parse(f, idx++, 0);
+            c.tfl = parse(f, idx++, 0);
+            c.sacksDef = parse(f, idx++, 0);
+            c.defInt = parse(f, idx++, 0);
+            c.passDef = parse(f, idx++, 0);
+            c.forcedFumbles = parse(f, idx++, 0);
+            c.fumbleRec = parse(f, idx++, 0);
         }
         return idx;
     }
@@ -192,7 +231,9 @@ public final class PlayerSaveCodec {
                 || s.sacked != 0 || s.rushAtt != 0 || s.rushYards != 0 || s.rushTd != 0 || s.fumbles != 0
                 || s.targets != 0 || s.receptions != 0 || s.recYards != 0 || s.recTd != 0 || s.drops != 0
                 || s.recFumbles != 0 || s.xpAtt != 0 || s.xpMade != 0 || s.fgAtt != 0 || s.fgMade != 0
-                || s.puntAtt != 0 || s.puntYards != 0;
+                || s.puntAtt != 0 || s.puntYards != 0
+                || s.tackles != 0 || s.tfl != 0 || s.sacksDef != 0 || s.defInt != 0
+                || s.passDef != 0 || s.forcedFumbles != 0 || s.fumbleRec != 0;
     }
 
     private static String injuryToken(Player p) {

@@ -2,6 +2,7 @@ package achijones.footballcoach.ui.schedule
 
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
+import androidx.lifecycle.viewModelScope
 import CFBsimPack.GameSession
 import CFBsimPack.League
 import CFBsimPack.NilMoney
@@ -10,11 +11,18 @@ import CFBsimPack.OocContract
 import CFBsimPack.OocScheduleBuilder
 import CFBsimPack.Rivalry
 import CFBsimPack.Team
+import achijones.footballcoach.save.CareerPersistence
+import achijones.footballcoach.save.CareerSessionRestorer
+import achijones.footballcoach.save.OffseasonFlow
+import achijones.footballcoach.save.SaveRepository
 import achijones.footballcoach.ui.theme.UserBrandTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.math.abs
 
 /** Series return legs land a few years out, matching how real home-and-homes are booked. */
@@ -158,9 +166,12 @@ data class ScheduleUiState(
     val primaryLabel: String? = null,
     val message: String? = null,
     val navigateToMain: Boolean = false,
+    val navigateToTalentHub: Boolean = false,
 )
 
 class ScheduleViewModel(application: Application) : AndroidViewModel(application) {
+
+    private val repo = SaveRepository.get(application)
 
     private val _uiState = MutableStateFlow(ScheduleUiState())
     val uiState: StateFlow<ScheduleUiState> = _uiState.asStateFlow()
@@ -174,31 +185,43 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun bootstrap() {
-        if (!GameSession.hasLeague()) {
-            _uiState.update { it.copy(missingLeague = true, ready = false) }
-            return
+        viewModelScope.launch {
+            if (!GameSession.hasLeague()) {
+                val result = withContext(Dispatchers.IO) {
+                    CareerSessionRestorer.resumeIfNeeded(getApplication(), repo)
+                }
+                val ok = result is CareerSessionRestorer.ResumeResult.Success ||
+                    result is CareerSessionRestorer.ResumeResult.AlreadyLoaded
+                if (!ok) {
+                    val msg = (result as? CareerSessionRestorer.ResumeResult.Failed)?.message
+                    _uiState.update {
+                        it.copy(missingLeague = true, ready = false, message = msg)
+                    }
+                    return@launch
+                }
+            }
+            league = GameSession.getLeague()
+            if (OffseasonSession.ready()) {
+                league = OffseasonSession.league ?: league
+                GameSession.setLeague(league)
+            }
+            user = league?.userTeam
+            if (!GameSession.needsTeamPicker()) {
+                UserBrandTheme.setFrom(user)
+            }
+            val year = league?.year ?: 0
+            _uiState.update {
+                it.copy(
+                    ready = true,
+                    teamName = user?.name.orEmpty(),
+                    teamAbbr = user?.abbr.orEmpty(),
+                    year = year,
+                    selectedHorizonYear = year,
+                    horizonYears = (0..3).map { year + it },
+                )
+            }
+            reload()
         }
-        league = GameSession.getLeague()
-        if (OffseasonSession.ready()) {
-            league = OffseasonSession.league ?: league
-            GameSession.setLeague(league)
-        }
-        user = league?.userTeam
-        if (!GameSession.needsTeamPicker()) {
-            UserBrandTheme.setFrom(user)
-        }
-        val year = league?.year ?: 0
-        _uiState.update {
-            it.copy(
-                ready = true,
-                teamName = user?.name.orEmpty(),
-                teamAbbr = user?.abbr.orEmpty(),
-                year = year,
-                selectedHorizonYear = year,
-                horizonYears = (0..3).map { year + it },
-            )
-        }
-        reload()
     }
 
     fun selectHorizonYear(year: Int) {
@@ -212,6 +235,10 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
 
     fun consumeNavigateToMain() {
         _uiState.update { it.copy(navigateToMain = false) }
+    }
+
+    fun consumeNavigateToTalentHub() {
+        _uiState.update { it.copy(navigateToTalentHub = false) }
     }
 
     fun onPrimary() {
@@ -250,8 +277,40 @@ class ScheduleViewModel(application: Application) : AndroidViewModel(application
     }
 
     private fun finishScheduling() {
-        GameSession.setPendingOffseasonResult(GameSession.OffseasonResult.DONE_SCHEDULE)
-        _uiState.update { it.copy(navigateToMain = true) }
+        viewModelScope.launch {
+            val next = withContext(Dispatchers.Default) { OffseasonFlow.finishSchedule() }
+            league = GameSession.getLeague() ?: OffseasonSession.league
+            user = league?.userTeam
+            val saved = if (GameSession.hasActiveSaveSlot() && league != null) {
+                withContext(Dispatchers.IO) {
+                    CareerPersistence.saveActive(league!!, repo).isSuccess
+                }
+            } else {
+                true
+            }
+            when (next) {
+                OffseasonFlow.Next.TALENT_HUB -> _uiState.update {
+                    it.copy(
+                        navigateToTalentHub = true,
+                        showDonePreview = false,
+                        message = if (!saved) "Schedule save failed" else null,
+                    )
+                }
+                OffseasonFlow.Next.MAIN -> _uiState.update {
+                    it.copy(
+                        navigateToMain = true,
+                        showDonePreview = false,
+                        message = if (!saved) "Schedule save failed" else null,
+                    )
+                }
+                else -> _uiState.update {
+                    it.copy(
+                        navigateToMain = true,
+                        showDonePreview = false,
+                    )
+                }
+            }
+        }
     }
 
     fun requestBack() {

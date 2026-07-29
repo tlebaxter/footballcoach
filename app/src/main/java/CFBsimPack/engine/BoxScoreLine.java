@@ -30,6 +30,13 @@ public final class BoxScoreLine {
     public final int xpAtt;
     public final int puntAtt;
     public final int puntYards;
+    public final int tackles;
+    public final int tfl;
+    public final int sacksDef;
+    public final int defInt;
+    public final int passDef;
+    public final int forcedFumbles;
+    public final int fumbleRec;
 
     public BoxScoreLine(
             String name,
@@ -57,7 +64,14 @@ public final class BoxScoreLine {
             int xpMade,
             int xpAtt,
             int puntAtt,
-            int puntYards
+            int puntYards,
+            int tackles,
+            int tfl,
+            int sacksDef,
+            int defInt,
+            int passDef,
+            int forcedFumbles,
+            int fumbleRec
     ) {
         this.name = name != null ? name : "";
         this.position = position != null ? position : "";
@@ -85,5 +99,12 @@ public final class BoxScoreLine {
         this.xpAtt = xpAtt;
         this.puntAtt = puntAtt;
         this.puntYards = puntYards;
+        this.tackles = tackles;
+        this.tfl = tfl;
+        this.sacksDef = sacksDef;
+        this.defInt = defInt;
+        this.passDef = passDef;
+        this.forcedFumbles = forcedFumbles;
+        this.fumbleRec = fumbleRec;
     }
 }

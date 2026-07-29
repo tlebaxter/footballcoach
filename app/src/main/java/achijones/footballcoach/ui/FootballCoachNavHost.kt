@@ -22,10 +22,14 @@ fun FootballCoachNavHost(
         onNavigateSchedule: () -> Unit,
     ) -> Unit,
     coachGame: @Composable (onFinished: () -> Unit) -> Unit,
-    schedule: @Composable (onNavigateToMain: () -> Unit) -> Unit,
+    schedule: @Composable (
+        onNavigateToMain: () -> Unit,
+        onNavigateToTalentHub: () -> Unit,
+    ) -> Unit,
     talentHub: @Composable (
         onNavigateToMain: () -> Unit,
         onNavigateHome: () -> Unit,
+        onNavigateToSchedule: () -> Unit,
     ) -> Unit,
 ) {
     NavHost(navController = navController, startDestination = startDestination) {
@@ -67,12 +71,20 @@ fun FootballCoachNavHost(
             })
         }
         composable(Routes.SCHEDULE) {
-            schedule({
-                navController.navigate(Routes.MAIN) {
-                    popUpTo(Routes.SCHEDULE) { inclusive = true }
-                    launchSingleTop = true
-                }
-            })
+            schedule(
+                {
+                    navController.navigate(Routes.MAIN) {
+                        popUpTo(Routes.SCHEDULE) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                {
+                    navController.navigate(Routes.TALENT_HUB) {
+                        popUpTo(Routes.SCHEDULE) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+            )
         }
         composable(Routes.TALENT_HUB) {
             talentHub(
@@ -85,6 +97,12 @@ fun FootballCoachNavHost(
                 {
                     navController.navigate(Routes.HOME) {
                         popUpTo(Routes.HOME) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
+                {
+                    navController.navigate(Routes.SCHEDULE) {
+                        popUpTo(Routes.TALENT_HUB) { inclusive = true }
                         launchSingleTop = true
                     }
                 },

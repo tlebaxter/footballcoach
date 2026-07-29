@@ -38,8 +38,14 @@ public final class PlayerSkillStats {
     public int puntAtt;
     public int puntYards;
 
-    // Defense
+    // Defense (order: tackles, tfl, sacksDef, defInt, passDef, forcedFumbles, fumbleRec)
+    public int tackles;
+    public int tfl;
+    public int sacksDef;
     public int defInt;
+    public int passDef;
+    public int forcedFumbles;
+    public int fumbleRec;
 
     public void addFrom(PlayerSkillStats other) {
         if (other == null) return;
@@ -65,7 +71,13 @@ public final class PlayerSkillStats {
         fgMade += other.fgMade;
         puntAtt += other.puntAtt;
         puntYards += other.puntYards;
+        tackles += other.tackles;
+        tfl += other.tfl;
+        sacksDef += other.sacksDef;
         defInt += other.defInt;
+        passDef += other.passDef;
+        forcedFumbles += other.forcedFumbles;
+        fumbleRec += other.fumbleRec;
     }
 
     public void clear() {
@@ -91,6 +103,12 @@ public final class PlayerSkillStats {
         fgMade = 0;
         puntAtt = 0;
         puntYards = 0;
+        tackles = 0;
+        tfl = 0;
+        sacksDef = 0;
         defInt = 0;
+        passDef = 0;
+        forcedFumbles = 0;
+        fumbleRec = 0;
     }
 }

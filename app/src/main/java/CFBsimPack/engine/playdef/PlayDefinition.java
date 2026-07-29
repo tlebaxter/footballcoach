@@ -30,14 +30,6 @@ public final class PlayDefinition {
     public final RunScheme run;
     public final RpoRules rpoRules;
 
-    /** Legacy outcome multipliers during migration. */
-    public final double completionMod;
-    public final double yardsMod;
-    public final double sackRiskMod;
-    public final double runYardsMod;
-    public final double fumbleMod;
-    public final double clockMultExtra;
-
     public PlayDefinition(
             String id,
             String displayName,
@@ -51,13 +43,7 @@ public final class PlayDefinition {
             ProtectionScheme protection,
             List<RouteAssignment> routes,
             RunScheme run,
-            RpoRules rpoRules,
-            double completionMod,
-            double yardsMod,
-            double sackRiskMod,
-            double runYardsMod,
-            double fumbleMod,
-            double clockMultExtra
+            RpoRules rpoRules
     ) {
         this.id = id;
         this.displayName = displayName;
@@ -74,11 +60,5 @@ public final class PlayDefinition {
                 : Collections.emptyList();
         this.run = run;
         this.rpoRules = rpoRules;
-        this.completionMod = completionMod;
-        this.yardsMod = yardsMod;
-        this.sackRiskMod = sackRiskMod;
-        this.runYardsMod = runYardsMod;
-        this.fumbleMod = fumbleMod;
-        this.clockMultExtra = clockMultExtra;
     }
 }

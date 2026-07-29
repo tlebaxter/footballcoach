@@ -75,6 +75,7 @@ import achijones.footballcoach.ui.theme.onColorFor
 @Composable
 fun ScheduleScreen(
     onNavigateToMain: () -> Unit,
+    onNavigateToTalentHub: () -> Unit = {},
     viewModel: ScheduleViewModel = viewModel(),
 ) {
     val state by viewModel.uiState.collectAsState()
@@ -86,6 +87,12 @@ fun ScheduleScreen(
         if (state.navigateToMain) {
             viewModel.consumeNavigateToMain()
             onNavigateToMain()
+        }
+    }
+    LaunchedEffect(state.navigateToTalentHub) {
+        if (state.navigateToTalentHub) {
+            viewModel.consumeNavigateToTalentHub()
+            onNavigateToTalentHub()
         }
     }
     LaunchedEffect(state.message) {

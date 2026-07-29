@@ -7,7 +7,7 @@ import CFBsimPack.engine.playdef.ExplosiveProfile;
 import java.util.List;
 
 /**
- * Deep safety brake on explosives and help-INT prior.
+ * Deep safety brake on explosives, help-INT prior, and scramble contain.
  */
 public final class SafetyHelp {
 
@@ -75,6 +75,85 @@ public final class SafetyHelp {
             default:
                 return 0.6;
         }
+    }
+
+    /**
+     * Extra INT prior from coverage identity (replaces legacy intMod).
+     * Applied on top of shell help / primary contest.
+     */
+    public static double coverageIntPrior(CoverageCall cov) {
+        if (cov == null) return 1.0;
+        switch (cov) {
+            case COVER_0:
+                return 1.20;
+            case PRESS:
+                return 1.15;
+            case MAN:
+                return 1.12;
+            case COVER_1:
+                return 1.10;
+            case COVER_2:
+            case OFF_COVERAGE:
+                return 0.85;
+            case COVER_4:
+                return 0.80;
+            case STACK_BOX:
+                return 0.90;
+            case ZONE:
+                return 0.95;
+            case SPY:
+            case COVER_3:
+            default:
+                return 1.0;
+        }
+    }
+
+    /**
+     * Scramble / QB-keep contain (replaces legacy scrambleMod).
+     * Lower = spy/contain works.
+     */
+    public static double containFactor(CoverageCall cov) {
+        if (cov == null) return 1.0;
+        switch (cov) {
+            case SPY:
+                return 0.70;
+            case STACK_BOX:
+                return 0.85;
+            case COVER_2:
+                return 0.95;
+            case ZONE:
+                return 0.98;
+            case OFF_COVERAGE:
+                return 0.90;
+            case COVER_0:
+                return 1.10;
+            case PRESS:
+                return 1.20;
+            case COVER_1:
+            case MAN:
+                return 1.05;
+            case COVER_4:
+                return 1.05;
+            case COVER_3:
+            default:
+                return 1.0;
+        }
+    }
+
+    /** Soft crease / sep additives that used to live in passFitBonus / runFitBonus. */
+    public static double passSepAdjust(CoverageCall cov) {
+        if (cov == CoverageCall.COVER_4 || cov == CoverageCall.COVER_2) return 0.8;
+        if (cov == CoverageCall.STACK_BOX) return -1.2;
+        if (cov == CoverageCall.OFF_COVERAGE) return 1.4;
+        if (cov == CoverageCall.PRESS) return -0.9;
+        return 0;
+    }
+
+    public static double runCreaseAdjust(CoverageCall cov) {
+        if (cov == CoverageCall.STACK_BOX) return -2.5;
+        if (cov == CoverageCall.COVER_4 || cov == CoverageCall.OFF_COVERAGE) return 1.2;
+        if (cov == CoverageCall.COVER_0 || cov == CoverageCall.PRESS) return 0.7;
+        return 0;
     }
 
     public static Player deepHelper(List<CoverageAssignment> coverage) {

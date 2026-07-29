@@ -33,8 +33,14 @@ public final class PlayerGameStats {
         public int passYards;
         public int passTd;
         public int passInt;
+        public int sacks; // QB sacked (offense-taken), not defender sacks
+        public int tackles;
+        public int tfl;
+        public int sacksDef;
         public int defInt;
-        public int sacks;
+        public int passDef;
+        public int forcedFumbles;
+        public int fumbleRec;
         public int rushAtt;
         public int rushYards;
         public int rushTd;

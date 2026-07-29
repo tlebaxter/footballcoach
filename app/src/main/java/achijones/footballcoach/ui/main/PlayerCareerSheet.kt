@@ -644,6 +644,12 @@ private fun shortStatHeader(label: String): String = when (label) {
     "Tgts" -> "TGT"
     "Drops" -> "DRP"
     "Rec" -> "REC"
+    "Tck" -> "TCK"
+    "TFL" -> "TFL"
+    "INT" -> "INT"
+    "PD" -> "PD"
+    "FF" -> "FF"
+    "FR" -> "FR"
     else -> label.uppercase().take(4)
 }
 

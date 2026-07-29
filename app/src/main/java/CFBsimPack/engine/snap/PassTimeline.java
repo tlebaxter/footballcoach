@@ -88,7 +88,7 @@ public final class PassTimeline {
                         usable);
             }
             if (hotForced && t >= Math.min(1.15, pressureAt)) {
-                ThrowWindow hot = pickBest(usable, offMap, coverage, t, fatigue, pressJam, true);
+                ThrowWindow hot = pickBest(usable, offMap, coverage, t, fatigue, cov, pressJam, true);
                 // Only force a hot throw if it is actually open; otherwise scramble/sack policy
                 if (hot != null && hot.separation >= 8.5) {
                     return new TimelineState(protection, coverage,
@@ -101,7 +101,7 @@ public final class PassTimeline {
                         usable);
             }
 
-            ThrowWindow cand = pickBest(usable, offMap, coverage, t, fatigue, pressJam, false);
+            ThrowWindow cand = pickBest(usable, offMap, coverage, t, fatigue, cov, pressJam, false);
             if (cand != null) {
                 if (cand.hot && (bestHot == null || cand.separation > bestHot.separation)) {
                     bestHot = cand;
@@ -145,6 +145,7 @@ public final class PassTimeline {
             List<CoverageAssignment> coverage,
             double t,
             FatigueTracker fatigue,
+            CoverageCall call,
             boolean pressJam,
             boolean hotOnly
     ) {
@@ -158,7 +159,7 @@ public final class PassTimeline {
             Player target = offMap.get(route.slot);
             if (target == null) continue;
             CoverageAssignment cov = findCoverage(coverage, route);
-            double sep = separation(target, route, cov, t, fatigue, pressJam);
+            double sep = separation(target, route, cov, t, fatigue, pressJam, call);
             ThrowWindow w = new ThrowWindow(ThrowWindow.Decision.THROW, route, target, cov, t, sep,
                     route.hotEligible);
             if (best == null || candScore(w) > candScore(best)) best = w;
@@ -204,13 +205,15 @@ public final class PassTimeline {
             CoverageAssignment cov,
             double t,
             FatigueTracker fatigue,
-            boolean pressJam
+            boolean pressJam,
+            CoverageCall call
     ) {
         int rtr = rate(target, fatigue, x -> x.rtr, 60);
         int spd = rate(target, fatigue, x -> x.spd, 55);
         double openBonus = Math.max(0, t - route.openBeatSec) * 3.5;
+        double callAdj = SafetyHelp.passSepAdjust(call);
         if (cov == null) {
-            return 10 + (rtr - 50) / 8.0 + openBonus;
+            return Math.max(1, Math.min(22, 10 + (rtr - 50) / 8.0 + openBonus + callAdj));
         }
         if (cov.mode == CoverageMode.MAN) {
             int pcv = rate(cov.defender, fatigue, x -> x.pcv, 65);
@@ -222,12 +225,13 @@ public final class PassTimeline {
                 if (t < route.openBeatSec + 0.35) offR -= 10;
             }
             DuelOutcome duel = duels.contest(offR, defR);
-            double sep = 8 + duel.margin * 6 + openBonus;
+            double sep = 8 + duel.margin * 6 + openBonus + callAdj;
             if (route.route == RouteType.MESH_CROSS || route.route == RouteType.CROSS) sep += 2.5;
+            if (pressJam) sep -= 0.8;
             return Math.max(1, Math.min(22, sep));
         }
         // Zone vacancy
-        double vac = 9 + openBonus + (rtr - 55) / 10.0;
+        double vac = 9 + openBonus + (rtr - 55) / 10.0 + callAdj;
         if (cov.zoneLandmark == ZoneLandmark.DEEP_HALF || cov.zoneLandmark == ZoneLandmark.DEEP_QUARTER) {
             if (route.depthYards >= 18) vac -= 3;
             else vac += 2;
