@@ -1692,7 +1692,12 @@ public class League {
 
     /**
      * Full SAVE_VERSION 9 career text (same payload {@link #saveLeague(File)} writes).
+     *
+     * @deprecated Canonical careers are typed JSON v13 via
+     * {@code achijones.footballcoach.save.CareerSaveMapper}. Prefer that for new writes;
+     * this remains for CFB import fixtures and MidSeasonSaveTest.
      */
+    @Deprecated
     public String buildSaveString() {
         StringBuilder sb = new StringBuilder();
 

@@ -648,7 +648,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                     )
                 }
-                suggestions = off.suggestUserRetains(u)
+                suggestions = mergeRetainSuggestions(off.suggestUserRetains(u), suggestions)
                 for (s in suggestions) {
                     val p = s.player
                     val key = suggestionKey(s)
@@ -878,7 +878,28 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         "${p.position}|${p.name}|$suffix|${System.identityHashCode(p)}"
 
     private fun suggestionKey(s: LeagueOffseason.RetainSuggestion): String =
-        "${s.player.position}|${s.player.name}|${s.bucket}|${System.identityHashCode(s)}"
+        "${s.bucket}|${System.identityHashCode(s.player)}"
+
+    /**
+     * Refresh candidates from the league, but keep the user's prior retain choices
+     * (selected + offer terms) for players still in the list.
+     */
+    private fun mergeRetainSuggestions(
+        fresh: List<LeagueOffseason.RetainSuggestion>,
+        prior: List<LeagueOffseason.RetainSuggestion>,
+    ): List<LeagueOffseason.RetainSuggestion> {
+        if (prior.isEmpty()) return fresh
+        val priorByKey = prior.associateBy { suggestionKey(it) }
+        for (s in fresh) {
+            val old = priorByKey[suggestionKey(s)] ?: continue
+            s.selected = old.selected
+            s.status = old.status
+            s.years = old.years
+            s.nil = old.nil
+            s.stayBonus = old.stayBonus
+        }
+        return fresh
+    }
 
     private fun costPreviewText(p: Player, u: Team, st: RosterStatus, y: Int): String {
         val nil = if (st == RosterStatus.SCHOLARSHIP_PLUS_NIL) {

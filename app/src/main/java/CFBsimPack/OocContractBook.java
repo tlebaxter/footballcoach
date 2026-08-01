@@ -28,6 +28,10 @@ public final class OocContractBook {
         return new ArrayList<>(contracts);
     }
 
+    public int getNextId() {
+        return nextId;
+    }
+
     public List<OocContract> forTeam(String abbr) {
         ArrayList<OocContract> out = new ArrayList<>();
         for (OocContract c : contracts) {

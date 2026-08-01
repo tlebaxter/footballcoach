@@ -19,6 +19,12 @@ class SaveRepository(
     @Volatile
     private var migrated = false
 
+    private val namesCSV: String
+        get() = context.getString(R.string.league_player_names)
+
+    private val lastNamesCSV: String
+        get() = context.getString(R.string.league_last_names)
+
     suspend fun ensureMigrated() = withContext(Dispatchers.IO) {
         migrateMutex.withLock {
             if (migrated) return@withLock
@@ -42,7 +48,6 @@ class SaveRepository(
             val previous = dao.getSlot(slotIndex)
             try {
                 val document = CareerSaveMapper.fromLeague(league)
-                val json = CareerSaveMapper.encode(document)
                 dao.writeSlotTransactional(
                     SaveSlotEntity(
                         slotIndex = slotIndex,
@@ -50,7 +55,7 @@ class SaveRepository(
                         summary = document.summary,
                         saveVersion = document.saveVersion,
                         updatedAtMillis = System.currentTimeMillis(),
-                        payloadJson = json,
+                        payloadJson = CareerSaveMapper.encodeForStorage(document),
                     ),
                     setLastActive = setLastActive,
                 )
@@ -81,9 +86,24 @@ class SaveRepository(
             val payload = entity.payloadJson
                 ?: throw CorruptSaveException("Slot $slotIndex has no payload")
             try {
-                val document = CareerSaveMapper.decode(payload)
+                val priorVersion = entity.saveVersion
+                val document = CareerSaveMapper.decode(payload, namesCSV, lastNamesCSV)
                 val league = CareerSaveMapper.toLeague(document, namesCSV, lastNamesCSV)
-                dao.upsertSessionMeta(SessionMetaEntity(0, slotIndex))
+                if (priorVersion < CURRENT_SAVE_VERSION || !SaveCompression.isPacked(payload)) {
+                    dao.writeSlotTransactional(
+                        SaveSlotEntity(
+                            slotIndex = slotIndex,
+                            status = SlotStatus.OK.name,
+                            summary = document.summary,
+                            saveVersion = document.saveVersion,
+                            updatedAtMillis = System.currentTimeMillis(),
+                            payloadJson = CareerSaveMapper.encodeForStorage(document),
+                        ),
+                        setLastActive = true,
+                    )
+                } else {
+                    dao.upsertSessionMeta(SessionMetaEntity(0, slotIndex))
+                }
                 league
             } catch (e: IncompatibleSaveException) {
                 // Keep payload so the user can export; mark for UI only.
@@ -128,17 +148,21 @@ class SaveRepository(
         if (payload.isNullOrBlank()) {
             throw CorruptSaveException("Slot not exportable")
         }
-        // Pretty-print when possible (migrates v10/v11 → v12). Fall back to raw bytes so
-        // load bugs never strand a recoverable export.
+        // Pretty-print when possible (migrates older versions → v13). Fall back to raw
+        // bytes so load bugs never strand a recoverable export.
         try {
-            val doc = CareerSaveMapper.decode(payload)
-            kotlinx.serialization.json.Json {
-                prettyPrint = true
-                encodeDefaults = true
-                ignoreUnknownKeys = true
-            }.encodeToString(SaveDocument.serializer(), doc)
+            val doc = CareerSaveMapper.decode(payload, namesCSV, lastNamesCSV)
+            CareerSaveMapper.encodePretty(doc)
         } catch (_: Exception) {
-            payload
+            if (SaveCompression.isPacked(payload)) {
+                try {
+                    SaveCompression.unpack(payload)
+                } catch (_: Exception) {
+                    payload
+                }
+            } else {
+                payload
+            }
         }
     }
 
@@ -148,7 +172,7 @@ class SaveRepository(
             throw IllegalArgumentException("Bad slot")
         }
         val document = try {
-            CareerSaveMapper.decode(jsonText)
+            CareerSaveMapper.decode(jsonText, namesCSV, lastNamesCSV)
         } catch (e: IncompatibleSaveException) {
             throw e
         } catch (e: Exception) {
@@ -161,7 +185,7 @@ class SaveRepository(
                 summary = document.summary,
                 saveVersion = document.saveVersion,
                 updatedAtMillis = System.currentTimeMillis(),
-                payloadJson = CareerSaveMapper.encode(document),
+                payloadJson = CareerSaveMapper.encodeForStorage(document),
             ),
             setLastActive = false,
         )
@@ -205,8 +229,8 @@ class SaveRepository(
     }
 
     private suspend fun migrateLegacyCfbFiles() {
-        val names = context.getString(R.string.league_player_names)
-        val lastNames = context.getString(R.string.league_last_names)
+        val names = namesCSV
+        val lastNames = lastNamesCSV
         for (i in 0 until SLOT_COUNT) {
             val entity = dao.getSlot(i) ?: continue
             if (entity.status != SlotStatus.EMPTY.name) continue
@@ -222,14 +246,14 @@ class SaveRepository(
                         summary = document.summary,
                         saveVersion = document.saveVersion,
                         updatedAtMillis = System.currentTimeMillis(),
-                        payloadJson = CareerSaveMapper.encode(document),
+                        payloadJson = CareerSaveMapper.encodeForStorage(document),
                     ),
                 )
                 val migrated = File(context.filesDir, "saveFile$i.cfb.migrated")
                 if (!file.renameTo(migrated)) {
                     file.delete()
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 dao.upsert(
                     SaveSlotEntity(
                         slotIndex = i,

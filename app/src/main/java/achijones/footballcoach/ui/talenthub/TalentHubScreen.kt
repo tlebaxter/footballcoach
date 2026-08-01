@@ -486,7 +486,6 @@ private fun TalentRowCard(
             .fillMaxWidth()
             .clip(RoundedCornerShape(12.dp))
             .background(MaterialTheme.colorScheme.surfaceVariant)
-            .clickable(onClick = onClick)
             .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -494,43 +493,51 @@ private fun TalentRowCard(
             Checkbox(checked = row.checked, onCheckedChange = { onCheck() })
             Spacer(Modifier.width(4.dp))
         }
-        if (!row.moneyRow) {
-            Text(
-                text = row.position,
-                color = FcChipPosText,
-                style = MaterialTheme.typography.labelMedium,
-                modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(FcChipPosBg)
-                    .padding(horizontal = 8.dp, vertical = 4.dp),
-            )
-            Spacer(Modifier.width(8.dp))
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(row.primary, fontWeight = FontWeight.SemiBold)
-            if (row.secondary.isNotEmpty()) {
-                Text(row.secondary, style = MaterialTheme.typography.bodySmall)
-            }
-            Text(row.costLine, color = FcChipMoneyText, style = MaterialTheme.typography.bodySmall)
-        }
-        if (!row.moneyRow) {
-            Box(
-                modifier = Modifier
-                    .clip(RoundedCornerShape(20.dp))
-                    .background(ovrColor(row.ovr))
-                    .padding(horizontal = 10.dp, vertical = 6.dp),
-            ) {
+        Row(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(onClick = onClick),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            if (!row.moneyRow) {
                 Text(
-                    text = row.ovr.toString(),
-                    color = Color.Black,
-                    fontWeight = FontWeight.Bold,
+                    text = row.position,
+                    color = FcChipPosText,
+                    style = MaterialTheme.typography.labelMedium,
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(FcChipPosBg)
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
                 )
+                Spacer(Modifier.width(8.dp))
             }
+            Column(modifier = Modifier.weight(1f)) {
+                Text(row.primary, fontWeight = FontWeight.SemiBold)
+                if (row.secondary.isNotEmpty()) {
+                    Text(row.secondary, style = MaterialTheme.typography.bodySmall)
+                }
+                Text(row.costLine, color = FcChipMoneyText, style = MaterialTheme.typography.bodySmall)
+            }
+            if (!row.moneyRow) {
+                Box(
+                    modifier = Modifier
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(ovrColor(row.ovr))
+                        .padding(horizontal = 10.dp, vertical = 6.dp),
+                ) {
+                    Text(
+                        text = row.ovr.toString(),
+                        color = Color.Black,
+                        fontWeight = FontWeight.Bold,
+                    )
+                }
+            }
+            Spacer(Modifier.width(8.dp))
+            Text(row.statusLabel, style = MaterialTheme.typography.labelSmall)
         }
-        Spacer(Modifier.width(8.dp))
-        Text(row.statusLabel, style = MaterialTheme.typography.labelSmall)
     }
 }
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

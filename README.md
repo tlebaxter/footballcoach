@@ -26,7 +26,7 @@ Relative to the original Football Coach codebase, Football Coach 3 notably inclu
 - Multi-factor **Program Profile**: tradition, fanbase, donors, recruiting footprint, NFL pipeline, and momentum
 - Modern Gradle / Kotlin project layout and unit tests around the new sim systems
 
-Careers use save format **version 12** (JSON documents in a SQLite slot database wrapping the league CFB payload). Legacy `.cfb` slots (versions 6–9) and structured JSON versions 10–11 are migrated automatically on load.
+We neCareers use save format **version 13** (typed JSON league snapshots in a SQLite slot database). Legacy `.cfb` slots (versions 6–9), structured JSON versions 10–11, and v12 CFB envelopes are imported automatically and rewritten to v13 on load.
 
 ---
 
@@ -55,12 +55,12 @@ After the season, eligibility attrition and transfers open spots. Player spendin
 
 ### Saving
 
-Careers are stored in **10 SQLite slots** (`careers.db`) as version **12** JSON envelopes: metadata plus a gzip+Base64 league CFB payload (rosters, Program Profile, mid-season schedule/results, postseason/`POSTSEASON` block, offseason). The live career is process-scoped; disk is updated after every career-mutating action (week advance, coach results, Talent Hub offers/buyouts, offseason phase completes at the source screen). Background save on app stop is a backup flush only. Home offers **Resume** for the last active slot after process death.
+Careers are stored in **10 SQLite slots** (`careers.db`) as version **13** typed JSON snapshots (teams, players, schedule, postseason, offseason, OOC, records). Slot rows store the whole document gzip+Base64 (`gz1:…`) so CursorWindow limits are not hit. The live career is process-scoped; disk is updated after every career-mutating action (week advance, coach results, Talent Hub offers/buyouts, offseason phase completes at the source screen). Background save on app stop is a backup flush only. Home offers **Resume** for the last active slot after process death.
 
 - Load/mapper failures do **not** mark an otherwise OK slot **CORRUPT** — Resume/Load and export stay available; only empty/missing payloads and failed legacy `.cfb` migrates use CORRUPT.
 - Incompatible versions are rejected but the payload remains exportable.
 - Export/import JSON from the Load dialog for backup/share/debug (export works whenever a payload exists).
-- Legacy `saveFileN.cfb` files are imported once into SQLite, then renamed `.cfb.migrated`. Structured v10/v11 JSON is upgraded to the v12 CFB envelope on read.
+- Legacy `saveFileN.cfb` files are imported once into SQLite as v13, then renamed `.cfb.migrated`. Older JSON (v10–v12) upgrades to typed v13 on load and the slot is rewritten.
 
 
 ### Program seed data
