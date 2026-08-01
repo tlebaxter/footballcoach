@@ -38,7 +38,8 @@ data class TalentRowUi(
     val ovr: Int,
     val primary: String,
     val secondary: String,
-    val costLine: String,
+    /** Purse / NIL cash label for the row (not scholarship slots). */
+    val cashLine: String,
     val statusLabel: String,
     val showCheck: Boolean,
     val checked: Boolean,
@@ -67,6 +68,7 @@ data class OfferSheetState(
     val buyoutLabel: String,
     val stayBonusLabel: String,
     val suggestionKey: String?,
+    val impact: OfferImpactUi? = null,
 )
 
 data class TalentHubUiState(
@@ -81,6 +83,11 @@ data class TalentHubUiState(
     val y1Label: String = "",
     val schollyLabel: String = "",
     val rosterLabel: String = "",
+    val pwoLabel: String = "",
+    val depthBoard: DepthBoardUi? = null,
+    val showDepthBoard: Boolean = false,
+    val positionContext: PositionDepthUi? = null,
+    val needLabels: List<String> = emptyList(),
     val search: String = "",
     val positionFilter: String = "ALL",
     val sortMode: Int = 0,
@@ -181,6 +188,14 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
     fun setAffordableOnly(v: Boolean) {
         _uiState.update { it.copy(affordableOnly = v) }
         applyFilters()
+    }
+
+    fun openDepthBoard() {
+        _uiState.update { it.copy(showDepthBoard = true) }
+    }
+
+    fun dismissDepthBoard() {
+        _uiState.update { it.copy(showDepthBoard = false) }
     }
 
     fun clearMessage() {
@@ -355,6 +370,20 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             startYears = ProgramOffers.suggestedContractYears(player)
         }
         val stayBonus = if (draftStay) (suggestion?.stayBonus ?: 0) else 0
+        val costPreview = if (draftStay) {
+            "Stay bonus: ${NilMoney.format(stayBonus)}"
+        } else {
+            costPreviewText(player, u, startStatus, startYears)
+        }
+        val impact = computeOfferImpact(
+            u = u,
+            player = player,
+            draftStay = draftStay,
+            retention = retention,
+            status = startStatus,
+            years = startYears,
+            stayBonus = stayBonus,
+        )
         _uiState.update {
             it.copy(
                 offerSheet = OfferSheetState(
@@ -369,11 +398,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     status = startStatus,
                     years = startYears,
                     maxYears = maxY,
-                    costPreview = if (draftStay) {
-                        "Stay bonus: ${NilMoney.format(stayBonus)}"
-                    } else {
-                        costPreviewText(player, u, startStatus, startYears)
-                    },
+                    costPreview = costPreview,
                     confirmLabel = when {
                         draftStay -> "Pay to stay"
                         retention -> "Select offer"
@@ -383,6 +408,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     buyoutLabel = buyoutButtonLabel(u.buyoutCost(player)),
                     stayBonusLabel = NilMoney.format(stayBonus),
                     suggestionKey = row.suggestionKey,
+                    impact = impact,
                 ),
             )
         }
@@ -394,7 +420,18 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val player = offerPlayer ?: return
         val u = user ?: return
         val preview = costPreviewText(player, u, status, sheet.years)
-        _uiState.update { it.copy(offerSheet = sheet.copy(status = status, costPreview = preview)) }
+        val impact = computeOfferImpact(
+            u = u,
+            player = player,
+            draftStay = false,
+            retention = sheet.retention,
+            status = status,
+            years = sheet.years,
+            stayBonus = 0,
+        )
+        _uiState.update {
+            it.copy(offerSheet = sheet.copy(status = status, costPreview = preview, impact = impact))
+        }
     }
 
     fun updateOfferYears(years: Int) {
@@ -404,7 +441,18 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val u = user ?: return
         val y = years.coerceIn(1, sheet.maxYears)
         val preview = costPreviewText(player, u, sheet.status, y)
-        _uiState.update { it.copy(offerSheet = sheet.copy(years = y, costPreview = preview)) }
+        val impact = computeOfferImpact(
+            u = u,
+            player = player,
+            draftStay = false,
+            retention = sheet.retention,
+            status = sheet.status,
+            years = y,
+            stayBonus = 0,
+        )
+        _uiState.update {
+            it.copy(offerSheet = sheet.copy(years = y, costPreview = preview, impact = impact))
+        }
     }
 
     fun dismissOfferSheet() {
@@ -636,7 +684,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             ovr = p.ratOvr,
                             primary = "${p.name} ${p.getYrStr()}",
                             secondary = if (p.year >= 5) "Graduated — leaving" else "Leaving for draft",
-                            costLine = "—",
+                            cashLine = "—",
                             statusLabel = "Draft",
                             showCheck = false,
                             checked = false,
@@ -655,7 +703,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     val id = playerKey(p, key)
                     map[id] = p
                     sugMap[key] = s
-                    val (secondary, cost, status, sortCost) = when (s.bucket) {
+                    val (secondary, cash, status, sortCost) = when (s.bucket) {
                         "DRAFT_STAY" -> Tuple4(
                             "Pay to stay from draft",
                             NilMoney.format(s.stayBonus),
@@ -664,15 +712,15 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                         )
                         "RISK" -> Tuple4(
                             p.transferReasonText ?: "At risk",
-                            NilMoney.format(s.yearOneCost(u)),
+                            offerCashLine(s.status, s.yearOneNilPurse(u)),
                             s.status.displayName(),
-                            s.yearOneCost(u),
+                            s.yearOneNilPurse(u),
                         )
                         else -> Tuple4(
                             "Deal expired — renew",
-                            NilMoney.format(s.yearOneCost(u)),
+                            offerCashLine(s.status, s.yearOneNilPurse(u)),
                             "Renew",
-                            s.yearOneCost(u),
+                            s.yearOneNilPurse(u),
                         )
                     }
                     built.add(
@@ -683,7 +731,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             ovr = p.ratOvr,
                             primary = "${p.name} ${p.getYrStr()}",
                             secondary = secondary,
-                            costLine = cost,
+                            cashLine = cash,
                             statusLabel = status,
                             showCheck = true,
                             checked = s.selected,
@@ -707,7 +755,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     } else {
                         0
                     }
-                    val cost = u.offerTotalCost(min, nil)
+                    val cost = u.nilPurseCost(min, nil)
                     val prior = p.priorTeam?.abbr ?: "?"
                     built.add(
                         TalentRowUi(
@@ -719,7 +767,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             secondary = "From $prior" +
                                 (if (p.transferReason != null) " · ${p.transferReason.label}" else "") +
                                 " · ${attrSummary(p)}",
-                            costLine = NilMoney.format(cost),
+                            cashLine = offerCashLine(min, cost),
                             statusLabel = min.displayName(),
                             showCheck = false,
                             checked = false,
@@ -747,7 +795,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     } else {
                         0
                     }
-                    val cost = u.offerTotalCost(min, nil)
+                    val cost = u.nilPurseCost(min, nil)
                     built.add(
                         TalentRowUi(
                             id = id,
@@ -756,7 +804,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             ovr = p.ratOvr,
                             primary = "${p.name} Fr",
                             secondary = "Pot ${p.ratPot} · ${attrSummary(p)}",
-                            costLine = NilMoney.format(cost),
+                            cashLine = offerCashLine(min, cost),
                             statusLabel = min.displayName(),
                             showCheck = false,
                             checked = false,
@@ -780,7 +828,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             ovr = 0,
                             primary = parts.getOrElse(0) { line },
                             secondary = parts.getOrElse(1) { "" },
-                            costLine = parts.getOrElse(2) { "" },
+                            cashLine = parts.getOrElse(2) { "" },
                             statusLabel = "Ledger",
                             showCheck = false,
                             checked = false,
@@ -809,6 +857,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             else -> null
         }
 
+        val depth = buildDepthBoard(u)
         _uiState.update {
             it.copy(
                 teamName = u.name,
@@ -819,6 +868,9 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                 y1Label = u.budgetY1FreeLabel(),
                 schollyLabel = u.budgetSchollyLabel(),
                 rosterLabel = u.budgetRosterLabel(),
+                pwoLabel = depth.pwoLabel,
+                depthBoard = depth,
+                needLabels = depth.worstNeedLabels,
                 primaryLabel = primaryLabel,
             )
         }
@@ -844,6 +896,13 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                 }
             }
         }
+        val depth = state.depthBoard ?: buildDepthBoard(u)
+        val positionContext = if (state.positionFilter == "ALL") {
+            null
+        } else {
+            depth.positions.find { it.position == state.positionFilter }
+                ?: buildPositionDepth(u, state.positionFilter)
+        }
         _uiState.update {
             it.copy(
                 rows = filtered,
@@ -852,8 +911,42 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                 y1Label = u.budgetY1FreeLabel(),
                 schollyLabel = u.budgetSchollyLabel(),
                 rosterLabel = u.budgetRosterLabel(),
+                pwoLabel = depth.pwoLabel,
+                depthBoard = depth,
+                needLabels = depth.worstNeedLabels,
+                positionContext = positionContext,
             )
         }
+    }
+
+    private fun computeOfferImpact(
+        u: Team,
+        player: Player,
+        draftStay: Boolean,
+        retention: Boolean,
+        status: RosterStatus,
+        years: Int,
+        stayBonus: Int,
+    ): OfferImpactUi {
+        val kind = when {
+            draftStay -> OfferImpactKind.DRAFT_STAY
+            retention -> OfferImpactKind.RETENTION
+            else -> OfferImpactKind.PORTAL_OR_HS
+        }
+        val nil = if (status == RosterStatus.SCHOLARSHIP_PLUS_NIL) {
+            ProgramOffers.annualNilFor(player, u, years)
+        } else {
+            0
+        }
+        return buildOfferImpact(
+            team = u,
+            player = player,
+            kind = kind,
+            proposedStatus = status,
+            proposedNil = nil,
+            years = years,
+            stayBonus = stayBonus,
+        )
     }
 
     private fun canActOnTab(tab: HubTab): Boolean {
@@ -901,16 +994,29 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         return fresh
     }
 
+    private fun offerCashLine(status: RosterStatus, nilPurse: Int): String {
+        return when (status) {
+            RosterStatus.SCHOLARSHIP_PLUS_NIL ->
+                if (nilPurse > 0) "NIL ${NilMoney.format(nilPurse)}" else "$0 cash"
+            else -> "$0 cash"
+        }
+    }
+
     private fun costPreviewText(p: Player, u: Team, st: RosterStatus, y: Int): String {
         val nil = if (st == RosterStatus.SCHOLARSHIP_PLUS_NIL) {
             ProgramOffers.annualNilFor(p, u, y)
         } else {
             0
         }
-        val cost = u.offerTotalCost(st, nil)
-        return st.displayName() +
-            (if (nil > 0) " ${NilMoney.format(nil)}/yr" else "") +
-            " · ${y}yr · year-1 ${NilMoney.format(cost)}"
+        val resources = u.offerResources(st, nil)
+        val slots = resources.scholarshipSlots
+        val slotLabel = if (slots == 1) "1 scholarship" else "$slots scholarships"
+        return if (st == RosterStatus.SCHOLARSHIP_PLUS_NIL && resources.annualNilCash > 0) {
+            "${st.chipLabel()} · NIL ${NilMoney.format(resources.annualNilCash)}/yr · ${y}yr · " +
+                "year-1 purse ${NilMoney.format(resources.annualNilCash)} · $slotLabel"
+        } else {
+            "${st.chipLabel()} · $0 cash · $slotLabel · ${y}yr"
+        }
     }
 
     private fun buyoutButtonLabel(cost: Int): String {

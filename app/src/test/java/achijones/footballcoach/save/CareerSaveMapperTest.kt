@@ -57,14 +57,12 @@ class CareerSaveMapperTest {
 
         val document = CareerSaveMapper.fromLeague(league)
         assertEquals(CURRENT_SAVE_VERSION, document.saveVersion)
-        assertTrue(document.cfbPayload.isEmpty())
         assertTrue(document.teams.isNotEmpty())
         assertNotNull(document.schedule)
         assertTrue(document.teams.any { it.players.isNotEmpty() })
 
         val json = CareerSaveMapper.encode(document)
         val decoded = CareerSaveMapper.decode(json)
-        assertTrue(decoded.cfbPayload.isEmpty())
         assertTrue(decoded.teams.isNotEmpty())
         val loaded = CareerSaveMapper.toLeague(
             decoded,
@@ -84,6 +82,45 @@ class CareerSaveMapperTest {
         val loadedQb = findPlayer(loadedUser, qb.position, qb.name)
         assertNotNull(loadedQb)
         assertEquals(212, loadedQb!!.seasonStats.passYards)
+    }
+
+    @Test
+    fun redshirtAndReturnStatsSurviveTypedHydrate() {
+        val league = LeagueFixtures.createLeagueWithUser()
+        val user = league.userTeam
+        val player = user.allPlayers.first { it.year == 1 }
+        player.isRedshirt = true
+        player.careerPrAtt = 12
+        player.careerPrYards = 145
+        player.careerPrTd = 1
+        player.careerKrAtt = 8
+        player.careerKrYards = 190
+        player.careerKrTd = 0
+        player.careerFairCatches = 3
+        player.statsPrAtt = 2
+        player.statsPrYards = 31
+        player.statsKrAtt = 1
+        player.statsKrYards = 22
+        player.gamesPlayed = 1
+
+        val loaded = CareerSaveMapper.toLeague(
+            CareerSaveMapper.decode(CareerSaveMapper.encode(CareerSaveMapper.fromLeague(league))),
+            LeagueFixtures.FIRST_NAMES,
+            LeagueFixtures.LAST_NAMES,
+        )
+        val loadedPlayer = findPlayer(loaded.findTeamAbbr(user.abbr), player.position, player.name)
+        assertNotNull(loadedPlayer)
+        assertTrue(loadedPlayer!!.isRedshirt)
+        assertEquals(12, loadedPlayer.careerPrAtt)
+        assertEquals(145, loadedPlayer.careerPrYards)
+        assertEquals(1, loadedPlayer.careerPrTd)
+        assertEquals(8, loadedPlayer.careerKrAtt)
+        assertEquals(190, loadedPlayer.careerKrYards)
+        assertEquals(3, loadedPlayer.careerFairCatches)
+        assertEquals(2, loadedPlayer.statsPrAtt)
+        assertEquals(31, loadedPlayer.statsPrYards)
+        assertEquals(1, loadedPlayer.statsKrAtt)
+        assertEquals(22, loadedPlayer.statsKrYards)
     }
 
     @Test
@@ -236,53 +273,7 @@ class CareerSaveMapperTest {
     }
 
     @Test
-    fun legacyStructuredV11MigratesOnDecode() {
-        val league = LeagueFixtures.createLeagueWithUser()
-        val structured = CareerSaveMapper.fromCfbText(league.buildSaveString(), league)
-        assertEquals(11, structured.saveVersion)
-        assertTrue(structured.teams.isNotEmpty())
-
-        val migrated = CareerSaveMapper.migrateToCurrent(
-            structured,
-            LeagueFixtures.FIRST_NAMES,
-            LeagueFixtures.LAST_NAMES,
-        )
-        assertEquals(CURRENT_SAVE_VERSION, migrated.saveVersion)
-        assertTrue(migrated.cfbPayload.isEmpty())
-        assertTrue(migrated.teams.isNotEmpty())
-        assertTrue(migrated.teams.first().players.isNotEmpty() || migrated.teams.first().playerLines.isEmpty())
-
-        val loaded = CareerSaveMapper.toLeague(
-            migrated,
-            LeagueFixtures.FIRST_NAMES,
-            LeagueFixtures.LAST_NAMES,
-        )
-        assertEquals(league.userTeam.abbr, loaded.userTeam.abbr)
-    }
-
-    @Test
-    fun v12CfbEnvelopeMigratesToTypedV13() {
-        val league = LeagueFixtures.createLeagueWithUser()
-        val v12 = SaveDocument(
-            saveVersion = 12,
-            summary = league.userTeam.abbr,
-            currentWeek = league.currentWeek,
-            hasScheduledBowls = league.hasScheduledBowls,
-            userTeamAbbr = league.userTeam.abbr,
-            cfbPayload = CareerSaveMapper.packCfb(league.buildSaveString()),
-        )
-        val migrated = CareerSaveMapper.migrateToCurrent(
-            v12,
-            LeagueFixtures.FIRST_NAMES,
-            LeagueFixtures.LAST_NAMES,
-        )
-        assertEquals(CURRENT_SAVE_VERSION, migrated.saveVersion)
-        assertTrue(migrated.cfbPayload.isEmpty())
-        assertTrue(migrated.teams.isNotEmpty())
-    }
-
-    @Test
-    fun legacyStructuredCorruptScheduleFailsMigrate() {
+    fun legacyV11IsIncompatibleOnMigrate() {
         val forced = SaveDocument(
             saveVersion = 11,
             summary = "2026: ALA (0-0) 0 CCs, 0 NCs",
@@ -293,24 +284,6 @@ class CareerSaveMapperTest {
                     name = "Alabama",
                     abbr = "ALA",
                     profile = ProgramProfileDoc(),
-                    profileCsv = "90,88,92,85,80,75,0,0,0,0,,0,0,0,0,1,0,ALA,0,0,false,false,0,0,,,,,false,,,,0,0,0,0,0",
-                    evenYearHomeOpp = "",
-                    playerLines = emptyList(),
-                ),
-            ),
-            schedule = listOf(
-                ScheduleTeamDoc(
-                    teamAbbr = "ALA",
-                    byeWeek = 6,
-                    weeks = List(League.REGULAR_SEASON_WEEKS) {
-                        ScheduleSlotDoc(
-                            kind = "MATCHUP",
-                            home = true,
-                            opponentAbbr = "AUB",
-                            played = true,
-                            result = null,
-                        )
-                    },
                 ),
             ),
         )
@@ -320,9 +293,51 @@ class CareerSaveMapperTest {
                 LeagueFixtures.FIRST_NAMES,
                 LeagueFixtures.LAST_NAMES,
             )
-            fail("expected corrupt")
-        } catch (_: CorruptSaveException) {
-            // ok
+            fail("expected incompatible")
+        } catch (e: IncompatibleSaveException) {
+            assertTrue(e.message!!.contains("no longer supported"))
+        }
+    }
+
+    @Test
+    fun legacyV12IsIncompatibleOnMigrate() {
+        val forced = SaveDocument(
+            saveVersion = 12,
+            summary = "legacy",
+            userTeamAbbr = "ALA",
+        )
+        try {
+            CareerSaveMapper.migrateToCurrent(
+                forced,
+                LeagueFixtures.FIRST_NAMES,
+                LeagueFixtures.LAST_NAMES,
+            )
+            fail("expected incompatible")
+        } catch (e: IncompatibleSaveException) {
+            assertTrue(e.message!!.contains("no longer supported"))
+        }
+    }
+
+    @Test
+    fun legacyV10IsIncompatibleOnDecode() {
+        val forced = SaveDocument(
+            saveVersion = 10,
+            summary = "2026: ALA (0-0) 0 CCs, 0 NCs",
+            userTeamAbbr = "ALA",
+            teams = listOf(
+                TeamDoc(
+                    conference = "SEC",
+                    name = "Alabama",
+                    abbr = "ALA",
+                    profile = ProgramProfileDoc(),
+                ),
+            ),
+        )
+        try {
+            CareerSaveMapper.decode(CareerSaveMapper.encode(forced))
+            fail("expected incompatible")
+        } catch (e: IncompatibleSaveException) {
+            assertTrue(e.message!!.contains("no longer supported"))
         }
     }
 
@@ -414,72 +429,6 @@ class CareerSaveMapperTest {
         assertTrue(loaded.userTeam.getAllPlayers().any { it.name == keep.name && it.retainedThisOffseason })
     }
 
-    @Test
-    fun v11StructuredDocumentMigratesThroughRoomAndRewritesSlot() = runBlocking {
-        val db = SaveDatabase.createInMemory(app)
-        val repo = SaveRepository(app, db)
-        val league = LeagueFixtures.createLeagueWithUser()
-        val structured = CareerSaveMapper.fromCfbText(league.buildSaveString(), league)
-        assertEquals(11, structured.saveVersion)
-
-        db.saveSlotDao().upsert(
-            SaveSlotEntity(
-                slotIndex = 0,
-                status = SlotStatus.OK.name,
-                summary = structured.summary,
-                saveVersion = 11,
-                updatedAtMillis = 1L,
-                payloadJson = CareerSaveMapper.encode(structured),
-            ),
-        )
-
-        val loaded = repo.load(0, LeagueFixtures.FIRST_NAMES, LeagueFixtures.LAST_NAMES)
-        assertEquals(league.userTeam.abbr, loaded.userTeam.abbr)
-
-        val rewritten = db.saveSlotDao().getSlot(0)!!
-        assertEquals(CURRENT_SAVE_VERSION, rewritten.saveVersion)
-        assertTrue(SaveCompression.isPacked(rewritten.payloadJson!!))
-
-        val exported = repo.exportJson(0)
-        val redecoded = CareerSaveMapper.decode(
-            exported,
-            LeagueFixtures.FIRST_NAMES,
-            LeagueFixtures.LAST_NAMES,
-        )
-        assertEquals(CURRENT_SAVE_VERSION, redecoded.saveVersion)
-        assertTrue(redecoded.cfbPayload.isEmpty())
-        assertTrue(redecoded.teams.isNotEmpty())
-    }
-
-    @Test
-    fun v12SlotRewritesToV13OnLoad() = runBlocking {
-        val db = SaveDatabase.createInMemory(app)
-        val repo = SaveRepository(app, db)
-        val league = LeagueFixtures.createLeagueWithUser()
-        val v12 = SaveDocument(
-            saveVersion = 12,
-            summary = "legacy",
-            userTeamAbbr = league.userTeam.abbr,
-            currentWeek = league.currentWeek,
-            cfbPayload = CareerSaveMapper.packCfb(league.buildSaveString()),
-        )
-        db.saveSlotDao().upsert(
-            SaveSlotEntity(
-                slotIndex = 0,
-                status = SlotStatus.OK.name,
-                summary = v12.summary,
-                saveVersion = 12,
-                updatedAtMillis = 1L,
-                payloadJson = CareerSaveMapper.encode(v12),
-            ),
-        )
-
-        val loaded = repo.load(0, LeagueFixtures.FIRST_NAMES, LeagueFixtures.LAST_NAMES)
-        assertEquals(league.userTeam.abbr, loaded.userTeam.abbr)
-        val rewritten = db.saveSlotDao().getSlot(0)!!
-        assertEquals(CURRENT_SAVE_VERSION, rewritten.saveVersion)
-        assertTrue(SaveCompression.isPacked(rewritten.payloadJson!!))
-    }
 
     private fun firstPlayableGame(team: Team): Game? {
         for (week in 0 until team.gameSchedule.size) {

@@ -5,12 +5,13 @@ from __future__ import annotations
 
 import csv
 import hashlib
+import json
 from pathlib import Path
 
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "app/src/main/assets/fbs_2026_classes.csv"
-OUTPUT = ROOT / "app/src/main/assets/fbs_2026.csv"
+OUTPUT = ROOT / "sim/src/main/resources/fbs_2026.json"
 
 PROGRAM_CLASSES: dict[str, tuple[int, int, int]] = {
     # tradition, fanbase, donors
@@ -66,19 +67,6 @@ STRONG = {
     "WMU", "WFU", "HAW", "BOI",
 }
 
-FIELDS = (
-    "conference",
-    "name",
-    "abbr",
-    "tradition",
-    "fanbase",
-    "donors",
-    "footprint",
-    "pipeline",
-    "momentum",
-    "rivals",
-)
-
 
 def deterministic_jitter(abbreviation: str, factor: str) -> int:
     digest = hashlib.sha256(f"{abbreviation}:{factor}".encode()).digest()
@@ -103,7 +91,18 @@ def momentum_class(abbreviation: str, program_class: str) -> str:
     return "AVERAGE"
 
 
-def generate_row(row: dict[str, str]) -> dict[str, str | int]:
+def parse_rivals(encoded: str) -> list[dict[str, object]]:
+    rivals: list[dict[str, object]] = []
+    for part in encoded.split(";"):
+        part = part.strip()
+        if not part:
+            continue
+        abbr, strength = part.split(":", 1)
+        rivals.append({"abbr": abbr.strip(), "strength": int(strength)})
+    return rivals
+
+
+def generate_row(row: dict[str, str]) -> dict[str, object]:
     program_class = row["programClass"]
     region = row["region"]
     pipeline_class = row["pipelineClass"]
@@ -134,7 +133,7 @@ def generate_row(row: dict[str, str]) -> dict[str, str | int]:
         "name": row["name"],
         "abbr": abbreviation,
         **numeric,
-        "rivals": row["rivals"],
+        "rivals": parse_rivals(row["rivals"]),
     }
 
 
@@ -149,10 +148,8 @@ def main() -> None:
         raise ValueError("Duplicate team abbreviation in program seed classes")
 
     generated = [generate_row(row) for row in rows]
-    with OUTPUT.open("w", newline="", encoding="utf-8") as output:
-        writer = csv.DictWriter(output, fieldnames=FIELDS, lineterminator="\n")
-        writer.writeheader()
-        writer.writerows(generated)
+    payload = {"season": 2026, "teams": generated}
+    OUTPUT.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

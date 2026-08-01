@@ -25,8 +25,8 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Search
+import achijones.footballcoach.ui.icons.Save
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -67,6 +67,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
+import CFBsimPack.NilMoney
 import CFBsimPack.RosterStatus
 import achijones.footballcoach.ui.components.SegmentedControl
 import achijones.footballcoach.ui.components.TabContentTransition
@@ -183,7 +184,15 @@ fun TalentHubScreen(
                 BudgetChip(state.purseLabel)
                 BudgetChip(state.y1Label)
                 BudgetChip(state.schollyLabel)
+                BudgetChip(state.pwoLabel)
                 BudgetChip(state.rosterLabel)
+                state.needLabels.forEach { need ->
+                    BudgetChip(need)
+                }
+                BudgetChip(
+                    label = "Board",
+                    onClick = viewModel::openDepthBoard,
+                )
             }
             Spacer(Modifier.height(4.dp))
             SegmentedControl(
@@ -200,6 +209,22 @@ fun TalentHubScreen(
                 Column(modifier = Modifier.fillMaxSize()) {
                     if (tab != HubTab.MONEY) {
                         FiltersRow(state, viewModel)
+                        state.positionContext?.let { ctx ->
+                            Text(
+                                text = ctx.contextLine(),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = if (ctx.underDepth) {
+                                    MaterialTheme.colorScheme.error
+                                } else {
+                                    MaterialTheme.colorScheme.onSurfaceVariant
+                                },
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(bottom = 4.dp),
+                            )
+                        }
                     }
                     LazyColumn(
                         modifier = Modifier.fillMaxSize(),
@@ -215,6 +240,15 @@ fun TalentHubScreen(
                     }
                 }
             }
+        }
+    }
+
+    if (state.showDepthBoard) {
+        state.depthBoard?.let { board ->
+            DepthBoardSheet(
+                board = board,
+                onDismiss = viewModel::dismissDepthBoard,
+            )
         }
     }
 
@@ -330,16 +364,28 @@ fun TalentHubScreen(
 }
 
 @Composable
-private fun BudgetChip(label: String) {
+private fun BudgetChip(
+    label: String,
+    onClick: (() -> Unit)? = null,
+) {
+    val modifier = Modifier
+        .clip(RoundedCornerShape(12.dp))
+        .background(FcChipMoneyBg)
+        .then(
+            if (onClick != null) {
+                Modifier.clickable(onClick = onClick)
+            } else {
+                Modifier
+            },
+        )
+        .padding(horizontal = 8.dp, vertical = 3.dp)
     Text(
         text = label,
         color = FcChipMoneyText,
         style = MaterialTheme.typography.labelSmall,
+        fontWeight = if (onClick != null) FontWeight.Bold else FontWeight.Normal,
         maxLines = 1,
-        modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
-            .background(FcChipMoneyBg)
-            .padding(horizontal = 8.dp, vertical = 3.dp),
+        modifier = modifier,
     )
 }
 
@@ -516,7 +562,7 @@ private fun TalentRowCard(
                 if (row.secondary.isNotEmpty()) {
                     Text(row.secondary, style = MaterialTheme.typography.bodySmall)
                 }
-                Text(row.costLine, color = FcChipMoneyText, style = MaterialTheme.typography.bodySmall)
+                Text(row.cashLine, color = FcChipMoneyText, style = MaterialTheme.typography.bodySmall)
             }
             if (!row.moneyRow) {
                 Box(
@@ -538,6 +584,132 @@ private fun TalentRowCard(
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DepthBoardSheet(
+    board: DepthBoardUi,
+    onDismiss: () -> Unit,
+) {
+    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var expandedPos by remember { mutableStateOf<String?>(null) }
+    ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheetState) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Text(
+                "Depth Board",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+            )
+            Text(
+                text = "Scholarships ${board.schollyUsed}/${board.schollyCap} · " +
+                    "PWO ${board.pwoCount} · " +
+                    "Roster ${board.rosterUsed}/${board.rosterCap} · " +
+                    board.cashLabel,
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .heightIn(max = 480.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                items(board.positions, key = { it.position }) { pos ->
+                    val expanded = expandedPos == pos.position
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clip(RoundedCornerShape(10.dp))
+                            .background(
+                                if (pos.underDepth) {
+                                    MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.35f)
+                                } else {
+                                    MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.45f)
+                                },
+                            )
+                            .clickable {
+                                expandedPos = if (expanded) null else pos.position
+                            }
+                            .padding(horizontal = 10.dp, vertical = 8.dp),
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                pos.position,
+                                color = FcChipPosText,
+                                fontWeight = FontWeight.Bold,
+                                style = MaterialTheme.typography.labelLarge,
+                                modifier = Modifier
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(FcChipPosBg)
+                                    .padding(horizontal = 6.dp, vertical = 2.dp)
+                                    .width(48.dp),
+                                textAlign = TextAlign.Center,
+                            )
+                            Spacer(Modifier.width(8.dp))
+                            Text(
+                                "${pos.have}/${pos.sug}",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.width(44.dp),
+                            )
+                            Text(
+                                "Sch ${pos.scholly}",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.width(52.dp),
+                            )
+                            Text(
+                                "PWO ${pos.pwo}",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.width(52.dp),
+                            )
+                            Text(
+                                "NIL ${NilMoney.format(pos.nilSpend)}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = FcChipMoneyText,
+                                modifier = Modifier.width(72.dp),
+                            )
+                            Text(
+                                if (pos.have == 0) "— / —" else "${pos.topOvr} / ${pos.avgOvr}",
+                                style = MaterialTheme.typography.labelSmall,
+                                modifier = Modifier.weight(1f),
+                                textAlign = TextAlign.End,
+                            )
+                        }
+                        if (expanded) {
+                            Spacer(Modifier.height(6.dp))
+                            if (pos.players.isEmpty()) {
+                                Text(
+                                    "No players at this position",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                )
+                            } else {
+                                pos.players.forEach { p ->
+                                    Text(
+                                        "${p.name} · ${p.ovr} · ${p.yearLabel} · ${p.statusLabel}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        modifier = Modifier.padding(vertical = 2.dp),
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            TextButton(onClick = onDismiss, modifier = Modifier.fillMaxWidth()) {
+                Text("Close")
+            }
+        }
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -582,17 +754,22 @@ private fun OfferBottomSheet(
             if (!sheet.draftStay) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(
-                        RosterStatus.PWO to "PWO",
-                        RosterStatus.SCHOLARSHIP to "Scholly",
-                        RosterStatus.SCHOLARSHIP_PLUS_NIL to "NIL",
-                    ).forEach { (status, label) ->
+                        RosterStatus.PWO,
+                        RosterStatus.SCHOLARSHIP,
+                        RosterStatus.SCHOLARSHIP_PLUS_NIL,
+                    ).forEach { status ->
                         FilterChip(
                             selected = sheet.status == status,
                             onClick = { onStatus(status) },
-                            label = { Text(label) },
+                            label = { Text(status.chipLabel()) },
                         )
                     }
                 }
+                Text(
+                    "NIL always includes a scholarship. Purse cost is NIL only.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
                 ExposedDropdownMenuBox(
                     expanded = yearsExpanded,
                     onExpandedChange = { yearsExpanded = !yearsExpanded },
@@ -619,6 +796,9 @@ private fun OfferBottomSheet(
                 }
             }
             Text(sheet.costPreview, color = FcChipMoneyText)
+            sheet.impact?.let { impact ->
+                OfferImpactBlock(impact)
+            }
             Button(onClick = onConfirm, modifier = Modifier.fillMaxWidth()) {
                 Text(sheet.confirmLabel)
             }
@@ -631,6 +811,48 @@ private fun OfferBottomSheet(
                 Text("Cancel")
             }
             Spacer(Modifier.height(16.dp))
+        }
+    }
+}
+
+@Composable
+private fun OfferImpactBlock(impact: OfferImpactUi) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "If you sign",
+            style = MaterialTheme.typography.labelLarge,
+            fontWeight = FontWeight.Bold,
+        )
+        impact.lines.forEach { line ->
+            if (!line.changed && !line.label.contains("depth") && line.label != "Purse") return@forEach
+            Row(modifier = Modifier.fillMaxWidth()) {
+                Text(
+                    line.label,
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.width(100.dp),
+                )
+                Text(
+                    "${line.before} → ${line.after}",
+                    style = MaterialTheme.typography.bodySmall,
+                    fontWeight = if (line.changed) FontWeight.SemiBold else FontWeight.Normal,
+                )
+            }
+        }
+        impact.blockedReason?.let { reason ->
+            Text(
+                reason,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+                fontWeight = FontWeight.SemiBold,
+            )
         }
     }
 }

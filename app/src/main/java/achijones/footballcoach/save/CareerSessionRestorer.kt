@@ -3,7 +3,6 @@ package achijones.footballcoach.save
 import CFBsimPack.GameSession
 import CFBsimPack.League
 import android.content.Context
-import achijones.footballcoach.R
 
 /**
  * Reloads the last active career into [GameSession] after process death.
@@ -32,11 +31,7 @@ object CareerSessionRestorer {
             return ResumeResult.Failed(info.summary.ifBlank { "Save damaged — cannot load" })
         }
         return try {
-            val league = repository.load(
-                slot,
-                context.getString(R.string.league_player_names),
-                context.getString(R.string.league_last_names),
-            )
+            val league = repository.load(slot)
             applyLoadedLeague(league, slot)
             ResumeResult.Success
         } catch (e: Exception) {

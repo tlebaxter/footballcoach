@@ -1,6 +1,8 @@
 package achijones.footballcoach.ui.main
 
-enum class MainTab { HOME, TEAM, LEAGUE, AWARDS, MORE }
+enum class MainTab { HOME, TEAM, LEAGUE, MENU }
+
+enum class MenuDestination { GRID, AWARDS }
 
 enum class HomeSegment { STATS, ROSTER, GAMES }
 
@@ -119,6 +121,19 @@ data class AwardRowUi(
     val isMessage: Boolean = false,
     val title: String? = null,
     val subtitle: String? = null,
+    val playerKey: Int? = null,
+)
+
+data class AwardCategoryPageUi(
+    val categoryLabel: String,
+    val sectionLabel: String,
+    val potyHeader: String? = null,
+    val potySubhead: String? = null,
+    val potyStats: String? = null,
+    val potyTeamName: String? = null,
+    val potyAbbr: String? = null,
+    val potyPlayerKey: Int? = null,
+    val rows: List<AwardRowUi> = emptyList(),
 )
 
 data class RankingRowUi(
@@ -293,9 +308,13 @@ data class MainUiState(
     val navigateHome: Boolean = false,
     val navigateToTalentHub: Boolean = false,
     val navigateToSchedule: Boolean = false,
-    /** True during Retention / Portal / HS so More can re-open Talent Hub. */
+    /** True during Retention / Portal / HS (Talent Hub available from bottom nav). */
     val showReturnToTalentHub: Boolean = false,
     val selectedTab: MainTab = MainTab.HOME,
+    val menuDestination: MenuDestination = MenuDestination.GRID,
+    val menuTeamName: String = "",
+    val menuTeamAbbr: String = "",
+    val menuTeamRecord: String = "",
     val homeSegment: HomeSegment = HomeSegment.ROSTER,
     val browseSegment: BrowseSegment = BrowseSegment.ROSTER,
     val teamSegment: TeamPanelSegment = TeamPanelSegment.DEPTH_CHART,
@@ -329,13 +348,8 @@ data class MainUiState(
     val pressureResponseIndices: List<Int> = emptyList(),
     val navigateToCoach: Boolean = false,
     val awardsBowlsUnlocked: Boolean = false,
-    val awardCategories: List<String> = emptyList(),
+    val awardPages: List<AwardCategoryPageUi> = emptyList(),
     val selectedAwardCategory: Int = 0,
-    val potyHeader: String? = null,
-    val potySubhead: String? = null,
-    val potyStats: String? = null,
-    val potyTeamName: String? = null,
-    val potyAbbr: String? = null,
     val awardsSectionLabel: String = "",
     val awardRows: List<AwardRowUi> = emptyList(),
     val bowlSpinnerOptions: List<String> = emptyList(),

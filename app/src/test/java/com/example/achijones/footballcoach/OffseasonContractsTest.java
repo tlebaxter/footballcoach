@@ -10,6 +10,7 @@ import CFBsimPack.RosterStatus;
 import CFBsimPack.Team;
 import CFBsimPack.TransferReason;
 
+import achijones.footballcoach.save.CareerSaveMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -93,6 +94,23 @@ public class OffseasonContractsTest {
     }
 
     @Test
+    public void applyOfferUpgradesScholarshipWithNilAndBlocksPwoNil() {
+        Player upgrade = new Player();
+        upgrade.year = 2;
+        upgrade.ratOvr = 80;
+        upgrade.applyOffer(RosterStatus.SCHOLARSHIP, 150000, 3);
+        assertEquals(RosterStatus.SCHOLARSHIP_PLUS_NIL, upgrade.rosterStatus);
+        assertEquals(150000, upgrade.nilDealAmount);
+
+        Player walkOn = new Player();
+        walkOn.year = 1;
+        walkOn.ratOvr = 55;
+        walkOn.applyOffer(RosterStatus.PWO, 150000, 2);
+        assertEquals(RosterStatus.PWO, walkOn.rosterStatus);
+        assertEquals(0, walkOn.nilDealAmount);
+    }
+
+    @Test
     public void buyoutScalesWithRemainingYears() {
         Player p = new Player();
         p.year = 2;
@@ -144,11 +162,13 @@ public class OffseasonContractsTest {
         String portalName = portalSample.name;
         OffseasonSession.begin(league, off, OffseasonSession.Phase.PORTAL);
 
-        java.io.File saveFile = temporaryFolder.newFile("offseason_roundtrip.cfb");
-        assertTrue(league.saveLeague(saveFile));
+        String json = CareerSaveMapper.INSTANCE.encode(CareerSaveMapper.INSTANCE.fromLeague(league));
         OffseasonSession.clear();
 
-        League loaded = new League(saveFile, FIRST_NAMES, LAST_NAMES);
+        League loaded = CareerSaveMapper.INSTANCE.toLeague(
+                CareerSaveMapper.INSTANCE.decode(json, FIRST_NAMES, LAST_NAMES),
+                FIRST_NAMES,
+                LAST_NAMES);
         assertTrue(loaded.loadedInOffseason);
         assertEquals(OffseasonSession.Phase.PORTAL, loaded.loadedOffseasonPhase);
         assertTrue(OffseasonSession.ready());
@@ -234,11 +254,7 @@ public class OffseasonContractsTest {
     }
 
     private League createLeague() throws IOException {
-        Path csvPath = Paths.get("app/src/main/assets/fbs_2026.csv");
-        if (!Files.exists(csvPath)) {
-            csvPath = Paths.get("src/main/assets/fbs_2026.csv");
-        }
-        String csv = new String(Files.readAllBytes(csvPath), StandardCharsets.UTF_8);
+        String csv = achijones.footballcoach.testing.FbsCsv.read();
         return new League(FIRST_NAMES, LAST_NAMES, csv);
     }
 }

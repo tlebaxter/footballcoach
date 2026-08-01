@@ -6,6 +6,7 @@ import CFBsimPack.LeagueOffseason;
 import CFBsimPack.Rivalry;
 import CFBsimPack.Team;
 
+import achijones.footballcoach.save.CareerSaveMapper;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -191,11 +192,12 @@ public class ExampleUnitTest {
         League league = createLeague();
         league.userTeam = league.teamList.get(0);
         league.userTeam.userControlled = true;
-        File saveFile = temporaryFolder.newFile("fbs-2026.cfb");
 
-        assertTrue(league.saveLeague(saveFile));
-
-        League loaded = new League(saveFile, FIRST_NAMES, LAST_NAMES);
+        String json = CareerSaveMapper.INSTANCE.encode(CareerSaveMapper.INSTANCE.fromLeague(league));
+        League loaded = CareerSaveMapper.INSTANCE.toLeague(
+                CareerSaveMapper.INSTANCE.decode(json, FIRST_NAMES, LAST_NAMES),
+                FIRST_NAMES,
+                LAST_NAMES);
         assertEquals(140, loaded.teamList.size());
         assertEquals(11, loaded.conferences.size());
         assertEquals(League.FIRST_SEASON_YEAR, loaded.getYear());
@@ -222,12 +224,10 @@ public class ExampleUnitTest {
         league.userTeam.resetStats();
         league.advanceSeason();
 
-        File saveFile = temporaryFolder.newFile("recruiting.cfb");
-        assertTrue(league.saveLeague(saveFile));
-
-        String recruits = league.userTeam.getRecruitsInfoSaveFile();
-        assertTrue(recruits.length() > 100);
-        assertTrue(league.userTeam.getPlayerInfoSaveFile().length() > 100);
+        String json = CareerSaveMapper.INSTANCE.encode(CareerSaveMapper.INSTANCE.fromLeague(league));
+        assertTrue(json.length() > 100);
+        assertTrue(CareerSaveMapper.INSTANCE.fromLeague(league).getTeams().stream()
+                .anyMatch(t -> !t.getPlayers().isEmpty()));
     }
 
     @Test
@@ -270,11 +270,7 @@ public class ExampleUnitTest {
     }
 
     private static League createLeague() throws IOException {
-        Path asset = Paths.get("src/main/assets/fbs_2026.csv");
-        if (!Files.exists(asset)) {
-            asset = Paths.get("app/src/main/assets/fbs_2026.csv");
-        }
-        String teamsCsv = new String(Files.readAllBytes(asset), StandardCharsets.UTF_8);
+        String teamsCsv = achijones.footballcoach.testing.FbsCsv.read();
         return new League(
                 FIRST_NAMES,
                 LAST_NAMES,

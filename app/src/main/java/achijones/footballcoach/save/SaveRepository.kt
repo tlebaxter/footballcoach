@@ -1,7 +1,7 @@
 package achijones.footballcoach.save
 
 import CFBsimPack.League
-import achijones.footballcoach.R
+import achijones.footballcoach.ui.util.SeedAssets
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -19,11 +19,10 @@ class SaveRepository(
     @Volatile
     private var migrated = false
 
-    private val namesCSV: String
-        get() = context.getString(R.string.league_player_names)
-
-    private val lastNamesCSV: String
-        get() = context.getString(R.string.league_last_names)
+    private fun nameCsvPair(): Pair<String, String> {
+        val pools = SeedAssets.namePools(context)
+        return pools.first.joinToString(",") to pools.last.joinToString(",")
+    }
 
     suspend fun ensureMigrated() = withContext(Dispatchers.IO) {
         migrateMutex.withLock {
@@ -68,6 +67,11 @@ class SaveRepository(
                 Result.failure(e)
             }
         }
+
+    suspend fun load(slotIndex: Int): League {
+        val (names, lastNames) = nameCsvPair()
+        return load(slotIndex, names, lastNames)
+    }
 
     suspend fun load(slotIndex: Int, namesCSV: String, lastNamesCSV: String): League =
         withContext(Dispatchers.IO) {
@@ -151,7 +155,8 @@ class SaveRepository(
         // Pretty-print when possible (migrates older versions → v13). Fall back to raw
         // bytes so load bugs never strand a recoverable export.
         try {
-            val doc = CareerSaveMapper.decode(payload, namesCSV, lastNamesCSV)
+            val (names, lastNames) = nameCsvPair()
+            val doc = CareerSaveMapper.decode(payload, names, lastNames)
             CareerSaveMapper.encodePretty(doc)
         } catch (_: Exception) {
             if (SaveCompression.isPacked(payload)) {
@@ -172,7 +177,8 @@ class SaveRepository(
             throw IllegalArgumentException("Bad slot")
         }
         val document = try {
-            CareerSaveMapper.decode(jsonText, namesCSV, lastNamesCSV)
+            val (names, lastNames) = nameCsvPair()
+            CareerSaveMapper.decode(jsonText, names, lastNames)
         } catch (e: IncompatibleSaveException) {
             throw e
         } catch (e: Exception) {
@@ -229,41 +235,12 @@ class SaveRepository(
     }
 
     private suspend fun migrateLegacyCfbFiles() {
-        val names = namesCSV
-        val lastNames = lastNamesCSV
         for (i in 0 until SLOT_COUNT) {
-            val entity = dao.getSlot(i) ?: continue
-            if (entity.status != SlotStatus.EMPTY.name) continue
             val file = File(context.filesDir, "saveFile$i.cfb")
             if (!file.exists()) continue
-            try {
-                val league = League(file, names, lastNames)
-                val document = CareerSaveMapper.fromLeague(league)
-                dao.upsert(
-                    SaveSlotEntity(
-                        slotIndex = i,
-                        status = SlotStatus.OK.name,
-                        summary = document.summary,
-                        saveVersion = document.saveVersion,
-                        updatedAtMillis = System.currentTimeMillis(),
-                        payloadJson = CareerSaveMapper.encodeForStorage(document),
-                    ),
-                )
-                val migrated = File(context.filesDir, "saveFile$i.cfb.migrated")
-                if (!file.renameTo(migrated)) {
-                    file.delete()
-                }
-            } catch (_: Exception) {
-                dao.upsert(
-                    SaveSlotEntity(
-                        slotIndex = i,
-                        status = SlotStatus.CORRUPT.name,
-                        summary = "Migration failed",
-                        saveVersion = 0,
-                        updatedAtMillis = System.currentTimeMillis(),
-                        payloadJson = null,
-                    ),
-                )
+            val unsupported = File(context.filesDir, "saveFile$i.cfb.unsupported")
+            if (!file.renameTo(unsupported)) {
+                file.delete()
             }
         }
     }

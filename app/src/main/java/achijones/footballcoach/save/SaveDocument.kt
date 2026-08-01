@@ -8,8 +8,8 @@ const val SLOT_COUNT = 10
 /**
  * Version 13 career document: typed league snapshot (canonical).
  *
- * Legacy fields (`cfbPayload`, CSV blobs) exist only so v10–v12 JSON can decode
- * before [CareerSaveMapper.migrateToCurrent] upgrades to typed v13.
+ * [CareerSaveMapper] uses [ignoreUnknownKeys] so older JSON with removed legacy
+ * fields still parses; [saveVersion] is checked after decode.
  */
 @Serializable
 data class SaveDocument(
@@ -32,11 +32,6 @@ data class SaveDocument(
     val postseason: PostseasonDoc? = null,
     val oocContracts: OocBookDoc? = null,
     val offseason: OffseasonSaveDoc? = null,
-    // --- legacy v10–v12 decode only ---
-    val cfbPayload: String = "",
-    val leagueRecordLines: List<String> = emptyList(),
-    val leagueWinStreakCsv: String = "",
-    val userTeamRecordLines: List<String> = emptyList(),
 )
 
 @Serializable
@@ -65,10 +60,6 @@ data class TeamDoc(
     val evenYearHomeOpp: String = "",
     val players: List<PlayerDoc> = emptyList(),
     val specialTeams: SpecialTeamsDepthDoc = SpecialTeamsDepthDoc(),
-    /** Legacy v10/v11 only. */
-    val profileCsv: String = "",
-    val playerLines: List<String> = emptyList(),
-    val specialTeamsDepth: String? = null,
 )
 
 @Serializable
@@ -102,22 +93,7 @@ data class StreakDoc(
     val team: String = "XXX",
     val startYear: Int = 0,
     val endYear: Int = 0,
-) {
-    fun toCsv(): String = "$length,$team,$startYear,$endYear"
-
-    companion object {
-        fun fromCsv(csv: String): StreakDoc {
-            val p = csv.split(',')
-            if (p.size < 4) return StreakDoc()
-            return StreakDoc(
-                length = p[0].toIntOrNull() ?: 0,
-                team = p[1].ifBlank { "XXX" },
-                startYear = p[2].toIntOrNull() ?: 0,
-                endYear = p[3].toIntOrNull() ?: 0,
-            )
-        }
-    }
-}
+)
 
 @Serializable
 data class QbPressureDoc(
@@ -285,24 +261,7 @@ data class RecordDoc(
     val number: Int = -1,
     val holder: String = "-1",
     val year: Int = -1,
-) {
-    fun toCsvLine(): String = "$key,$number,$holder,$year"
-
-    companion object {
-        fun fromCsvLine(line: String): RecordDoc {
-            val p = line.split(',')
-            if (p.size < 4) {
-                return RecordDoc(key = line)
-            }
-            return RecordDoc(
-                key = p[0],
-                number = p[1].toIntOrNull() ?: -1,
-                holder = p[2],
-                year = p[3].toIntOrNull() ?: -1,
-            )
-        }
-    }
-}
+)
 
 @Serializable
 data class ScheduleTeamDoc(
@@ -354,8 +313,6 @@ data class TeamSeasonDoc(
     val confChampion: String = "",
     val semiFinalWL: String = "",
     val natChampWL: String = "",
-    /** Legacy v10/v11. */
-    val winStreakCsv: String = "",
 )
 
 @Serializable
@@ -389,8 +346,6 @@ data class PostseasonDoc(
 data class OocBookDoc(
     val nextId: Int,
     val contracts: List<OocContractDoc> = emptyList(),
-    /** Legacy v10/v11. */
-    val contractLines: List<String> = emptyList(),
 )
 
 @Serializable
@@ -424,8 +379,6 @@ data class OffseasonSaveDoc(
     val retained: List<RetainedKeyDoc> = emptyList(),
     val portal: List<PortalPlayerDoc> = emptyList(),
     val hsClass: List<PlayerDoc> = emptyList(),
-    /** Legacy v10/v11 HS lines. */
-    val hsClassLines: List<String> = emptyList(),
 )
 
 @Serializable
@@ -446,8 +399,6 @@ data class RetainedKeyDoc(
 data class PortalPlayerDoc(
     val priorTeamAbbr: String,
     val player: PlayerDoc? = null,
-    /** Legacy v10/v11. */
-    val playerLine: String = "",
 )
 
 enum class SlotStatus {

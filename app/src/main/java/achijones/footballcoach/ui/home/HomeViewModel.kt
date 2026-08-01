@@ -5,14 +5,13 @@ import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import CFBsimPack.GameSession
 import CFBsimPack.League
-import achijones.footballcoach.R
 import achijones.footballcoach.save.CareerSessionRestorer
 import achijones.footballcoach.save.SaveRepository
 import achijones.footballcoach.save.SlotInfo
 import achijones.footballcoach.save.SlotStatus
 import achijones.footballcoach.ui.theme.UserBrandTheme
-import achijones.footballcoach.ui.util.AssetReader
 import achijones.footballcoach.ui.util.SaveSlots
+import achijones.footballcoach.ui.util.SeedAssets
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -114,11 +113,11 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 withContext(Dispatchers.Default) {
                     val app = getApplication<Application>()
-                    val teamsCsv = AssetReader.read(app, "fbs_2026.csv")
+                    val names = SeedAssets.namePools(app)
                     val league = League(
-                        app.getString(R.string.league_player_names),
-                        app.getString(R.string.league_last_names),
-                        teamsCsv,
+                        names.first,
+                        names.last,
+                        SeedAssets.teamsJson(app),
                     )
                     GameSession.setLeague(league)
                     GameSession.clearOffseason()
@@ -155,11 +154,7 @@ class HomeViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val loadedUser = withContext(Dispatchers.IO) {
                     val app = getApplication<Application>()
-                    val league = repo.load(
-                        index,
-                        app.getString(R.string.league_player_names),
-                        app.getString(R.string.league_last_names),
-                    )
+                    val league = repo.load(index)
                     CareerSessionRestorer.applyLoadedLeague(league, index)
                     league.userTeam
                 }

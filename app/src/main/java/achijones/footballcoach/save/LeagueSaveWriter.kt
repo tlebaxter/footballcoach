@@ -3,6 +3,7 @@ package achijones.footballcoach.save
 import CFBsimPack.DefensiveSystem
 import CFBsimPack.Game
 import CFBsimPack.League
+import CFBsimPack.LeagueRecords
 import CFBsimPack.OffensivePhilosophy
 import CFBsimPack.OffseasonSession
 import CFBsimPack.ProgramProfile
@@ -30,9 +31,9 @@ object LeagueSaveWriter {
             heismanHistory = ArrayList(league.heismanHistory),
             teams = league.teamList.map { teamDoc(it) },
             userTeamHistory = ArrayList(league.userTeam.teamHistory),
-            leagueRecords = parseRecords(league.leagueRecords.recordsStr),
+            leagueRecords = parseRecords(league.leagueRecords),
             leagueWinStreak = streakDoc(league.yearStartLongestWinStreak),
-            userTeamRecords = parseRecords(league.userTeamRecords.recordsStr),
+            userTeamRecords = parseRecords(league.userTeamRecords),
             hallOfFame = ArrayList(league.userTeam.hallOfFame),
             schedule = scheduleDocs(league),
             teamSeason = teamSeasonDocs(league),
@@ -137,12 +138,15 @@ object LeagueSaveWriter {
         )
     }
 
-    private fun parseRecords(raw: String): List<RecordDoc> {
-        return raw.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .map { RecordDoc.fromCsvLine(it) }
-            .toList()
+    private fun parseRecords(records: LeagueRecords): List<RecordDoc> {
+        return records.orderedRecordEntries.map { entry ->
+            RecordDoc(
+                key = entry.key,
+                number = entry.number,
+                holder = entry.holder,
+                year = entry.year,
+            )
+        }
     }
 
     private fun scheduleDocs(league: League): List<ScheduleTeamDoc> {

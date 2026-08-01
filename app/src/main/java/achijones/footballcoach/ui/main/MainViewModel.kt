@@ -259,7 +259,12 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun openTalentHub() {
-        if (!OffseasonSession.ready()) return
+        if (!OffseasonSession.ready()) {
+            _uiState.update {
+                it.copy(snackbarMessage = "Talent Hub opens in the offseason")
+            }
+            return
+        }
         GameSession.setStayingOnMainDuringOffseason(false)
         _uiState.update { it.copy(navigateToTalentHub = true, showReturnToTalentHub = false) }
     }
@@ -281,7 +286,29 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectTab(tab: MainTab) {
-        _uiState.update { it.copy(selectedTab = tab) }
+        _uiState.update {
+            it.copy(
+                selectedTab = tab,
+                menuDestination = if (tab == MainTab.MENU) {
+                    it.menuDestination
+                } else {
+                    MenuDestination.GRID
+                },
+            )
+        }
+    }
+
+    fun openMenuAwards() {
+        _uiState.update {
+            it.copy(
+                selectedTab = MainTab.MENU,
+                menuDestination = MenuDestination.AWARDS,
+            )
+        }
+    }
+
+    fun closeMenuAwards() {
+        _uiState.update { it.copy(menuDestination = MenuDestination.GRID) }
     }
 
     fun selectHomeSegment(segment: HomeSegment) {
@@ -430,8 +457,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun selectAwardCategory(index: Int) {
-        _uiState.update { it.copy(selectedAwardCategory = index) }
-        rebuildSnapshot()
+        _uiState.update { state ->
+            if (state.awardPages.isEmpty()) return@update state
+            state.copy(selectedAwardCategory = index.coerceIn(state.awardPages.indices))
+        }
     }
 
     fun selectBowlOption(index: Int) {
@@ -1234,7 +1263,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val l = league ?: return emptyList()
         val user = userTeam ?: return emptyList()
         return if (mode == 1) {
-            parseRecordsCsv(l.getLeagueRecordsStr(), user.abbr)
+            listOf(
+                winStreakHistoryRow("Longest Win Streak", l.longestWinStreak, user.abbr),
+                winStreakHistoryRow("Active Win Streak", l.longestActiveWinStreak, user.abbr),
+            ) + buildRecordHistoryRows(l.leagueRecords.orderedRecordEntries, user.abbr)
         } else {
             parseLeagueHistoryYears(l.getLeagueHistoryStr(), user.abbr)
         }
@@ -1245,7 +1277,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val l = league ?: return emptyList()
         return when (mode) {
             0 -> parseTeamHistoryList(user)
-            1 -> parseRecordsCsv(l.userTeamRecords.getRecordsStr(), user.abbr)
+            1 -> buildRecordHistoryRows(l.userTeamRecords.orderedRecordEntries, user.abbr)
             else -> user.hallOfFame.map { line ->
                 val parts = line.split("&")
                 HistoryRowUi(
@@ -1329,40 +1361,55 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         return rows
     }
 
-    private fun parseRecordsCsv(raw: String, userAbbr: String): List<HistoryRowUi> {
+    private fun buildRecordHistoryRows(
+        entries: List<CFBsimPack.LeagueRecords.RecordEntry>,
+        userAbbr: String,
+    ): List<HistoryRowUi> {
         val sectionKeys = setOf("TEAM", "SEASON", "CAREER")
-        return raw.lineSequence()
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .mapNotNull { line ->
-                val parts = line.split(",")
-                if (parts.isEmpty()) return@mapNotNull null
-                val key = parts[0].trim()
-                if (key in sectionKeys || (parts.size >= 2 && parts[1].trim() == "-1")) {
-                    HistoryRowUi(
-                        kind = HistoryRowKind.SECTION,
-                        title = key,
-                    )
-                } else if (parts.size >= 4) {
-                    val holder = parts[2].trim()
-                    val holderAbbr = holder.substringBefore(" ").trim().takeIf { it.isNotBlank() && it != "XXX" }
-                    val team = teamByAbbr(holderAbbr)
-                    HistoryRowUi(
-                        kind = HistoryRowKind.RECORD,
-                        title = key,
-                        value = parts[1].trim(),
-                        holder = holder,
-                        yearLabel = parts[3].trim(),
-                        abbr = holderAbbr,
-                        teamName = team?.name,
-                        isUserRelated = holderAbbr == userAbbr || holder.contains(userAbbr),
-                        highlightAbbr = userAbbr,
-                    )
-                } else {
-                    HistoryRowUi(kind = HistoryRowKind.TEXT, text = line)
-                }
+        return entries.map { entry ->
+            if (entry.key in sectionKeys || entry.number == -1) {
+                HistoryRowUi(
+                    kind = HistoryRowKind.SECTION,
+                    title = entry.key,
+                )
+            } else {
+                val holder = entry.holder
+                val holderAbbr = holder.substringBefore(" ").trim().takeIf { it.isNotBlank() && it != "XXX" }
+                val team = teamByAbbr(holderAbbr)
+                HistoryRowUi(
+                    kind = HistoryRowKind.RECORD,
+                    title = entry.key,
+                    value = entry.number.toString(),
+                    holder = holder,
+                    yearLabel = entry.year.toString(),
+                    abbr = holderAbbr,
+                    teamName = team?.name,
+                    isUserRelated = holderAbbr == userAbbr || holder.contains(userAbbr),
+                    highlightAbbr = userAbbr,
+                )
             }
-            .toList()
+        }
+    }
+
+    private fun winStreakHistoryRow(
+        title: String,
+        streak: CFBsimPack.TeamStreak,
+        userAbbr: String,
+    ): HistoryRowUi {
+        val holder = streak.team
+        val holderAbbr = holder.trim().takeIf { it.isNotBlank() && it != "XXX" }
+        val team = teamByAbbr(holderAbbr)
+        return HistoryRowUi(
+            kind = HistoryRowKind.RECORD,
+            title = title,
+            value = streak.streakLength.toString(),
+            holder = holder,
+            yearLabel = "${streak.startYear}-${streak.endYear}",
+            abbr = holderAbbr,
+            teamName = team?.name,
+            isUserRelated = holderAbbr == userAbbr || holder.contains(userAbbr),
+            highlightAbbr = userAbbr,
+        )
     }
 
     private fun teamByAbbr(abbr: String?): Team? {
@@ -1452,7 +1499,9 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         if (l == null || user == null || browse == null) return
 
         val prev = _uiState.value
-        val tab = if (switchToAwardsHonors) MainTab.AWARDS else prev.selectedTab
+        val tab = if (switchToAwardsHonors) MainTab.MENU else prev.selectedTab
+        val menuDestination =
+            if (switchToAwardsHonors) MenuDestination.AWARDS else prev.menuDestination
         val awardsSeg = if (switchToAwardsHonors) AwardsSegment.HONORS else prev.awardsSegment
 
         val playLabel = when {
@@ -1513,6 +1562,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             state.copy(
                 ready = ready ?: state.ready,
                 selectedTab = tab,
+                menuDestination = menuDestination,
+                menuTeamName = user.name,
+                menuTeamAbbr = user.abbr,
+                menuTeamRecord = "${user.wins}-${user.losses}",
                 awardsSegment = awardsSeg,
                 playWeekLabel = playLabel,
                 showReturnToTalentHub = showTalentHub,
@@ -1578,82 +1631,81 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
                 }
             }
             return state.copy(
-                awardCategories = emptyList(),
+                awardPages = emptyList(),
                 awardsSectionLabel = "Historic Awards",
-                potyHeader = null,
-                potySubhead = null,
-                potyStats = null,
-                potyTeamName = null,
-                potyAbbr = null,
                 awardRows = rows,
                 bowlSpinnerOptions = bowlOptions(l),
                 bowlRows = buildBowlRows(l, state),
             )
         }
-        val categories = buildList {
-            add("Player of the Year")
-            add("All Americans")
-            for (c in l.conferences) add("All-${c.confName}")
-        }
-        val cat = state.selectedAwardCategory.coerceIn(categories.indices)
-        var potyHeader: String? = null
-        var potySub: String? = null
-        var potyStats: String? = null
-        var potyTeamName: String? = null
-        var potyAbbr: String? = null
-        var section = categories[cat]
-        val rows: List<AwardRowUi> = when (cat) {
-            0 -> {
-                val candidates = l.getHeisman()
-                val winner = candidates.firstOrNull()
-                if (winner != null) {
-                    potyHeader = "${winner.position} ${winner.name}"
-                    potySub = "${winner.team.name} • ${winner.getYrStr()} • Player of the Year"
-                    potyStats = l.heismanWinnerStatsLine(winner)
-                    potyTeamName = winner.team.name
-                    potyAbbr = winner.team.abbr
-                } else {
-                    potyHeader = "Player of the Year"
-                }
-                section = "Voting results"
-                candidates.take(5).mapIndexed { index, p ->
-                    awardRowFromPlayer(
-                        player = p,
-                        rankNum = index + 1,
-                        metaLine = "${p.getHeismanScore()} votes · ${p.team.wins}-${p.team.losses}",
-                        statsLine = l.heismanWinnerStatsLine(p).replace(" · ", ", "),
-                        userAbbr = user.abbr,
-                    )
-                }
-            }
-            1 -> awardRowsFromAllAmericanStr(l.getAllAmericanStr(), user.abbr)
-            else -> {
-                val confIdx = cat - 2
-                val conf = l.conferences.getOrNull(confIdx)
-                if (conf != null) {
-                    conf.getAllConfPlayers().map { p ->
+
+        val pages = buildList {
+            val candidates = l.getHeisman()
+            val winner = candidates.firstOrNull()
+            add(
+                AwardCategoryPageUi(
+                    categoryLabel = "Player of the Year",
+                    sectionLabel = "Voting results",
+                    potyHeader = if (winner != null) {
+                        "${winner.position} ${winner.name}"
+                    } else {
+                        "Player of the Year"
+                    },
+                    potySubhead = winner?.let {
+                        "${it.team.name} • ${it.getYrStr()} • Player of the Year"
+                    },
+                    potyStats = winner?.let { l.heismanWinnerStatsLine(it) },
+                    potyTeamName = winner?.team?.name,
+                    potyAbbr = winner?.team?.abbr,
+                    potyPlayerKey = winner?.let { playerKey(it) },
+                    rows = candidates.take(5).mapIndexed { index, p ->
+                        awardRowFromPlayer(
+                            player = p,
+                            rankNum = index + 1,
+                            metaLine = "${p.getHeismanScore()} votes · ${p.team.wins}-${p.team.losses}",
+                            statsLine = l.heismanWinnerStatsLine(p).replace(" · ", ", "),
+                            userAbbr = user.abbr,
+                        )
+                    },
+                ),
+            )
+            add(
+                AwardCategoryPageUi(
+                    categoryLabel = "All Americans",
+                    sectionLabel = "All Americans",
+                    rows = l.getAllAmericans().map { p ->
                         awardRowFromPlayer(
                             player = p,
                             metaLine = "${p.team.wins}-${p.team.losses} · ${p.getYrStr()}",
                             statsLine = l.heismanWinnerStatsLine(p).replace(" · ", ", "),
                             userAbbr = user.abbr,
                         )
-                    }
-                } else {
-                    emptyList()
-                }
+                    },
+                ),
+            )
+            for (c in l.conferences) {
+                add(
+                    AwardCategoryPageUi(
+                        categoryLabel = "All-${c.confName}",
+                        sectionLabel = "All-${c.confName}",
+                        rows = c.getAllConfPlayers().map { p ->
+                            awardRowFromPlayer(
+                                player = p,
+                                metaLine = "${p.team.wins}-${p.team.losses} · ${p.getYrStr()}",
+                                statsLine = l.heismanWinnerStatsLine(p).replace(" · ", ", "),
+                                userAbbr = user.abbr,
+                            )
+                        },
+                    ),
+                )
             }
         }
+        val cat = state.selectedAwardCategory.coerceIn(pages.indices)
         return state.copy(
-            awardCategories = categories,
+            awardPages = pages,
             selectedAwardCategory = cat,
-            awardsSectionLabel = section,
-            potyHeader = potyHeader,
-            potySubhead = potySub,
-            potyStats = potyStats,
-            potyTeamName = potyTeamName,
-            potyAbbr = potyAbbr,
-            awardRows = rows,
+            awardsSectionLabel = "",
+            awardRows = emptyList(),
             bowlSpinnerOptions = bowlOptions(l),
             bowlRows = buildBowlRows(l, state),
         )
@@ -1677,39 +1729,8 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
             yearLabel = player.getYrStr(),
             metaLine = metaLine,
             statsLine = statsLine,
+            playerKey = playerKey(player),
         )
-    }
-
-    private fun awardRowsFromAllAmericanStr(raw: String, userAbbr: String): List<AwardRowUi> {
-        return raw.split(">")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .map { block ->
-                val lines = block.lines().map { it.trim() }.filter { it.isNotEmpty() }
-                val header = lines.firstOrNull().orEmpty()
-                // "ALA(12-1) -  QB Name [Jr]"
-                val abbr = header.substringBefore("(").trim().takeIf { it.isNotBlank() }
-                val afterDash = header.substringAfter("-", "").trim()
-                val tokens = afterDash.split("\\s+".toRegex()).filter { it.isNotEmpty() }
-                val position = tokens.getOrNull(0)
-                val yearTok = tokens.lastOrNull()?.takeIf { it.startsWith("[") && it.endsWith("]") }
-                val name = tokens
-                    .drop(1)
-                    .dropLast(if (yearTok != null) 1 else 0)
-                    .joinToString(" ")
-                val team = teamByAbbr(abbr)
-                AwardRowUi(
-                    highlightUser = abbr == userAbbr,
-                    teamName = team?.name,
-                    abbr = abbr,
-                    position = position,
-                    playerName = name.ifBlank { afterDash },
-                    yearLabel = yearTok?.removeSurrounding("[", "]"),
-                    metaLine = header.substringAfter("(").substringBefore(")").takeIf { it.contains("-") }
-                        ?.let { "($it)" },
-                    statsLine = lines.drop(1).joinToString(" · ") { it.replace("\t", "").trim() },
-                )
-            }
     }
 
     private fun bowlOptions(l: League): List<String> {
@@ -1801,26 +1822,16 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     private fun buildTeamStats(team: Team): List<StatRowUi> {
-        // CSV format from Team.getTeamStatsStrCSV: value,label,rank
-        return team.getTeamStatsStrCSV()
-            .split("%\n")
-            .map { it.trim() }
-            .filter { it.isNotEmpty() }
-            .mapNotNull { line ->
-                val parts = line.split(",")
-                if (parts.size < 3) return@mapNotNull null
-                val value = parts[0].trim()
-                val label = parts[1].trim()
-                val rank = parts[2].trim()
-                StatRowUi(
-                    label = label,
-                    value = value,
-                    rank = rank,
-                    rankNum = rank.filter { ch -> ch.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE,
-                    category = categoryForTeamStat(label),
-                    rankingsMode = rankingsModeForTeamStat(label),
-                )
-            }
+        return team.teamStatLines.map { line ->
+            StatRowUi(
+                label = line.label,
+                value = line.value,
+                rank = line.rank,
+                rankNum = line.rank.filter { ch -> ch.isDigit() }.toIntOrNull() ?: Int.MAX_VALUE,
+                category = categoryForTeamStat(line.label),
+                rankingsMode = rankingsModeForTeamStat(line.label),
+            )
+        }
     }
 
     private fun categoryForTeamStat(label: String): String = when (label) {
@@ -2122,7 +2133,7 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
         val yearLabel = if (currentYear > 0) currentYear.toString() else "Now"
 
         val dealTitle = when (player.rosterStatus) {
-            RosterStatus.SCHOLARSHIP_PLUS_NIL -> "NIL deal active"
+            RosterStatus.SCHOLARSHIP_PLUS_NIL -> "Scholarship + NIL deal"
             RosterStatus.SCHOLARSHIP -> "Scholarship secured"
             RosterStatus.PWO -> "Walk-on roster spot"
             else -> "Roster status"

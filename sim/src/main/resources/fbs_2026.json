@@ -1,0 +1,2497 @@
+{
+  "season": 2026,
+  "teams": [
+    {
+      "conference": "SEC",
+      "name": "Alabama",
+      "abbr": "ALA",
+      "tradition": 94,
+      "fanbase": 95,
+      "donors": 98,
+      "footprint": 94,
+      "pipeline": 97,
+      "momentum": 94,
+      "rivals": [
+        {
+          "abbr": "AUB",
+          "strength": 90
+        },
+        {
+          "abbr": "LSU",
+          "strength": 60
+        },
+        {
+          "abbr": "TEN",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Arkansas",
+      "abbr": "ARK",
+      "tradition": 77,
+      "fanbase": 79,
+      "donors": 74,
+      "footprint": 92,
+      "pipeline": 62,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "MIZ",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Auburn",
+      "abbr": "AUB",
+      "tradition": 92,
+      "fanbase": 91,
+      "donors": 89,
+      "footprint": 90,
+      "pipeline": 86,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "ALA",
+          "strength": 90
+        },
+        {
+          "abbr": "UGA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Florida",
+      "abbr": "FLA",
+      "tradition": 88,
+      "fanbase": 89,
+      "donors": 90,
+      "footprint": 98,
+      "pipeline": 87,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "UGA",
+          "strength": 90
+        },
+        {
+          "abbr": "FSU",
+          "strength": 60
+        },
+        {
+          "abbr": "MIA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Georgia",
+      "abbr": "UGA",
+      "tradition": 95,
+      "fanbase": 98,
+      "donors": 96,
+      "footprint": 92,
+      "pipeline": 96,
+      "momentum": 94,
+      "rivals": [
+        {
+          "abbr": "FLA",
+          "strength": 90
+        },
+        {
+          "abbr": "GAT",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Kentucky",
+      "abbr": "UKY",
+      "tradition": 74,
+      "fanbase": 78,
+      "donors": 78,
+      "footprint": 92,
+      "pipeline": 65,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "TEN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "LSU",
+      "abbr": "LSU",
+      "tradition": 89,
+      "fanbase": 90,
+      "donors": 91,
+      "footprint": 90,
+      "pipeline": 94,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "OLM",
+          "strength": 90
+        },
+        {
+          "abbr": "ALA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Mississippi State",
+      "abbr": "MST",
+      "tradition": 57,
+      "fanbase": 59,
+      "donors": 54,
+      "footprint": 93,
+      "pipeline": 48,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "TAM",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Missouri",
+      "abbr": "MIZ",
+      "tradition": 78,
+      "fanbase": 80,
+      "donors": 74,
+      "footprint": 74,
+      "pipeline": 61,
+      "momentum": 81,
+      "rivals": [
+        {
+          "abbr": "ARK",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Oklahoma",
+      "abbr": "OKL",
+      "tradition": 95,
+      "fanbase": 94,
+      "donors": 98,
+      "footprint": 72,
+      "pipeline": 84,
+      "momentum": 86,
+      "rivals": [
+        {
+          "abbr": "TEX",
+          "strength": 90
+        },
+        {
+          "abbr": "OKS",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Ole Miss",
+      "abbr": "OLM",
+      "tradition": 83,
+      "fanbase": 83,
+      "donors": 82,
+      "footprint": 91,
+      "pipeline": 84,
+      "momentum": 95,
+      "rivals": [
+        {
+          "abbr": "LSU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "South Carolina",
+      "abbr": "SCA",
+      "tradition": 78,
+      "fanbase": 78,
+      "donors": 75,
+      "footprint": 94,
+      "pipeline": 64,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "VAN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Tennessee",
+      "abbr": "TEN",
+      "tradition": 90,
+      "fanbase": 91,
+      "donors": 90,
+      "footprint": 94,
+      "pipeline": 86,
+      "momentum": 80,
+      "rivals": [
+        {
+          "abbr": "UKY",
+          "strength": 90
+        },
+        {
+          "abbr": "ALA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Texas",
+      "abbr": "TEX",
+      "tradition": 98,
+      "fanbase": 97,
+      "donors": 94,
+      "footprint": 95,
+      "pipeline": 97,
+      "momentum": 86,
+      "rivals": [
+        {
+          "abbr": "OKL",
+          "strength": 90
+        },
+        {
+          "abbr": "TAM",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Texas A&M",
+      "abbr": "TAM",
+      "tradition": 91,
+      "fanbase": 93,
+      "donors": 90,
+      "footprint": 92,
+      "pipeline": 87,
+      "momentum": 92,
+      "rivals": [
+        {
+          "abbr": "MST",
+          "strength": 90
+        },
+        {
+          "abbr": "TEX",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "SEC",
+      "name": "Vanderbilt",
+      "abbr": "VAN",
+      "tradition": 57,
+      "fanbase": 59,
+      "donors": 58,
+      "footprint": 94,
+      "pipeline": 50,
+      "momentum": 88,
+      "rivals": [
+        {
+          "abbr": "SCA",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Illinois",
+      "abbr": "ILL",
+      "tradition": 75,
+      "fanbase": 76,
+      "donors": 77,
+      "footprint": 78,
+      "pipeline": 73,
+      "momentum": 78,
+      "rivals": [
+        {
+          "abbr": "NWU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Indiana",
+      "abbr": "IND",
+      "tradition": 66,
+      "fanbase": 75,
+      "donors": 75,
+      "footprint": 79,
+      "pipeline": 63,
+      "momentum": 98,
+      "rivals": [
+        {
+          "abbr": "PUR",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Iowa",
+      "abbr": "IOW",
+      "tradition": 75,
+      "fanbase": 76,
+      "donors": 75,
+      "footprint": 80,
+      "pipeline": 87,
+      "momentum": 88,
+      "rivals": [
+        {
+          "abbr": "NEB",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Maryland",
+      "abbr": "UMD",
+      "tradition": 58,
+      "fanbase": 58,
+      "donors": 54,
+      "footprint": 58,
+      "pipeline": 50,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "RUT",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Michigan",
+      "abbr": "MIC",
+      "tradition": 97,
+      "fanbase": 95,
+      "donors": 94,
+      "footprint": 80,
+      "pipeline": 93,
+      "momentum": 90,
+      "rivals": [
+        {
+          "abbr": "OSU",
+          "strength": 90
+        },
+        {
+          "abbr": "MSU",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Michigan State",
+      "abbr": "MSU",
+      "tradition": 77,
+      "fanbase": 78,
+      "donors": 75,
+      "footprint": 78,
+      "pipeline": 75,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "PSU",
+          "strength": 90
+        },
+        {
+          "abbr": "MIC",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Minnesota",
+      "abbr": "MIN",
+      "tradition": 77,
+      "fanbase": 80,
+      "donors": 75,
+      "footprint": 80,
+      "pipeline": 77,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "WIS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Nebraska",
+      "abbr": "NEB",
+      "tradition": 91,
+      "fanbase": 90,
+      "donors": 91,
+      "footprint": 71,
+      "pipeline": 74,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "IOW",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Northwestern",
+      "abbr": "NWU",
+      "tradition": 56,
+      "fanbase": 60,
+      "donors": 57,
+      "footprint": 77,
+      "pipeline": 50,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "ILL",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Ohio State",
+      "abbr": "OSU",
+      "tradition": 96,
+      "fanbase": 97,
+      "donors": 97,
+      "footprint": 77,
+      "pipeline": 96,
+      "momentum": 95,
+      "rivals": [
+        {
+          "abbr": "MIC",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Oregon",
+      "abbr": "ORE",
+      "tradition": 91,
+      "fanbase": 92,
+      "donors": 89,
+      "footprint": 72,
+      "pipeline": 85,
+      "momentum": 93,
+      "rivals": [
+        {
+          "abbr": "WAS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Penn State",
+      "abbr": "PSU",
+      "tradition": 91,
+      "fanbase": 89,
+      "donors": 91,
+      "footprint": 62,
+      "pipeline": 97,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "MSU",
+          "strength": 90
+        },
+        {
+          "abbr": "PIT",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Purdue",
+      "abbr": "PUR",
+      "tradition": 57,
+      "fanbase": 61,
+      "donors": 55,
+      "footprint": 79,
+      "pipeline": 48,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "IND",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Rutgers",
+      "abbr": "RUT",
+      "tradition": 55,
+      "fanbase": 61,
+      "donors": 54,
+      "footprint": 59,
+      "pipeline": 48,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "UMD",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "UCLA",
+      "abbr": "UCL",
+      "tradition": 74,
+      "fanbase": 76,
+      "donors": 75,
+      "footprint": 93,
+      "pipeline": 76,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "CAL",
+          "strength": 90
+        },
+        {
+          "abbr": "USC",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "USC",
+      "abbr": "USC",
+      "tradition": 96,
+      "fanbase": 94,
+      "donors": 95,
+      "footprint": 92,
+      "pipeline": 88,
+      "momentum": 88,
+      "rivals": [
+        {
+          "abbr": "NDE",
+          "strength": 90
+        },
+        {
+          "abbr": "UCL",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Washington",
+      "abbr": "WAS",
+      "tradition": 90,
+      "fanbase": 91,
+      "donors": 88,
+      "footprint": 74,
+      "pipeline": 85,
+      "momentum": 81,
+      "rivals": [
+        {
+          "abbr": "ORE",
+          "strength": 90
+        },
+        {
+          "abbr": "WSU",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Big Ten",
+      "name": "Wisconsin",
+      "abbr": "WIS",
+      "tradition": 89,
+      "fanbase": 89,
+      "donors": 89,
+      "footprint": 79,
+      "pipeline": 84,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "MIN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Boston College",
+      "abbr": "BCO",
+      "tradition": 57,
+      "fanbase": 59,
+      "donors": 54,
+      "footprint": 60,
+      "pipeline": 48,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "SYR",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "California",
+      "abbr": "CAL",
+      "tradition": 77,
+      "fanbase": 78,
+      "donors": 77,
+      "footprint": 91,
+      "pipeline": 62,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "UCL",
+          "strength": 90
+        },
+        {
+          "abbr": "STA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Clemson",
+      "abbr": "CLE",
+      "tradition": 90,
+      "fanbase": 89,
+      "donors": 89,
+      "footprint": 90,
+      "pipeline": 97,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "FSU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Duke",
+      "abbr": "DUK",
+      "tradition": 74,
+      "fanbase": 80,
+      "donors": 74,
+      "footprint": 93,
+      "pipeline": 62,
+      "momentum": 79,
+      "rivals": [
+        {
+          "abbr": "UNC",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Florida State",
+      "abbr": "FSU",
+      "tradition": 89,
+      "fanbase": 93,
+      "donors": 89,
+      "footprint": 94,
+      "pipeline": 88,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "CLE",
+          "strength": 90
+        },
+        {
+          "abbr": "MIA",
+          "strength": 60
+        },
+        {
+          "abbr": "FLA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Georgia Tech",
+      "abbr": "GAT",
+      "tradition": 74,
+      "fanbase": 78,
+      "donors": 76,
+      "footprint": 90,
+      "pipeline": 73,
+      "momentum": 78,
+      "rivals": [
+        {
+          "abbr": "MIA",
+          "strength": 90
+        },
+        {
+          "abbr": "UGA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Louisville",
+      "abbr": "LOU",
+      "tradition": 77,
+      "fanbase": 76,
+      "donors": 78,
+      "footprint": 92,
+      "pipeline": 73,
+      "momentum": 80,
+      "rivals": [
+        {
+          "abbr": "PIT",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Miami",
+      "abbr": "MIA",
+      "tradition": 91,
+      "fanbase": 92,
+      "donors": 88,
+      "footprint": 96,
+      "pipeline": 86,
+      "momentum": 92,
+      "rivals": [
+        {
+          "abbr": "GAT",
+          "strength": 90
+        },
+        {
+          "abbr": "FSU",
+          "strength": 60
+        },
+        {
+          "abbr": "FLA",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "NC State",
+      "abbr": "NCS",
+      "tradition": 76,
+      "fanbase": 80,
+      "donors": 76,
+      "footprint": 94,
+      "pipeline": 75,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "WFU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "North Carolina",
+      "abbr": "UNC",
+      "tradition": 76,
+      "fanbase": 80,
+      "donors": 76,
+      "footprint": 93,
+      "pipeline": 76,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "DUK",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Pittsburgh",
+      "abbr": "PIT",
+      "tradition": 74,
+      "fanbase": 76,
+      "donors": 75,
+      "footprint": 62,
+      "pipeline": 77,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "LOU",
+          "strength": 90
+        },
+        {
+          "abbr": "PSU",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "SMU",
+      "abbr": "SMU",
+      "tradition": 70,
+      "fanbase": 74,
+      "donors": 71,
+      "footprint": 93,
+      "pipeline": 62,
+      "momentum": 82,
+      "rivals": [
+        {
+          "abbr": "STA",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Stanford",
+      "abbr": "STA",
+      "tradition": 59,
+      "fanbase": 62,
+      "donors": 57,
+      "footprint": 92,
+      "pipeline": 49,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "SMU",
+          "strength": 90
+        },
+        {
+          "abbr": "CAL",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Syracuse",
+      "abbr": "SYR",
+      "tradition": 78,
+      "fanbase": 77,
+      "donors": 75,
+      "footprint": 62,
+      "pipeline": 62,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "BCO",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Virginia",
+      "abbr": "UVA",
+      "tradition": 55,
+      "fanbase": 61,
+      "donors": 55,
+      "footprint": 92,
+      "pipeline": 48,
+      "momentum": 86,
+      "rivals": [
+        {
+          "abbr": "VAT",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Virginia Tech",
+      "abbr": "VAT",
+      "tradition": 74,
+      "fanbase": 78,
+      "donors": 75,
+      "footprint": 90,
+      "pipeline": 62,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "UVA",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "ACC",
+      "name": "Wake Forest",
+      "abbr": "WFU",
+      "tradition": 55,
+      "fanbase": 58,
+      "donors": 56,
+      "footprint": 91,
+      "pipeline": 50,
+      "momentum": 81,
+      "rivals": [
+        {
+          "abbr": "NCS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Arizona",
+      "abbr": "ARI",
+      "tradition": 74,
+      "fanbase": 78,
+      "donors": 76,
+      "footprint": 64,
+      "pipeline": 65,
+      "momentum": 80,
+      "rivals": [
+        {
+          "abbr": "ASU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Arizona State",
+      "abbr": "ASU",
+      "tradition": 66,
+      "fanbase": 76,
+      "donors": 73,
+      "footprint": 65,
+      "pipeline": 65,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "ARI",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Baylor",
+      "abbr": "BAY",
+      "tradition": 77,
+      "fanbase": 77,
+      "donors": 76,
+      "footprint": 92,
+      "pipeline": 62,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "TCU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "BYU",
+      "abbr": "BYU",
+      "tradition": 70,
+      "fanbase": 76,
+      "donors": 74,
+      "footprint": 64,
+      "pipeline": 77,
+      "momentum": 88,
+      "rivals": [
+        {
+          "abbr": "UTA",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Cincinnati",
+      "abbr": "CIN",
+      "tradition": 75,
+      "fanbase": 76,
+      "donors": 78,
+      "footprint": 71,
+      "pipeline": 62,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "WVU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Colorado",
+      "abbr": "COL",
+      "tradition": 66,
+      "fanbase": 75,
+      "donors": 72,
+      "footprint": 71,
+      "pipeline": 65,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "KSU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Houston",
+      "abbr": "HOU",
+      "tradition": 74,
+      "fanbase": 80,
+      "donors": 78,
+      "footprint": 94,
+      "pipeline": 61,
+      "momentum": 89,
+      "rivals": [
+        {
+          "abbr": "UCF",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Iowa State",
+      "abbr": "ISU",
+      "tradition": 68,
+      "fanbase": 73,
+      "donors": 74,
+      "footprint": 75,
+      "pipeline": 65,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "KAN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Kansas",
+      "abbr": "KAN",
+      "tradition": 76,
+      "fanbase": 80,
+      "donors": 77,
+      "footprint": 71,
+      "pipeline": 65,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "ISU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Kansas State",
+      "abbr": "KSU",
+      "tradition": 84,
+      "fanbase": 85,
+      "donors": 84,
+      "footprint": 73,
+      "pipeline": 74,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "COL",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Oklahoma State",
+      "abbr": "OKS",
+      "tradition": 74,
+      "fanbase": 76,
+      "donors": 75,
+      "footprint": 71,
+      "pipeline": 63,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "TTU",
+          "strength": 90
+        },
+        {
+          "abbr": "OKL",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "TCU",
+      "abbr": "TCU",
+      "tradition": 75,
+      "fanbase": 77,
+      "donors": 77,
+      "footprint": 93,
+      "pipeline": 76,
+      "momentum": 89,
+      "rivals": [
+        {
+          "abbr": "BAY",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Texas Tech",
+      "abbr": "TTU",
+      "tradition": 67,
+      "fanbase": 72,
+      "donors": 73,
+      "footprint": 96,
+      "pipeline": 62,
+      "momentum": 93,
+      "rivals": [
+        {
+          "abbr": "OKS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "UCF",
+      "abbr": "UCF",
+      "tradition": 78,
+      "fanbase": 79,
+      "donors": 75,
+      "footprint": 97,
+      "pipeline": 64,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "HOU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "Utah",
+      "abbr": "UTA",
+      "tradition": 82,
+      "fanbase": 85,
+      "donors": 82,
+      "footprint": 64,
+      "pipeline": 75,
+      "momentum": 90,
+      "rivals": [
+        {
+          "abbr": "BYU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Big 12",
+      "name": "West Virginia",
+      "abbr": "WVU",
+      "tradition": 76,
+      "fanbase": 79,
+      "donors": 76,
+      "footprint": 75,
+      "pipeline": 62,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "CIN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Army",
+      "abbr": "ARM",
+      "tradition": 67,
+      "fanbase": 69,
+      "donors": 64,
+      "footprint": 61,
+      "pipeline": 62,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "NAV",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Charlotte",
+      "abbr": "CLT",
+      "tradition": 45,
+      "fanbase": 49,
+      "donors": 43,
+      "footprint": 93,
+      "pipeline": 47,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "ECU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "East Carolina",
+      "abbr": "ECU",
+      "tradition": 55,
+      "fanbase": 61,
+      "donors": 56,
+      "footprint": 93,
+      "pipeline": 47,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "CLT",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Florida Atlantic",
+      "abbr": "FAU",
+      "tradition": 46,
+      "fanbase": 46,
+      "donors": 44,
+      "footprint": 97,
+      "pipeline": 51,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "USF",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Memphis",
+      "abbr": "MEM",
+      "tradition": 67,
+      "fanbase": 70,
+      "donors": 63,
+      "footprint": 90,
+      "pipeline": 76,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "TUL",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Navy",
+      "abbr": "NAV",
+      "tradition": 67,
+      "fanbase": 72,
+      "donors": 62,
+      "footprint": 61,
+      "pipeline": 63,
+      "momentum": 86,
+      "rivals": [
+        {
+          "abbr": "ARM",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "North Texas",
+      "abbr": "UNT",
+      "tradition": 65,
+      "fanbase": 70,
+      "donors": 64,
+      "footprint": 93,
+      "pipeline": 65,
+      "momentum": 89,
+      "rivals": [
+        {
+          "abbr": "UTS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Rice",
+      "abbr": "RIC",
+      "tradition": 55,
+      "fanbase": 59,
+      "donors": 54,
+      "footprint": 92,
+      "pipeline": 50,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "TLS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Temple",
+      "abbr": "TEM",
+      "tradition": 43,
+      "fanbase": 47,
+      "donors": 47,
+      "footprint": 60,
+      "pipeline": 47,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "UAB",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Tulane",
+      "abbr": "TUL",
+      "tradition": 64,
+      "fanbase": 72,
+      "donors": 65,
+      "footprint": 91,
+      "pipeline": 77,
+      "momentum": 89,
+      "rivals": [
+        {
+          "abbr": "MEM",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "Tulsa",
+      "abbr": "TLS",
+      "tradition": 42,
+      "fanbase": 50,
+      "donors": 45,
+      "footprint": 73,
+      "pipeline": 47,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "RIC",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "UAB",
+      "abbr": "UAB",
+      "tradition": 55,
+      "fanbase": 61,
+      "donors": 55,
+      "footprint": 91,
+      "pipeline": 50,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "TEM",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "USF",
+      "abbr": "USF",
+      "tradition": 55,
+      "fanbase": 62,
+      "donors": 55,
+      "footprint": 98,
+      "pipeline": 49,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "FAU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "American",
+      "name": "UTSA",
+      "abbr": "UTS",
+      "tradition": 65,
+      "fanbase": 72,
+      "donors": 64,
+      "footprint": 95,
+      "pipeline": 62,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "UNT",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Delaware",
+      "abbr": "DEL",
+      "tradition": 44,
+      "fanbase": 50,
+      "donors": 43,
+      "footprint": 58,
+      "pipeline": 51,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "MTS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "FIU",
+      "abbr": "FIU",
+      "tradition": 42,
+      "fanbase": 46,
+      "donors": 44,
+      "footprint": 98,
+      "pipeline": 47,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "LIB",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Jacksonville State",
+      "abbr": "JST",
+      "tradition": 59,
+      "fanbase": 58,
+      "donors": 54,
+      "footprint": 93,
+      "pipeline": 51,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "KST",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Kennesaw State",
+      "abbr": "KST",
+      "tradition": 45,
+      "fanbase": 46,
+      "donors": 47,
+      "footprint": 91,
+      "pipeline": 48,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "JST",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Liberty",
+      "abbr": "LIB",
+      "tradition": 67,
+      "fanbase": 68,
+      "donors": 66,
+      "footprint": 90,
+      "pipeline": 61,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "FIU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Middle Tennessee",
+      "abbr": "MTS",
+      "tradition": 58,
+      "fanbase": 60,
+      "donors": 57,
+      "footprint": 91,
+      "pipeline": 47,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "DEL",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Missouri State",
+      "abbr": "MOS",
+      "tradition": 44,
+      "fanbase": 47,
+      "donors": 43,
+      "footprint": 74,
+      "pipeline": 51,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "NMS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "New Mexico State",
+      "abbr": "NMS",
+      "tradition": 58,
+      "fanbase": 61,
+      "donors": 56,
+      "footprint": 64,
+      "pipeline": 49,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "MOS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Sam Houston",
+      "abbr": "SHS",
+      "tradition": 59,
+      "fanbase": 60,
+      "donors": 55,
+      "footprint": 94,
+      "pipeline": 50,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "WKU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "WKU",
+      "abbr": "WKU",
+      "tradition": 57,
+      "fanbase": 61,
+      "donors": 56,
+      "footprint": 91,
+      "pipeline": 47,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "SHS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Merrimack",
+      "abbr": "MER",
+      "tradition": 46,
+      "fanbase": 48,
+      "donors": 47,
+      "footprint": 61,
+      "pipeline": 47,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "BEN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Conference USA",
+      "name": "Bentley",
+      "abbr": "BEN",
+      "tradition": 45,
+      "fanbase": 50,
+      "donors": 46,
+      "footprint": 58,
+      "pipeline": 50,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "MER",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Akron",
+      "abbr": "AKR",
+      "tradition": 44,
+      "fanbase": 46,
+      "donors": 46,
+      "footprint": 77,
+      "pipeline": 51,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "KEN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Ball State",
+      "abbr": "BSU",
+      "tradition": 45,
+      "fanbase": 47,
+      "donors": 44,
+      "footprint": 80,
+      "pipeline": 48,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "MOH",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Bowling Green",
+      "abbr": "BGS",
+      "tradition": 58,
+      "fanbase": 59,
+      "donors": 58,
+      "footprint": 76,
+      "pipeline": 49,
+      "momentum": 49,
+      "rivals": [
+        {
+          "abbr": "TOL",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Buffalo",
+      "abbr": "BUF",
+      "tradition": 58,
+      "fanbase": 60,
+      "donors": 54,
+      "footprint": 59,
+      "pipeline": 48,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "OHI",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Central Michigan",
+      "abbr": "CMU",
+      "tradition": 43,
+      "fanbase": 49,
+      "donors": 43,
+      "footprint": 78,
+      "pipeline": 50,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "WMU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Eastern Michigan",
+      "abbr": "EMU",
+      "tradition": 56,
+      "fanbase": 61,
+      "donors": 58,
+      "footprint": 77,
+      "pipeline": 48,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "SAC",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Kent State",
+      "abbr": "KEN",
+      "tradition": 44,
+      "fanbase": 49,
+      "donors": 47,
+      "footprint": 79,
+      "pipeline": 49,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "AKR",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Miami (Ohio)",
+      "abbr": "MOH",
+      "tradition": 59,
+      "fanbase": 58,
+      "donors": 57,
+      "footprint": 79,
+      "pipeline": 49,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "BSU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Ohio",
+      "abbr": "OHI",
+      "tradition": 58,
+      "fanbase": 59,
+      "donors": 56,
+      "footprint": 80,
+      "pipeline": 48,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "BUF",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Sacramento State",
+      "abbr": "SAC",
+      "tradition": 43,
+      "fanbase": 46,
+      "donors": 46,
+      "footprint": 92,
+      "pipeline": 48,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "EMU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Toledo",
+      "abbr": "TOL",
+      "tradition": 58,
+      "fanbase": 59,
+      "donors": 55,
+      "footprint": 80,
+      "pipeline": 47,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "BGS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "UMass",
+      "abbr": "UMA",
+      "tradition": 43,
+      "fanbase": 47,
+      "donors": 47,
+      "footprint": 62,
+      "pipeline": 47,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "UCN",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "MAC",
+      "name": "Western Michigan",
+      "abbr": "WMU",
+      "tradition": 58,
+      "fanbase": 62,
+      "donors": 55,
+      "footprint": 78,
+      "pipeline": 50,
+      "momentum": 78,
+      "rivals": [
+        {
+          "abbr": "CMU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "Air Force",
+      "abbr": "AFA",
+      "tradition": 55,
+      "fanbase": 62,
+      "donors": 58,
+      "footprint": 66,
+      "pipeline": 47,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "WYO",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "Hawaii",
+      "abbr": "HAW",
+      "tradition": 57,
+      "fanbase": 58,
+      "donors": 56,
+      "footprint": 68,
+      "pipeline": 48,
+      "momentum": 80,
+      "rivals": [
+        {
+          "abbr": "NEV",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "Nevada",
+      "abbr": "NEV",
+      "tradition": 42,
+      "fanbase": 49,
+      "donors": 44,
+      "footprint": 68,
+      "pipeline": 49,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "HAW",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "New Mexico",
+      "abbr": "UNM",
+      "tradition": 46,
+      "fanbase": 47,
+      "donors": 43,
+      "footprint": 67,
+      "pipeline": 49,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "UTP",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "North Dakota State",
+      "abbr": "NDS",
+      "tradition": 63,
+      "fanbase": 68,
+      "donors": 65,
+      "footprint": 74,
+      "pipeline": 73,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "NIU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "Northern Illinois",
+      "abbr": "NIU",
+      "tradition": 56,
+      "fanbase": 60,
+      "donors": 55,
+      "footprint": 78,
+      "pipeline": 61,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "NDS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "San Jose State",
+      "abbr": "SJS",
+      "tradition": 58,
+      "fanbase": 62,
+      "donors": 54,
+      "footprint": 93,
+      "pipeline": 50,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "UNL",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "UNLV",
+      "abbr": "UNL",
+      "tradition": 66,
+      "fanbase": 71,
+      "donors": 63,
+      "footprint": 65,
+      "pipeline": 63,
+      "momentum": 61,
+      "rivals": [
+        {
+          "abbr": "SJS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "UTEP",
+      "abbr": "UTP",
+      "tradition": 46,
+      "fanbase": 47,
+      "donors": 44,
+      "footprint": 93,
+      "pipeline": 49,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "UNM",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Mountain West",
+      "name": "Wyoming",
+      "abbr": "WYO",
+      "tradition": 55,
+      "fanbase": 62,
+      "donors": 54,
+      "footprint": 64,
+      "pipeline": 50,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "AFA",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "Boise State",
+      "abbr": "BOI",
+      "tradition": 66,
+      "fanbase": 75,
+      "donors": 74,
+      "footprint": 65,
+      "pipeline": 74,
+      "momentum": 81,
+      "rivals": [
+        {
+          "abbr": "FRE",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "Colorado State",
+      "abbr": "CSU",
+      "tradition": 55,
+      "fanbase": 61,
+      "donors": 58,
+      "footprint": 66,
+      "pipeline": 48,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "UST",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "Fresno State",
+      "abbr": "FRE",
+      "tradition": 63,
+      "fanbase": 70,
+      "donors": 65,
+      "footprint": 89,
+      "pipeline": 65,
+      "momentum": 64,
+      "rivals": [
+        {
+          "abbr": "BOI",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "Oregon State",
+      "abbr": "ORS",
+      "tradition": 63,
+      "fanbase": 72,
+      "donors": 63,
+      "footprint": 74,
+      "pipeline": 64,
+      "momentum": 61,
+      "rivals": [
+        {
+          "abbr": "WSU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "San Diego State",
+      "abbr": "SDS",
+      "tradition": 57,
+      "fanbase": 62,
+      "donors": 55,
+      "footprint": 92,
+      "pipeline": 49,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "TST",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "Texas State",
+      "abbr": "TST",
+      "tradition": 66,
+      "fanbase": 70,
+      "donors": 64,
+      "footprint": 92,
+      "pipeline": 65,
+      "momentum": 60,
+      "rivals": [
+        {
+          "abbr": "SDS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "Utah State",
+      "abbr": "UST",
+      "tradition": 59,
+      "fanbase": 59,
+      "donors": 54,
+      "footprint": 68,
+      "pipeline": 49,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "CSU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Pac-12",
+      "name": "Washington State",
+      "abbr": "WSU",
+      "tradition": 65,
+      "fanbase": 72,
+      "donors": 62,
+      "footprint": 71,
+      "pipeline": 65,
+      "momentum": 63,
+      "rivals": [
+        {
+          "abbr": "ORS",
+          "strength": 90
+        },
+        {
+          "abbr": "WAS",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Appalachian State",
+      "abbr": "APP",
+      "tradition": 63,
+      "fanbase": 71,
+      "donors": 66,
+      "footprint": 94,
+      "pipeline": 61,
+      "momentum": 62,
+      "rivals": [
+        {
+          "abbr": "JMU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Arkansas State",
+      "abbr": "ARS",
+      "tradition": 55,
+      "fanbase": 61,
+      "donors": 57,
+      "footprint": 93,
+      "pipeline": 48,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "ULL",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Coastal Carolina",
+      "abbr": "CCU",
+      "tradition": 58,
+      "fanbase": 59,
+      "donors": 54,
+      "footprint": 92,
+      "pipeline": 47,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "GSO",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Georgia Southern",
+      "abbr": "GSO",
+      "tradition": 59,
+      "fanbase": 60,
+      "donors": 56,
+      "footprint": 91,
+      "pipeline": 50,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "CCU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Georgia State",
+      "abbr": "GST",
+      "tradition": 56,
+      "fanbase": 62,
+      "donors": 55,
+      "footprint": 94,
+      "pipeline": 49,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "ODU",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "James Madison",
+      "abbr": "JMU",
+      "tradition": 65,
+      "fanbase": 70,
+      "donors": 63,
+      "footprint": 93,
+      "pipeline": 77,
+      "momentum": 87,
+      "rivals": [
+        {
+          "abbr": "APP",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Louisiana",
+      "abbr": "ULL",
+      "tradition": 56,
+      "fanbase": 62,
+      "donors": 54,
+      "footprint": 90,
+      "pipeline": 49,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "ARS",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Louisiana Tech",
+      "abbr": "LAT",
+      "tradition": 55,
+      "fanbase": 59,
+      "donors": 57,
+      "footprint": 92,
+      "pipeline": 47,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "SMI",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Marshall",
+      "abbr": "MSH",
+      "tradition": 56,
+      "fanbase": 59,
+      "donors": 56,
+      "footprint": 91,
+      "pipeline": 47,
+      "momentum": 51,
+      "rivals": [
+        {
+          "abbr": "ULM",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Old Dominion",
+      "abbr": "ODU",
+      "tradition": 58,
+      "fanbase": 61,
+      "donors": 56,
+      "footprint": 92,
+      "pipeline": 50,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "GST",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "South Alabama",
+      "abbr": "USA",
+      "tradition": 56,
+      "fanbase": 62,
+      "donors": 57,
+      "footprint": 91,
+      "pipeline": 48,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "TRO",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Southern Miss",
+      "abbr": "SMI",
+      "tradition": 44,
+      "fanbase": 48,
+      "donors": 47,
+      "footprint": 94,
+      "pipeline": 49,
+      "momentum": 48,
+      "rivals": [
+        {
+          "abbr": "LAT",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "Troy",
+      "abbr": "TRO",
+      "tradition": 56,
+      "fanbase": 62,
+      "donors": 57,
+      "footprint": 90,
+      "pipeline": 48,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "USA",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Sun Belt",
+      "name": "ULM",
+      "abbr": "ULM",
+      "tradition": 43,
+      "fanbase": 50,
+      "donors": 45,
+      "footprint": 94,
+      "pipeline": 50,
+      "momentum": 52,
+      "rivals": [
+        {
+          "abbr": "MSH",
+          "strength": 90
+        }
+      ]
+    },
+    {
+      "conference": "Independents",
+      "name": "Notre Dame",
+      "abbr": "NDE",
+      "tradition": 97,
+      "fanbase": 97,
+      "donors": 95,
+      "footprint": 78,
+      "pipeline": 97,
+      "momentum": 93,
+      "rivals": [
+        {
+          "abbr": "USC",
+          "strength": 90
+        },
+        {
+          "abbr": "MIC",
+          "strength": 60
+        }
+      ]
+    },
+    {
+      "conference": "Independents",
+      "name": "UConn",
+      "abbr": "UCN",
+      "tradition": 43,
+      "fanbase": 47,
+      "donors": 44,
+      "footprint": 58,
+      "pipeline": 50,
+      "momentum": 50,
+      "rivals": [
+        {
+          "abbr": "UMA",
+          "strength": 90
+        }
+      ]
+    }
+  ]
+}
