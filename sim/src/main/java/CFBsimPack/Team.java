@@ -20,6 +20,11 @@ public class Team {
     public String name;
     public String abbr;
     public String conference;
+    /** Stadium / campus coordinates from {@link GeoCatalog}. */
+    public double latitude = Double.NaN;
+    public double longitude = Double.NaN;
+    public String venueCity = "";
+    public String venueState = "";
     /** Named rivals with 0–100 strength. */
     public ArrayList<Rivalry> rivalries;
     /** Opponent abbr → won this season's rivalry game (only opponents listed as rivals). */
@@ -216,6 +221,7 @@ public class Team {
                 pipeline,
                 momentum,
                 Conference.mediaShareFor(conference));
+        GeoCatalog.get().applySchoolCoords(this);
         playersTransferring = new ArrayList<>();
         hadCoachingChange = false;
         programProfileUpdatedThisOffseason = false;
@@ -315,6 +321,7 @@ public class Team {
         t.qbPressurePolicy = qbPressurePolicy != null ? qbPressurePolicy : QbPressurePolicy.defaults();
         t.evenYearHomeOpp = evenYearHomeOpp != null ? evenYearHomeOpp : "";
         t.recruitMoney = NilMoney.yearlyBudget(t.programProfile);
+        GeoCatalog.get().applySchoolCoords(t);
         return t;
     }
 
@@ -1820,11 +1827,9 @@ public class Team {
     }
 
     /**
-     * Recruits walk ons at each needed position.
-     * This is used by user teams if there is a dearth at any position.
+     * Recruits walk-ons to cover suggested depth, then pads to {@link NilMoney#ROSTER_CAP}.
      */
     public void recruitWalkOns() {
-        // Pad to minimum depth suggestions with PWOs; never exceed roster cap
         addWalkOns("QB", NilMoney.SUG_QB - teamQBs.size());
         addWalkOns("RB", NilMoney.SUG_RB - teamRBs.size());
         addWalkOns("FB", NilMoney.SUG_FB - teamFBs.size());
@@ -1838,7 +1843,29 @@ public class Team {
         addWalkOns("EDGE", NilMoney.SUG_EDGE - teamEDGEs.size());
         addWalkOns("DL", NilMoney.SUG_DL - teamDLs.size());
         addWalkOns("LB", NilMoney.SUG_LB - teamLBs.size());
+        fillRosterToCap();
         sortPlayers();
+    }
+
+    /** Pad with PWOs at neediest positions until roster hits {@link NilMoney#ROSTER_CAP}. */
+    public void fillRosterToCap() {
+        while (canAddToRoster()) {
+            String bestPos = null;
+            double bestGap = -1;
+            for (String pos : NilMoney.POSITIONS) {
+                ArrayList<? extends Player> list = getPositionList(pos);
+                int have = list != null ? list.size() : 0;
+                double gap = (NilMoney.initFor(pos) - have) / (double) Math.max(1, NilMoney.initFor(pos));
+                if (gap > bestGap) {
+                    bestGap = gap;
+                    bestPos = pos;
+                }
+            }
+            if (bestPos == null) break;
+            int before = getRosterCount();
+            addWalkOns(bestPos, 1);
+            if (getRosterCount() <= before) break;
+        }
     }
 
     private void addWalkOns(String pos, int needs) {

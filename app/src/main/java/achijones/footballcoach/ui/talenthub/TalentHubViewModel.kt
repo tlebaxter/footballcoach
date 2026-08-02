@@ -4,11 +4,13 @@ import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import CFBsimPack.GameSession
+import CFBsimPack.GeoCatalog
 import CFBsimPack.League
 import CFBsimPack.LeagueOffseason
 import CFBsimPack.NilMoney
 import CFBsimPack.OffseasonSession
 import CFBsimPack.Player
+import CFBsimPack.PlayerMarket
 import CFBsimPack.PlayerRatings
 import CFBsimPack.PositionOvr
 import CFBsimPack.ProgramOffers
@@ -48,6 +50,8 @@ data class TalentRowUi(
     val sortOvr: Int,
     val sortCost: Int,
     val suggestionKey: String?,
+    /** Section header key for per-position retain boards. */
+    val sectionPosition: String? = null,
 )
 
 data class OfferSheetState(
@@ -103,6 +107,9 @@ data class TalentHubUiState(
     val showBuyoutConfirm: Boolean = false,
     val buyoutPlayerName: String? = null,
     val buyoutCostLabel: String? = null,
+    val showPhaseConfirm: Boolean = false,
+    val phaseConfirmTitle: String? = null,
+    val phaseConfirmBody: String? = null,
     val navigateToMain: Boolean = false,
     val navigateToSchedule: Boolean = false,
     val navigateHome: Boolean = false,
@@ -351,7 +358,6 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val retention = _uiState.value.selectedTab == HubTab.RETAIN
         val portal = _uiState.value.selectedTab == HubTab.PORTAL
         val suggestion = row.suggestionKey?.let { suggestionByKey[it] }
-        val draftStay = retention && suggestion != null && suggestion.bucket == "DRAFT_STAY"
         val maxY = ProgramOffers.maxContractYears(player)
         var startStatus = RosterStatus.SCHOLARSHIP
         var startYears = 1
@@ -359,30 +365,21 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             startStatus = suggestion.status
             startYears = suggestion.years.coerceIn(1, maxY)
         } else if (portal) {
-            startStatus = ProgramOffers.minimumAcceptable(player, maxOf(1, player.portalRiskTier))
+            startStatus = ProgramOffers.suggestedStatus(player, u)
             startYears = ProgramOffers.suggestedContractYears(player)
         } else {
-            startStatus = when {
-                player.ratOvr >= 82 -> RosterStatus.SCHOLARSHIP_PLUS_NIL
-                player.ratOvr >= 60 -> RosterStatus.SCHOLARSHIP
-                else -> RosterStatus.PWO
-            }
+            startStatus = ProgramOffers.suggestedStatus(player, u)
             startYears = ProgramOffers.suggestedContractYears(player)
         }
-        val stayBonus = if (draftStay) (suggestion?.stayBonus ?: 0) else 0
-        val costPreview = if (draftStay) {
-            "Stay bonus: ${NilMoney.format(stayBonus)}"
-        } else {
-            costPreviewText(player, u, startStatus, startYears)
-        }
+        val costPreview = costPreviewText(player, u, startStatus, startYears)
         val impact = computeOfferImpact(
             u = u,
             player = player,
-            draftStay = draftStay,
+            draftStay = false,
             retention = retention,
             status = startStatus,
             years = startYears,
-            stayBonus = stayBonus,
+            stayBonus = 0,
         )
         _uiState.update {
             it.copy(
@@ -392,21 +389,17 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     ovr = player.ratOvr,
                     yearLine = player.getYrStr(),
                     secondary = row.secondary,
-                    draftStay = draftStay,
+                    draftStay = false,
                     retention = retention,
                     portal = portal,
                     status = startStatus,
                     years = startYears,
                     maxYears = maxY,
                     costPreview = costPreview,
-                    confirmLabel = when {
-                        draftStay -> "Pay to stay"
-                        retention -> "Select offer"
-                        else -> "Sign"
-                    },
-                    showBuyout = retention && !draftStay,
+                    confirmLabel = if (retention) "Select offer" else "Sign",
+                    showBuyout = retention,
                     buyoutLabel = buyoutButtonLabel(u.buyoutCost(player)),
-                    stayBonusLabel = NilMoney.format(stayBonus),
+                    stayBonusLabel = "",
                     suggestionKey = row.suggestionKey,
                     impact = impact,
                 ),
@@ -465,17 +458,6 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val player = offerPlayer ?: return
         val u = user ?: return
         val off = offseason ?: return
-        if (sheet.draftStay) {
-            val suggestion = sheet.suggestionKey?.let { suggestionByKey[it] }
-            if (suggestion != null) {
-                suggestion.selected = true
-                suggestion.stayBonus = ProgramOffers.draftStayBonus(player, u)
-            }
-            dismissOfferSheet()
-            reloadTab()
-            persistAfterMutation()
-            return
-        }
         val st = sheet.status
         val y = sheet.years
         val nil = if (st == RosterStatus.SCHOLARSHIP_PLUS_NIL) {
@@ -558,14 +540,75 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
 
     fun onPrimary() {
         when (OffseasonSession.phase) {
-            OffseasonSession.Phase.RETENTION -> approveRetention()
-            OffseasonSession.Phase.PORTAL -> finishPortalPhase()
+            OffseasonSession.Phase.RETENTION -> requestPhaseConfirm(
+                title = "Approve retention?",
+                body = phaseConfirmRetentionBody(),
+            )
+            OffseasonSession.Phase.PORTAL -> requestPhaseConfirm(
+                title = "Finish portal?",
+                body = phaseConfirmPortalBody(),
+            )
             OffseasonSession.Phase.SCHEDULE -> {
-                // Scheduling moved to ScheduleScreen; bounce back to Main.
                 _uiState.update { it.copy(navigateToMain = true) }
             }
-            OffseasonSession.Phase.HS -> finishRecruitingPhase()
+            OffseasonSession.Phase.HS -> requestPhaseConfirm(
+                title = "Finish recruiting?",
+                body = phaseConfirmHsBody(),
+            )
         }
+    }
+
+    private fun requestPhaseConfirm(title: String, body: String) {
+        _uiState.update {
+            it.copy(
+                showPhaseConfirm = true,
+                phaseConfirmTitle = title,
+                phaseConfirmBody = body,
+            )
+        }
+    }
+
+    fun dismissPhaseConfirm() {
+        _uiState.update {
+            it.copy(
+                showPhaseConfirm = false,
+                phaseConfirmTitle = null,
+                phaseConfirmBody = null,
+            )
+        }
+    }
+
+    fun confirmPhaseAdvance() {
+        dismissPhaseConfirm()
+        when (OffseasonSession.phase) {
+            OffseasonSession.Phase.RETENTION -> approveRetention()
+            OffseasonSession.Phase.PORTAL -> finishPortalPhase()
+            OffseasonSession.Phase.HS -> finishRecruitingPhase()
+            else -> Unit
+        }
+    }
+
+    private fun phaseConfirmRetentionBody(): String {
+        val u = user ?: return "Advance to the portal."
+        val selected = suggestions.count { it.selected }
+        val atRisk = suggestions.size
+        return "Apply $selected retain offer(s) of $atRisk needs-deal player(s).\n" +
+            "Unretained players may enter the portal.\n" +
+            "Roster ${u.rosterCount}/${NilMoney.ROSTER_CAP} · Purse ${NilMoney.format(u.recruitMoney)}"
+    }
+
+    private fun phaseConfirmPortalBody(): String {
+        val off = offseason ?: return "CPU claims remaining portal; begin scheduling."
+        val u = user ?: return "Begin scheduling."
+        return "${off.transferPortal.size} portal player(s) left for CPU.\n" +
+            "Roster ${u.rosterCount}/${NilMoney.ROSTER_CAP} · Purse ${NilMoney.format(u.recruitMoney)}"
+    }
+
+    private fun phaseConfirmHsBody(): String {
+        val off = offseason ?: return "CPU signs remaining HS class and starts the season."
+        val u = user ?: return "Start season."
+        return "${off.hsClass.size} HS prospect(s) left for CPU.\n" +
+            "Roster ${u.rosterCount}/${NilMoney.ROSTER_CAP} · Purse ${NilMoney.format(u.recruitMoney)}"
     }
 
     private fun approveRetention() {
@@ -703,26 +746,15 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     val id = playerKey(p, key)
                     map[id] = p
                     sugMap[key] = s
-                    val (secondary, cash, status, sortCost) = when (s.bucket) {
-                        "DRAFT_STAY" -> Tuple4(
-                            "Pay to stay from draft",
-                            NilMoney.format(s.stayBonus),
-                            "Stay",
-                            s.stayBonus,
-                        )
-                        "RISK" -> Tuple4(
-                            p.transferReasonText ?: "At risk",
-                            offerCashLine(s.status, s.yearOneNilPurse(u)),
-                            s.status.displayName(),
-                            s.yearOneNilPurse(u),
-                        )
-                        else -> Tuple4(
-                            "Deal expired — renew",
-                            offerCashLine(s.status, s.yearOneNilPurse(u)),
-                            "Renew",
-                            s.yearOneNilPurse(u),
-                        )
+                    val label = when (s.bucket) {
+                        "DRAFT" -> "Draft leverage"
+                        "UNDERPAID" -> "Underpaid — raise?"
+                        "EXPIRED" -> "Deal expired — renew"
+                        "BREAKOUT" -> "Breakout — wants NIL"
+                        else -> p.transferReasonText ?: "Needs deal"
                     }
+                    val home = hometownLine(p, u)
+                    val prod = PlayerMarket.productionScore(p)
                     built.add(
                         TalentRowUi(
                             id = id,
@@ -730,16 +762,17 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             position = p.position,
                             ovr = p.ratOvr,
                             primary = "${p.name} ${p.getYrStr()}",
-                            secondary = secondary,
-                            cashLine = cash,
-                            statusLabel = status,
+                            secondary = "$label · Pot ${p.ratPot} · Prod $prod · $home",
+                            cashLine = offerCashLine(s.status, s.yearOneNilPurse(u)),
+                            statusLabel = s.bucket,
                             showCheck = true,
                             checked = s.selected,
                             locked = false,
                             moneyRow = false,
                             sortOvr = p.ratOvr,
-                            sortCost = sortCost,
+                            sortCost = s.yearOneNilPurse(u),
                             suggestionKey = key,
+                            sectionPosition = p.position,
                         )
                     )
                 }
@@ -757,6 +790,16 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     }
                     val cost = u.nilPurseCost(min, nil)
                     val prior = p.priorTeam?.abbr ?: "?"
+                    val depth = ProgramOffers.projectedDepthRank(p, u)
+                    val home = hometownLine(p, u)
+                    val prod = PlayerMarket.productionScore(p)
+                    val buyout = if (p.priorTeam != null && p.contractYearsRemaining > 0
+                        && p.rosterStatus == RosterStatus.SCHOLARSHIP_PLUS_NIL
+                    ) {
+                        NilMoney.buyoutCost(p, p.priorTeam.programProfile)
+                    } else {
+                        0
+                    }
                     built.add(
                         TalentRowUi(
                             id = id,
@@ -764,18 +807,18 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             position = p.position,
                             ovr = p.ratOvr,
                             primary = "${p.name} ${p.getYrStr()}",
-                            secondary = "From $prior" +
-                                (if (p.transferReason != null) " · ${p.transferReason.label}" else "") +
-                                " · ${attrSummary(p)}",
-                            cashLine = offerCashLine(min, cost),
+                            secondary = "From $prior · Depth #$depth · Prod $prod · Pot ${p.ratPot} · $home" +
+                                (if (buyout > 0) " · Buyout ${NilMoney.format(buyout)}" else ""),
+                            cashLine = offerCashLine(min, cost + buyout),
                             statusLabel = min.displayName(),
                             showCheck = false,
                             checked = false,
                             locked = false,
                             moneyRow = false,
-                            sortOvr = p.ratOvr,
-                            sortCost = cost,
+                            sortOvr = PlayerMarket.marketTalent(p),
+                            sortCost = cost + buyout,
                             suggestionKey = null,
+                            sectionPosition = p.position,
                         )
                     )
                 }
@@ -785,17 +828,15 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     val id = playerKey(p, "hs")
                     map[id] = p
                     val years = ProgramOffers.suggestedContractYears(p)
-                    val min = when {
-                        p.ratOvr >= 82 -> RosterStatus.SCHOLARSHIP_PLUS_NIL
-                        p.ratOvr >= 60 -> RosterStatus.SCHOLARSHIP
-                        else -> RosterStatus.PWO
-                    }
+                    val min = ProgramOffers.suggestedStatus(p, u)
                     val nil = if (min == RosterStatus.SCHOLARSHIP_PLUS_NIL) {
                         ProgramOffers.annualNilFor(p, u, years)
                     } else {
                         0
                     }
                     val cost = u.nilPurseCost(min, nil)
+                    val depth = ProgramOffers.projectedDepthRank(p, u)
+                    val home = hometownLine(p, u)
                     built.add(
                         TalentRowUi(
                             id = id,
@@ -803,7 +844,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             position = p.position,
                             ovr = p.ratOvr,
                             primary = "${p.name} Fr",
-                            secondary = "Pot ${p.ratPot} · ${attrSummary(p)}",
+                            secondary = "Pot ${p.ratPot} · Depth #$depth · $home · ${attrSummary(p)}",
                             cashLine = offerCashLine(min, cost),
                             statusLabel = min.displayName(),
                             showCheck = false,
@@ -813,6 +854,7 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                             sortOvr = p.ratOvr,
                             sortCost = cost,
                             suggestionKey = null,
+                            sectionPosition = p.position,
                         )
                     )
                 }
@@ -889,10 +931,15 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
                     (q.isEmpty() || (r.playerName?.lowercase(Locale.US)?.contains(q) == true)) &&
                     (!state.affordableOnly || r.sortCost <= u.recruitMoney)
             }.sortedWith { a, b ->
-                when (state.sortMode) {
-                    1 -> a.sortCost - b.sortCost
-                    2 -> (a.playerName ?: "").compareTo(b.playerName ?: "", ignoreCase = true)
-                    else -> b.sortOvr - a.sortOvr
+                val posCmp = posOrder(a.position).compareTo(posOrder(b.position))
+                if (state.selectedTab == HubTab.RETAIN && posCmp != 0) {
+                    posCmp
+                } else {
+                    when (state.sortMode) {
+                        1 -> a.sortCost - b.sortCost
+                        2 -> (a.playerName ?: "").compareTo(b.playerName ?: "", ignoreCase = true)
+                        else -> b.sortOvr - a.sortOvr
+                    }
                 }
             }
         }
@@ -989,7 +1036,6 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
             s.status = old.status
             s.years = old.years
             s.nil = old.nil
-            s.stayBonus = old.stayBonus
         }
         return fresh
     }
@@ -1011,12 +1057,29 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         val resources = u.offerResources(st, nil)
         val slots = resources.scholarshipSlots
         val slotLabel = if (slots == 1) "1 scholarship" else "$slots scholarships"
+        val miles = GeoCatalog.get().miles(p, u)
+        val dist = if (miles < 9000) "${miles.toInt()} mi" else "—"
+        val depth = ProgramOffers.projectedDepthRank(p, u)
         return if (st == RosterStatus.SCHOLARSHIP_PLUS_NIL && resources.annualNilCash > 0) {
             "${st.chipLabel()} · NIL ${NilMoney.format(resources.annualNilCash)}/yr · ${y}yr · " +
-                "year-1 purse ${NilMoney.format(resources.annualNilCash)} · $slotLabel"
+                "depth #$depth · $dist · $slotLabel"
         } else {
-            "${st.chipLabel()} · $0 cash · $slotLabel · ${y}yr"
+            "${st.chipLabel()} · $0 cash · depth #$depth · $dist · $slotLabel · ${y}yr"
         }
+    }
+
+    private fun hometownLine(p: Player, u: Team): String {
+        val city = p.homeCity
+        val state = p.homeState
+        val home = if (!city.isNullOrBlank() && !state.isNullOrBlank()) {
+            "$city, $state"
+        } else if (!city.isNullOrBlank()) {
+            city
+        } else {
+            "Hometown ?"
+        }
+        val miles = GeoCatalog.get().miles(p, u)
+        return if (miles < 9000) "$home (${miles.toInt()} mi)" else home
     }
 
     private fun buyoutButtonLabel(cost: Int): String {
@@ -1046,10 +1109,8 @@ class TalentHubViewModel(application: Application) : AndroidViewModel(applicatio
         }
     }
 
-    private data class Tuple4(
-        val a: String,
-        val b: String,
-        val c: String,
-        val d: Int,
-    )
+    private fun posOrder(position: String): Int {
+        val idx = NilMoney.POSITIONS.indexOf(position)
+        return if (idx >= 0) idx else 99
+    }
 }

@@ -22,6 +22,7 @@ public final class PlayerFactory {
         p.isRedshirt = false;
         p.gamesPlayed = 0;
         p.isInjured = false;
+        GeoCatalog.get().applyHometown(p, r);
         p.recomputeCost(r);
         return p;
     }
@@ -33,6 +34,9 @@ public final class PlayerFactory {
         p.isRedshirt = redshirt;
         p.gamesPlayed = 0;
         p.isInjured = false;
+        if (p.homeGeoid == null || p.homeGeoid.isEmpty()) {
+            GeoCatalog.get().applyHometown(p, new Random(name != null ? name.hashCode() : 0));
+        }
         p.recomputeCost(new Random(name != null ? name.hashCode() : 0));
         return p;
     }

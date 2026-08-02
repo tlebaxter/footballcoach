@@ -89,6 +89,12 @@ public class Player {
     public String transferReasonText;
     public Team priorTeam;
     public int portalRiskTier; // 0 safe, 1-3 at risk
+    /** Census GEOIDFQ for hometown place (e.g. 1600000US0100988). */
+    public String homeGeoid;
+    public String homeCity;
+    public String homeState;
+    /** Seasons spent on the current program (loyalty). */
+    public int yearsAtProgram;
 
     protected final String[] letterGrades = {"F", "F+", "D", "D+", "C", "C+", "B", "B+", "A", "A+"};
     public void recordSeasonSnapshot() {
@@ -364,6 +370,7 @@ public class Player {
         }
         Random rng = new Random((long) name.hashCode() * 31L + year * 17L + seasonSnaps);
         DevelopmentCurve.advance(this, bonus, rng);
+        yearsAtProgram++;
         bankPositionCareerStats();
     }
 

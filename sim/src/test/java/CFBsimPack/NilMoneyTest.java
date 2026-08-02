@@ -32,8 +32,8 @@ public class NilMoneyTest {
 
     @Test
     public void positionPremiumsMatchKnownRoles() {
-        assertEquals(1.50, NilMoney.positionPremium("QB"), 0.001);
-        assertEquals(0.50, NilMoney.positionPremium("K"), 0.001);
+        assertEquals(2.20, NilMoney.positionPremium("QB"), 0.001);
+        assertEquals(0.35, NilMoney.positionPremium("K"), 0.001);
         assertEquals(1.0, NilMoney.positionPremium(null), 0.001);
         assertEquals(1.0, NilMoney.positionPremium("XX"), 0.001);
     }

@@ -57,14 +57,37 @@ public class LeagueOffseason {
                 p.portalRiskTier = 0;
                 continue;
             }
+            // Fair multi-year deals stay put
+            if (p.contractYearsRemaining > 0 && PlayerMarket.isFairlyPaid(p, t)) {
+                p.transferReason = TransferReason.NONE;
+                p.transferReasonText = "Under contract at " + t.name;
+                p.portalRiskTier = 0;
+                continue;
+            }
+            // Underpaid mid-deal: soft risk / renegotiate pressure
+            if (p.contractYearsRemaining > 0 && PlayerMarket.isUnderpaid(p, t)) {
+                p.transferReason = TransferReason.BETTER_FIT;
+                p.transferReasonText = "Wants a raise at " + t.name;
+                p.portalRiskTier = 1;
+                continue;
+            }
             TransferReason reason = evaluateReason(p, t);
             p.transferReason = reason;
-            if (reason == TransferReason.NONE) {
+            if (reason == TransferReason.NONE && !p.needsDealRenewal()
+                    && !PlayerMarket.wantsNilUpgrade(p, t)) {
                 p.transferReasonText = "Happy at " + t.name;
                 p.portalRiskTier = 0;
             } else {
+                if (reason == TransferReason.NONE) {
+                    reason = PlayerMarket.wantsNilUpgrade(p, t)
+                            ? TransferReason.BETTER_FIT : TransferReason.BETTER_FIT;
+                    p.transferReason = reason;
+                }
                 p.transferReasonText = reason.label + " at " + t.name;
-                p.portalRiskTier = riskTierFor(p, t, reason);
+                p.portalRiskTier = Math.max(1, riskTierFor(p, t, reason));
+                if (p.needsDealRenewal()) {
+                    p.portalRiskTier = Math.max(p.portalRiskTier, 1);
+                }
             }
         }
     }
@@ -187,13 +210,18 @@ public class LeagueOffseason {
         });
     }
 
-    /** Pending retention suggestion for user approve UI. */
+    /**
+     * Pending retention suggestion. {@code bucket} is a UI label only:
+     * DRAFT, UNDERPAID, EXPIRED, BREAKOUT, RISK — not separate products.
+     */
     public static class RetainSuggestion {
         public final Player player;
-        public final String bucket; // DRAFT_STAY, RISK, RENEWAL
+        public final String bucket;
         public RosterStatus status;
         public int nil;
         public int years;
+        /** @deprecated draft-stay product removed; always 0 */
+        @Deprecated
         public int stayBonus;
         public boolean selected;
 
@@ -203,7 +231,6 @@ public class LeagueOffseason {
         }
 
         public int yearOneNilPurse(Team t) {
-            if ("DRAFT_STAY".equals(bucket)) return stayBonus;
             return t.nilPurseCost(status, nil);
         }
     }
@@ -212,60 +239,62 @@ public class LeagueOffseason {
         ArrayList<RetainSuggestion> out = new ArrayList<>();
         int purse = user.recruitMoney;
         Set<Player> picked = new HashSet<>();
+        scorePortalRiskForTeam(user);
 
-        ArrayList<Player> draftPay = userDraftPayable(user);
-        for (Player p : draftPay) {
-            RetainSuggestion s = new RetainSuggestion(p, "DRAFT_STAY");
-            s.stayBonus = ProgramOffers.draftStayBonus(p, user);
-            s.years = 1;
-            s.status = p.rosterStatus != null ? p.rosterStatus : RosterStatus.SCHOLARSHIP;
-            s.nil = p.nilDealAmount;
-            boolean need = user.depthRank(p) <= 2 && p.ratOvr >= 78;
-            s.selected = need && s.stayBonus <= purse;
+        // Draft-eligible retainable via normal NIL
+        for (Player p : userDraftPayable(user)) {
+            RetainSuggestion s = buildNeedsDeal(user, p, "DRAFT");
+            boolean want = user.depthRank(p) <= 2 && PlayerMarket.marketTalent(p) >= 78;
+            s.selected = want && user.canAffordContract(s.status, s.nil, s.years)
+                    && s.yearOneNilPurse(user) <= purse;
             if (s.selected) {
-                purse -= s.stayBonus;
+                purse -= s.yearOneNilPurse(user);
                 picked.add(p);
             }
             out.add(s);
         }
 
-        ArrayList<Player> risk = userAtRiskPlayers(user);
-        Collections.sort(risk, new Comparator<Player>() {
+        ArrayList<Player> needs = new ArrayList<>();
+        for (Player p : user.getAllPlayers()) {
+            if (picked.contains(p)) continue;
+            if (user.playersLeaving.contains(p)) continue;
+            if (p.retainedThisOffseason) continue;
+            if (p.year >= 5) continue;
+            boolean underpaid = PlayerMarket.isUnderpaid(p, user);
+            boolean expired = p.needsDealRenewal();
+            boolean breakout = PlayerMarket.wantsNilUpgrade(p, user);
+            boolean risk = p.portalRiskTier >= 1;
+            if (underpaid || expired || breakout || risk) {
+                needs.add(p);
+            }
+        }
+        Collections.sort(needs, new Comparator<Player>() {
             @Override
             public int compare(Player a, Player b) {
-                return (b.ratOvr * b.portalRiskTier) - (a.ratOvr * a.portalRiskTier);
+                int ta = PlayerMarket.marketTalent(a) * Math.max(1, a.portalRiskTier);
+                int tb = PlayerMarket.marketTalent(b) * Math.max(1, b.portalRiskTier);
+                return tb - ta;
             }
         });
-        for (Player p : risk) {
-            if (picked.contains(p)) continue;
-            RetainSuggestion s = new RetainSuggestion(p, "RISK");
-            s.status = ProgramOffers.minimumAcceptable(p, p.portalRiskTier);
-            s.years = ProgramOffers.suggestedContractYears(p);
-            s.nil = s.status == RosterStatus.SCHOLARSHIP_PLUS_NIL
-                    ? ProgramOffers.annualNilFor(p, user, s.years) : 0;
-            int cost = user.nilPurseCost(s.status, s.nil);
-            boolean want = p.portalRiskTier >= 2 || (p.portalRiskTier == 1 && p.ratOvr >= 82);
-            s.selected = want && user.canAffordContract(s.status, s.nil, s.years) && cost <= purse;
-            if (s.selected) {
-                purse -= cost;
-                picked.add(p);
+        for (Player p : needs) {
+            String label;
+            if (PlayerMarket.isUnderpaid(p, user) && p.contractYearsRemaining > 0) {
+                label = "UNDERPAID";
+            } else if (p.needsDealRenewal()) {
+                label = "EXPIRED";
+            } else if (PlayerMarket.wantsNilUpgrade(p, user)) {
+                label = "BREAKOUT";
+            } else {
+                label = "RISK";
             }
-            out.add(s);
-        }
-
-        for (Player p : userRenewals(user)) {
-            if (picked.contains(p)) continue;
-            RetainSuggestion s = new RetainSuggestion(p, "RENEWAL");
-            s.status = p.rosterStatus != null ? p.rosterStatus : RosterStatus.SCHOLARSHIP;
-            if (s.status == RosterStatus.PWO) s.status = RosterStatus.SCHOLARSHIP;
-            s.years = ProgramOffers.suggestedContractYears(p);
-            s.nil = s.status == RosterStatus.SCHOLARSHIP_PLUS_NIL
-                    ? ProgramOffers.annualNilFor(p, user, s.years) : 0;
-            int cost = user.nilPurseCost(s.status, s.nil);
-            boolean want = p.ratOvr >= 70 || user.depthRank(p) <= 2;
-            s.selected = want && user.canAffordContract(s.status, s.nil, s.years) && cost <= purse;
+            RetainSuggestion s = buildNeedsDeal(user, p, label);
+            boolean want = p.portalRiskTier >= 2
+                    || user.depthRank(p) <= 2
+                    || PlayerMarket.marketTalent(p) >= 78;
+            s.selected = want && user.canAffordContract(s.status, s.nil, s.years)
+                    && s.yearOneNilPurse(user) <= purse;
             if (s.selected) {
-                purse -= cost;
+                purse -= s.yearOneNilPurse(user);
                 picked.add(p);
             }
             out.add(s);
@@ -273,20 +302,65 @@ public class LeagueOffseason {
         return out;
     }
 
+    private RetainSuggestion buildNeedsDeal(Team user, Player p, String label) {
+        RetainSuggestion s = new RetainSuggestion(p, label);
+        s.status = ProgramOffers.suggestedStatus(p, user);
+        if ("EXPIRED".equals(label) && p.rosterStatus != null
+                && offerAtLeast(p.rosterStatus, s.status)) {
+            s.status = p.rosterStatus == RosterStatus.PWO
+                    ? RosterStatus.SCHOLARSHIP : p.rosterStatus;
+            if (PlayerMarket.qualifiesForNil(p, user)) {
+                s.status = RosterStatus.SCHOLARSHIP_PLUS_NIL;
+            }
+        }
+        s.years = ProgramOffers.suggestedContractYears(p);
+        s.nil = s.status == RosterStatus.SCHOLARSHIP_PLUS_NIL
+                ? ProgramOffers.annualNilFor(p, user, s.years) : 0;
+        s.stayBonus = 0;
+        return s;
+    }
+
+    private static boolean offerAtLeast(RosterStatus have, RosterStatus need) {
+        int h = have == RosterStatus.SCHOLARSHIP_PLUS_NIL ? 2
+                : have == RosterStatus.SCHOLARSHIP ? 1 : 0;
+        int n = need == RosterStatus.SCHOLARSHIP_PLUS_NIL ? 2
+                : need == RosterStatus.SCHOLARSHIP ? 1 : 0;
+        return h >= n;
+    }
+
     public boolean applyUserRetain(Team user, RetainSuggestion s) {
         if (s == null || s.player == null) return false;
         Player p = s.player;
-        if ("DRAFT_STAY".equals(s.bucket)) {
-            return user.payDraftStay(p, s.stayBonus);
+        int risk = Math.max(1, p.portalRiskTier);
+        if ("UNDERPAID".equals(s.bucket) || "EXPIRED".equals(s.bucket)) {
+            risk = Math.max(risk, 1);
         }
-        if (!ProgramOffers.acceptsOffer(
-                p, user, s.status, s.nil, Math.max(1, p.portalRiskTier))) {
-            if (!"RENEWAL".equals(s.bucket)) return false;
+        if (!ProgramOffers.acceptsOffer(p, user, s.status, s.nil, risk)) {
+            if (!"EXPIRED".equals(s.bucket) && !"UNDERPAID".equals(s.bucket)) return false;
+        }
+        // Renegotiate mid-deal: only pay the raise delta when years remain
+        if (p.contractYearsRemaining > 0
+                && p.rosterStatus == RosterStatus.SCHOLARSHIP_PLUS_NIL
+                && s.status == RosterStatus.SCHOLARSHIP_PLUS_NIL
+                && s.nil > p.nilDealAmount) {
+            int delta = s.nil - p.nilDealAmount;
+            if (delta > user.recruitMoney) return false;
+            if (!user.canAffordContract(delta, s.nil, s.years)) return false;
+            user.recruitMoney -= delta;
+            p.applyOffer(s.status, s.nil, s.years);
+            p.portalRiskTier = 0;
+            p.retainedThisOffseason = true;
+            return true;
         }
         if (!user.spendRetentionOffer(s.status, s.nil, s.years, p)) return false;
         p.applyOffer(s.status, s.nil, s.years);
         p.portalRiskTier = 0;
         p.retainedThisOffseason = true;
+        if (user.playersLeaving.contains(p)) {
+            user.playersLeaving.remove(p);
+            p.draftDeclared = false;
+            p.projectedDraftRound = 0;
+        }
         return true;
     }
 
@@ -307,20 +381,34 @@ public class LeagueOffseason {
             scorePortalRiskForTeam(t);
             PositionBudgetBalancer bal = new PositionBudgetBalancer(t, t.recruitMoney);
 
-            // Draft stay-pay for R4–UDFA when needed
+            // Draft-eligible: NIL retain or clear
             for (Player p : new ArrayList<>(t.playersLeaving)) {
                 if (p.year >= 5 || ProgramOffers.isLockedDraftRound(p.projectedDraftRound)) {
                     t.clearCommitmentsForDraft(p);
                     continue;
                 }
-                if (!ProgramOffers.canPayToStay(p)) {
+                if (!ProgramOffers.canRetainDraftEligible(p)) {
                     t.clearCommitmentsForDraft(p);
                     continue;
                 }
-                int bonus = ProgramOffers.draftStayBonus(p, t);
-                boolean critical = t.depthRank(p) <= 2;
-                if (critical && bal.canSpend(p.position, bonus, true) && t.payDraftStay(p, bonus)) {
-                    bal.recordSpend(p.position, bonus);
+                boolean critical = t.depthRank(p) <= 2 && bal.needWeight(p.position) >= 1.0;
+                if (!critical) {
+                    t.clearCommitmentsForDraft(p);
+                    continue;
+                }
+                RosterStatus st = ProgramOffers.suggestedStatus(p, t);
+                int years = 1;
+                int nil = st == RosterStatus.SCHOLARSHIP_PLUS_NIL
+                        ? ProgramOffers.annualNilFor(p, t, years) : 0;
+                int cost = t.nilPurseCost(st, nil);
+                if (bal.canSpend(p.position, cost, true)
+                        && t.spendRetentionOffer(st, nil, years, p)) {
+                    p.applyOffer(st, nil, years);
+                    p.portalRiskTier = 0;
+                    t.playersLeaving.remove(p);
+                    p.draftDeclared = false;
+                    p.projectedDraftRound = 0;
+                    bal.recordSpend(p.position, cost);
                 } else {
                     t.clearCommitmentsForDraft(p);
                 }
@@ -329,27 +417,37 @@ public class LeagueOffseason {
             ArrayList<Player> targets = new ArrayList<>();
             for (Player p : t.getAllPlayers()) {
                 if (t.playersLeaving.contains(p)) continue;
-                if (p.portalRiskTier >= 2 || p.needsDealRenewal()) targets.add(p);
+                if (p.retainedThisOffseason) continue;
+                if (PlayerMarket.isFairlyPaid(p, t) && p.contractYearsRemaining > 0) continue;
+                if (p.portalRiskTier >= 1 || p.needsDealRenewal()
+                        || PlayerMarket.isUnderpaid(p, t)
+                        || PlayerMarket.wantsNilUpgrade(p, t)) {
+                    targets.add(p);
+                }
             }
             Collections.sort(targets, new Comparator<Player>() {
                 @Override
                 public int compare(Player a, Player b) {
-                    int sa = a.ratOvr * Math.max(1, a.portalRiskTier);
-                    int sb = b.ratOvr * Math.max(1, b.portalRiskTier);
+                    int sa = PlayerMarket.marketTalent(a) * Math.max(1, a.portalRiskTier);
+                    int sb = PlayerMarket.marketTalent(b) * Math.max(1, b.portalRiskTier);
                     return sb - sa;
                 }
             });
 
             for (Player p : targets) {
-                RosterStatus min = p.needsDealRenewal() && p.portalRiskTier == 0
-                        ? (p.rosterStatus != null ? p.rosterStatus : RosterStatus.SCHOLARSHIP)
-                        : ProgramOffers.minimumAcceptable(p, Math.max(1, p.portalRiskTier));
+                // AI skips overstocked rooms unless starter-critical
+                int have = t.getPositionList(p.position) != null
+                        ? t.getPositionList(p.position).size() : 0;
+                int sug = NilMoney.sugFor(p.position);
+                boolean critical = t.depthRank(p) <= 1;
+                if (!critical && have > sug + 1) continue;
+
+                RosterStatus min = ProgramOffers.suggestedStatus(p, t);
                 if (min == RosterStatus.PWO && p.needsDealRenewal()) min = RosterStatus.SCHOLARSHIP;
                 int years = ProgramOffers.suggestedContractYears(p);
                 int nil = min == RosterStatus.SCHOLARSHIP_PLUS_NIL
                         ? ProgramOffers.annualNilFor(p, t, years) : 0;
                 int cost = t.nilPurseCost(min, nil);
-                boolean critical = t.depthRank(p) <= 1;
                 if (!bal.canSpend(p.position, cost, critical)) {
                     years = 1;
                     nil = min == RosterStatus.SCHOLARSHIP_PLUS_NIL
@@ -364,6 +462,7 @@ public class LeagueOffseason {
             }
             bal.rebalanceToNeeds();
             aiBuyoutPressure(t, bal);
+            t.fillRosterToCap();
         }
     }
 
@@ -443,9 +542,12 @@ public class LeagueOffseason {
         Collections.sort(transferPortal, new Comparator<Player>() {
             @Override
             public int compare(Player a, Player b) {
-                return b.ratOvr - a.ratOvr;
+                int pa = PlayerMarket.productionScore(a) * 10 + PlayerMarket.marketTalent(a);
+                int pb = PlayerMarket.productionScore(b) * 10 + PlayerMarket.marketTalent(b);
+                return pb - pa;
             }
         });
+        league.refreshPositionMarketPremiums(transferPortal, hsClass);
     }
 
     public void removeFromPortal(Player p) {
@@ -464,14 +566,29 @@ public class LeagueOffseason {
             return false;
         }
         int y = Math.min(years, ProgramOffers.maxContractYears(p));
-        int cost = user.nilPurseCost(status, nilAmount);
-        if (!user.canAffordContract(status, nilAmount, y)) return false;
+        int nilCost = user.nilPurseCost(status, nilAmount);
+        int buyout = 0;
+        Team prior = p.priorTeam;
+        if (prior != null && p.contractYearsRemaining > 0
+                && p.rosterStatus == RosterStatus.SCHOLARSHIP_PLUS_NIL) {
+            buyout = NilMoney.buyoutCost(p, prior.programProfile);
+        }
+        int total = nilCost + buyout;
+        if (total > user.recruitMoney) return false;
+        if (!user.canAffordContract(nilCost, status == RosterStatus.SCHOLARSHIP_PLUS_NIL
+                ? Math.max(0, nilAmount) : 0, y)) return false;
         if (!ProgramOffers.acceptsOffer(
                 p, user, status, nilAmount, Math.max(1, p.portalRiskTier))) return false;
-        user.recruitMoney -= cost;
+        user.recruitMoney -= total;
+        if (buyout > 0 && prior != null) {
+            prior.recruitMoney += buyout;
+        }
+        // Clear prior guaranteed years — poacher paid the buyout
+        p.contractYearsRemaining = 0;
         p.applyOffer(status, nilAmount, y);
         p.team = user;
         p.portalRiskTier = 0;
+        p.yearsAtProgram = 0;
         user.addPlayerToRoster(p);
         transferPortal.remove(p);
         return true;
@@ -516,11 +633,18 @@ public class LeagueOffseason {
                 if (!t.canAddToRoster()) continue;
                 PositionBudgetBalancer bal = bals.get(t);
                 int depth = ProgramOffers.projectedDepthRank(p, t);
+                int have = t.getPositionList(p.position) != null
+                        ? t.getPositionList(p.position).size() : 0;
+                int sug = NilMoney.sugFor(p.position);
+                // AI: skip overstocked rooms unless they'd start
+                if (depth > 2 && have >= sug) continue;
+                double miles = GeoCatalog.get().miles(p, t);
                 double score = t.programProfile.brandAttract * 0.35
                         + t.programProfile.pipeline * 0.15
                         - depth * 8 + fitBonus(p, t)
-                        + bal.needWeight(p.position) * 12;
-                RosterStatus offer = ProgramOffers.minimumAcceptable(p, Math.max(1, p.portalRiskTier));
+                        + bal.needWeight(p.position) * 12
+                        - miles * 0.02;
+                RosterStatus offer = ProgramOffers.suggestedStatus(p, t);
                 if (offer.usesScholarship() && !t.canAwardScholarship()) {
                     if (offer == RosterStatus.SCHOLARSHIP_PLUS_NIL) continue;
                     offer = RosterStatus.PWO;
@@ -529,9 +653,15 @@ public class LeagueOffseason {
                 int years = Math.min(ProgramOffers.suggestedContractYears(p), ProgramOffers.maxContractYears(p));
                 int nil = offer == RosterStatus.SCHOLARSHIP_PLUS_NIL
                         ? ProgramOffers.annualNilFor(p, t, years) : 0;
-                int cost = t.nilPurseCost(offer, nil);
+                int buyout = 0;
+                if (p.priorTeam != null && p.contractYearsRemaining > 0
+                        && p.rosterStatus == RosterStatus.SCHOLARSHIP_PLUS_NIL) {
+                    buyout = NilMoney.buyoutCost(p, p.priorTeam.programProfile);
+                }
+                int cost = t.nilPurseCost(offer, nil) + buyout;
                 boolean critical = depth <= 1 && bal.needWeight(p.position) >= 1.5;
-                if (!t.canAffordContract(offer, nil, years) || !bal.canSpend(p.position, cost, critical)) {
+                if (!t.canAffordContract(offer, nil, years) || !bal.canSpend(p.position, cost, critical)
+                        || cost > t.recruitMoney) {
                     years = 1;
                     nil = offer == RosterStatus.SCHOLARSHIP_PLUS_NIL
                             ? ProgramOffers.annualNilFor(p, t, 1) : 0;
@@ -561,10 +691,21 @@ public class LeagueOffseason {
                 }
             }
             if (best != null) {
-                int cost = best.nilPurseCost(bestOffer, bestNil);
+                int buyout = 0;
+                if (p.priorTeam != null && p.contractYearsRemaining > 0
+                        && p.rosterStatus == RosterStatus.SCHOLARSHIP_PLUS_NIL) {
+                    buyout = NilMoney.buyoutCost(p, p.priorTeam.programProfile);
+                }
+                int nilCost = best.nilPurseCost(bestOffer, bestNil);
+                int cost = nilCost + buyout;
                 best.recruitMoney -= cost;
+                if (buyout > 0 && p.priorTeam != null) {
+                    p.priorTeam.recruitMoney += buyout;
+                }
+                p.contractYearsRemaining = 0;
                 p.applyOffer(bestOffer, bestNil, bestYears);
                 p.portalRiskTier = 0;
+                p.yearsAtProgram = 0;
                 best.addPlayerToRoster(p);
                 transferPortal.remove(p);
                 bals.get(best).recordSpend(p.position, cost);
@@ -578,6 +719,9 @@ public class LeagueOffseason {
                 p.priorTeam.addPlayerToRoster(p);
             }
             transferPortal.remove(p);
+        }
+        for (Team t : league.teamList) {
+            if (!t.userControlled) t.fillRosterToCap();
         }
     }
 

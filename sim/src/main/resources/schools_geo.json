@@ -1,0 +1,1264 @@
+{
+  "schools": [
+    {
+      "abbr": "AFA",
+      "name": "Air Force",
+      "lat": 38.9969701,
+      "lon": -104.8436165,
+      "city": "Colorado Springs",
+      "state": "CO",
+      "venue": "Falcon Stadium"
+    },
+    {
+      "abbr": "AKR",
+      "name": "Akron",
+      "lat": 41.0725534,
+      "lon": -81.5083408,
+      "city": "Akron",
+      "state": "OH",
+      "venue": "InfoCision Stadium"
+    },
+    {
+      "abbr": "ALA",
+      "name": "Alabama",
+      "lat": 33.2082752,
+      "lon": -87.5503836,
+      "city": "Tuscaloosa",
+      "state": "AL",
+      "venue": "Bryant-Denny Stadium"
+    },
+    {
+      "abbr": "APP",
+      "name": "Appalachian State",
+      "lat": 36.2114267,
+      "lon": -81.6854278,
+      "city": "Boone",
+      "state": "NC",
+      "venue": "Kidd Brewer Stadium"
+    },
+    {
+      "abbr": "ARI",
+      "name": "Arizona",
+      "lat": 32.2288054,
+      "lon": -110.9488677,
+      "city": "Tucson",
+      "state": "AZ",
+      "venue": "Arizona Stadium"
+    },
+    {
+      "abbr": "ARK",
+      "name": "Arkansas",
+      "lat": 36.0680662,
+      "lon": -94.1789534,
+      "city": "Fayetteville",
+      "state": "AR",
+      "venue": "Razorback Stadium"
+    },
+    {
+      "abbr": "ARM",
+      "name": "Army",
+      "lat": 41.3874924,
+      "lon": -73.9640891,
+      "city": "West Point",
+      "state": "NY",
+      "venue": "Michie Stadium"
+    },
+    {
+      "abbr": "ARS",
+      "name": "Arkansas State",
+      "lat": 35.8488977,
+      "lon": -90.6677436,
+      "city": "Jonesboro",
+      "state": "AR",
+      "venue": "Centennial Bank Stadium"
+    },
+    {
+      "abbr": "ASU",
+      "name": "Arizona State",
+      "lat": 33.4264471,
+      "lon": -111.9325005,
+      "city": "Tempe",
+      "state": "AZ",
+      "venue": "Mountain America Stadium"
+    },
+    {
+      "abbr": "AUB",
+      "name": "Auburn",
+      "lat": 32.6025532,
+      "lon": -85.4897479,
+      "city": "Auburn",
+      "state": "AL",
+      "venue": "Jordan-Hare Stadium"
+    },
+    {
+      "abbr": "BAY",
+      "name": "Baylor",
+      "lat": 31.5582015,
+      "lon": -97.1156702,
+      "city": "Waco",
+      "state": "TX",
+      "venue": "McLane Stadium"
+    },
+    {
+      "abbr": "BCO",
+      "name": "Boston College",
+      "lat": 42.335104,
+      "lon": -71.1664413,
+      "city": "Chestnut Hill",
+      "state": "MA",
+      "venue": "Alumni Stadium (Chestnut Hill, MA)"
+    },
+    {
+      "abbr": "BEN",
+      "name": "Bentley",
+      "lat": 42.3875,
+      "lon": -71.22,
+      "city": "Waltham",
+      "state": "MA",
+      "venue": "Bentley Athletic Field"
+    },
+    {
+      "abbr": "BGS",
+      "name": "Bowling Green",
+      "lat": 41.3780114,
+      "lon": -83.6225,
+      "city": "Bowling Green",
+      "state": "OH",
+      "venue": "Doyt L. Perry Stadium"
+    },
+    {
+      "abbr": "BOI",
+      "name": "Boise State",
+      "lat": 43.6028839,
+      "lon": -116.1958882,
+      "city": "Boise",
+      "state": "ID",
+      "venue": "Albertsons Stadium"
+    },
+    {
+      "abbr": "BSU",
+      "name": "Ball State",
+      "lat": 40.2159422,
+      "lon": -85.4161148,
+      "city": "Muncie",
+      "state": "IN",
+      "venue": "Scheumann Stadium"
+    },
+    {
+      "abbr": "BUF",
+      "name": "Buffalo",
+      "lat": 42.9991334,
+      "lon": -78.7775113,
+      "city": "Amherst",
+      "state": "NY",
+      "venue": "UB Stadium"
+    },
+    {
+      "abbr": "BYU",
+      "name": "BYU",
+      "lat": 40.2575347,
+      "lon": -111.6545247,
+      "city": "Provo",
+      "state": "UT",
+      "venue": "LaVell Edwards Stadium"
+    },
+    {
+      "abbr": "CAL",
+      "name": "California",
+      "lat": 37.8710434,
+      "lon": -122.2507729,
+      "city": "Berkeley",
+      "state": "CA",
+      "venue": "California Memorial Stadium"
+    },
+    {
+      "abbr": "CCU",
+      "name": "Coastal Carolina",
+      "lat": 33.7928506,
+      "lon": -79.0166946,
+      "city": "Conway",
+      "state": "SC",
+      "venue": "Brooks Stadium (SC)"
+    },
+    {
+      "abbr": "CIN",
+      "name": "Cincinnati",
+      "lat": 39.1312495,
+      "lon": -84.5161913,
+      "city": "Cincinnati",
+      "state": "OH",
+      "venue": "Nippert Stadium"
+    },
+    {
+      "abbr": "CLE",
+      "name": "Clemson",
+      "lat": 34.6787737,
+      "lon": -82.8432428,
+      "city": "Clemson",
+      "state": "SC",
+      "venue": "Memorial Stadium (Clemson, SC)"
+    },
+    {
+      "abbr": "CLT",
+      "name": "Charlotte",
+      "lat": 35.3105033,
+      "lon": -80.7401194,
+      "city": "Charlotte",
+      "state": "NC",
+      "venue": "Jerry Richardson Stadium"
+    },
+    {
+      "abbr": "CMU",
+      "name": "Central Michigan",
+      "lat": 43.5777313,
+      "lon": -84.7709904,
+      "city": "Mount Pleasant",
+      "state": "MI",
+      "venue": "Kelly/Shorts Stadium"
+    },
+    {
+      "abbr": "COL",
+      "name": "Colorado",
+      "lat": 40.0094746,
+      "lon": -105.266905,
+      "city": "Boulder",
+      "state": "CO",
+      "venue": "Folsom Field"
+    },
+    {
+      "abbr": "CSU",
+      "name": "Colorado State",
+      "lat": 40.570015,
+      "lon": -105.088435,
+      "city": "Fort Collins",
+      "state": "CO",
+      "venue": "Canvas Stadium"
+    },
+    {
+      "abbr": "DEL",
+      "name": "Delaware",
+      "lat": 39.6617428,
+      "lon": -75.7488224,
+      "city": "Newark",
+      "state": "DE",
+      "venue": "Delaware Stadium"
+    },
+    {
+      "abbr": "DUK",
+      "name": "Duke",
+      "lat": 35.9953688,
+      "lon": -78.9417564,
+      "city": "Durham",
+      "state": "NC",
+      "venue": "Wallace Wade Stadium"
+    },
+    {
+      "abbr": "ECU",
+      "name": "East Carolina",
+      "lat": 35.5968486,
+      "lon": -77.364564,
+      "city": "Greenville",
+      "state": "NC",
+      "venue": "Dowdy-Ficklen Stadium"
+    },
+    {
+      "abbr": "EMU",
+      "name": "Eastern Michigan",
+      "lat": 42.256126,
+      "lon": -83.647285,
+      "city": "Ypsilanti",
+      "state": "MI",
+      "venue": "Rynearson Stadium"
+    },
+    {
+      "abbr": "FAU",
+      "name": "Florida Atlantic",
+      "lat": 26.3763763,
+      "lon": -80.1015759,
+      "city": "Boca Raton",
+      "state": "FL",
+      "venue": "FAU Stadium"
+    },
+    {
+      "abbr": "FIU",
+      "name": "FIU",
+      "lat": 25.7525,
+      "lon": -80.37778,
+      "city": "Miami",
+      "state": "FL",
+      "venue": "Pitbull Stadium"
+    },
+    {
+      "abbr": "FLA",
+      "name": "Florida",
+      "lat": 29.6499357,
+      "lon": -82.3485788,
+      "city": "Gainesville",
+      "state": "FL",
+      "venue": "Ben Hill Griffin Stadium"
+    },
+    {
+      "abbr": "FRE",
+      "name": "Fresno State",
+      "lat": 36.8143527,
+      "lon": -119.7580092,
+      "city": "Fresno",
+      "state": "CA",
+      "venue": "Valley Children's Stadium"
+    },
+    {
+      "abbr": "FSU",
+      "name": "Florida State",
+      "lat": 30.4381692,
+      "lon": -84.3044032,
+      "city": "Tallahassee",
+      "state": "FL",
+      "venue": "Doak Campbell Stadium"
+    },
+    {
+      "abbr": "GAT",
+      "name": "Georgia Tech",
+      "lat": 33.7724449,
+      "lon": -84.3928054,
+      "city": "Atlanta",
+      "state": "GA",
+      "venue": "Bobby Dodd Stadium"
+    },
+    {
+      "abbr": "GSO",
+      "name": "Georgia Southern",
+      "lat": 32.4122471,
+      "lon": -81.7849296,
+      "city": "Statesboro",
+      "state": "GA",
+      "venue": "Allen E. Paulson Stadium"
+    },
+    {
+      "abbr": "GST",
+      "name": "Georgia State",
+      "lat": 33.735267,
+      "lon": -84.389949,
+      "city": "Atlanta",
+      "state": "GA",
+      "venue": "Center Parc Stadium"
+    },
+    {
+      "abbr": "HAW",
+      "name": "Hawaii",
+      "lat": 21.294294,
+      "lon": -157.819338,
+      "city": "Honolulu",
+      "state": "HI",
+      "venue": "Clarence T.C. Ching Athletics Complex"
+    },
+    {
+      "abbr": "HOU",
+      "name": "Houston",
+      "lat": 29.7219885,
+      "lon": -95.3491623,
+      "city": "Houston",
+      "state": "TX",
+      "venue": "TDECU Stadium"
+    },
+    {
+      "abbr": "ILL",
+      "name": "Illinois",
+      "lat": 40.0993268,
+      "lon": -88.2359569,
+      "city": "Champaign",
+      "state": "IL",
+      "venue": "Memorial Stadium (Champaign, IL)"
+    },
+    {
+      "abbr": "IND",
+      "name": "Indiana",
+      "lat": 39.1808959,
+      "lon": -86.5256217,
+      "city": "Bloomington",
+      "state": "IN",
+      "venue": "Memorial Stadium (Bloomington, IN)"
+    },
+    {
+      "abbr": "IOW",
+      "name": "Iowa",
+      "lat": 41.6586045,
+      "lon": -91.5510829,
+      "city": "Iowa City",
+      "state": "IA",
+      "venue": "Kinnick Stadium"
+    },
+    {
+      "abbr": "ISU",
+      "name": "Iowa State",
+      "lat": 42.0139977,
+      "lon": -93.6357716,
+      "city": "Ames",
+      "state": "IA",
+      "venue": "Jack Trice Stadium"
+    },
+    {
+      "abbr": "JMU",
+      "name": "James Madison",
+      "lat": 38.4352919,
+      "lon": -78.8729349,
+      "city": "Harrisonburg",
+      "state": "VA",
+      "venue": "Bridgeforth Stadium"
+    },
+    {
+      "abbr": "JST",
+      "name": "Jacksonville State",
+      "lat": 33.8201052,
+      "lon": -85.76647,
+      "city": "Jacksonville",
+      "state": "AL",
+      "venue": "AmFirst Stadium"
+    },
+    {
+      "abbr": "KAN",
+      "name": "Kansas",
+      "lat": 38.9629418,
+      "lon": -95.2463686,
+      "city": "Lawrence",
+      "state": "KS",
+      "venue": "Memorial Stadium"
+    },
+    {
+      "abbr": "KEN",
+      "name": "Kent State",
+      "lat": 41.1390935,
+      "lon": -81.31346,
+      "city": "Kent",
+      "state": "OH",
+      "venue": "Dix Stadium"
+    },
+    {
+      "abbr": "KST",
+      "name": "Kennesaw State",
+      "lat": 34.0289318,
+      "lon": -84.5676234,
+      "city": "Kennesaw",
+      "state": "GA",
+      "venue": "Fifth Third Stadium"
+    },
+    {
+      "abbr": "KSU",
+      "name": "Kansas State",
+      "lat": 39.2020096,
+      "lon": -96.5938395,
+      "city": "Manhattan",
+      "state": "KS",
+      "venue": "Bill Snyder Family Stadium"
+    },
+    {
+      "abbr": "LAT",
+      "name": "Louisiana Tech",
+      "lat": 32.5321487,
+      "lon": -92.6560019,
+      "city": "Ruston",
+      "state": "LA",
+      "venue": "Joe Aillet Stadium"
+    },
+    {
+      "abbr": "LIB",
+      "name": "Liberty",
+      "lat": 37.3544305,
+      "lon": -79.1750239,
+      "city": "Lynchburg",
+      "state": "VA",
+      "venue": "Williams Stadium (VA)"
+    },
+    {
+      "abbr": "LOU",
+      "name": "Louisville",
+      "lat": 38.2057621,
+      "lon": -85.7588141,
+      "city": "Louisville",
+      "state": "KY",
+      "venue": "L&N Federal Credit Union Stadium"
+    },
+    {
+      "abbr": "LSU",
+      "name": "LSU",
+      "lat": 30.412035,
+      "lon": -91.1838163,
+      "city": "Baton Rouge",
+      "state": "LA",
+      "venue": "Tiger Stadium (LA)"
+    },
+    {
+      "abbr": "MEM",
+      "name": "Memphis",
+      "lat": 35.1209429,
+      "lon": -89.977147,
+      "city": "Memphis",
+      "state": "TN",
+      "venue": "Simmons Bank Liberty Stadium"
+    },
+    {
+      "abbr": "MER",
+      "name": "Merrimack",
+      "lat": 42.6681,
+      "lon": -71.1231,
+      "city": "North Andover",
+      "state": "MA",
+      "venue": "Duane Stadium"
+    },
+    {
+      "abbr": "MIA",
+      "name": "Miami",
+      "lat": 25.9579665,
+      "lon": -80.2388604,
+      "city": "Miami Gardens",
+      "state": "FL",
+      "venue": "Hard Rock Stadium"
+    },
+    {
+      "abbr": "MIC",
+      "name": "Michigan",
+      "lat": 42.2658365,
+      "lon": -83.7486956,
+      "city": "Ann Arbor",
+      "state": "MI",
+      "venue": "Michigan Stadium"
+    },
+    {
+      "abbr": "MIN",
+      "name": "Minnesota",
+      "lat": 44.976525,
+      "lon": -93.2245462,
+      "city": "Minneapolis",
+      "state": "MN",
+      "venue": "Huntington Bank Stadium"
+    },
+    {
+      "abbr": "MIZ",
+      "name": "Missouri",
+      "lat": 38.9358491,
+      "lon": -92.3332009,
+      "city": "Columbia",
+      "state": "MO",
+      "venue": "Memorial Stadium"
+    },
+    {
+      "abbr": "MOH",
+      "name": "Miami (Ohio)",
+      "lat": 39.5197009,
+      "lon": -84.7330255,
+      "city": "Oxford",
+      "state": "OH",
+      "venue": "Yager Stadium"
+    },
+    {
+      "abbr": "MOS",
+      "name": "Missouri State",
+      "lat": 37.1976229,
+      "lon": -93.2798119,
+      "city": "Springfield",
+      "state": "MO",
+      "venue": "Plaster Sports Complex"
+    },
+    {
+      "abbr": "MSH",
+      "name": "Marshall",
+      "lat": 38.4247042,
+      "lon": -82.4214412,
+      "city": "Huntington",
+      "state": "WV",
+      "venue": "Joan C. Edwards Stadium"
+    },
+    {
+      "abbr": "MST",
+      "name": "Mississippi State",
+      "lat": 33.4563403,
+      "lon": -88.7933652,
+      "city": "Starkville",
+      "state": "MS",
+      "venue": "Davis Wade Stadium"
+    },
+    {
+      "abbr": "MSU",
+      "name": "Michigan State",
+      "lat": 42.7281474,
+      "lon": -84.4848526,
+      "city": "East Lansing",
+      "state": "MI",
+      "venue": "Spartan Stadium"
+    },
+    {
+      "abbr": "MTS",
+      "name": "Middle Tennessee",
+      "lat": 35.8511463,
+      "lon": -86.3681649,
+      "city": "Murfreesboro",
+      "state": "TN",
+      "venue": "Johnny \"Red\" Floyd Stadium"
+    },
+    {
+      "abbr": "NAV",
+      "name": "Navy",
+      "lat": 38.9846985,
+      "lon": -76.5076335,
+      "city": "Annapolis",
+      "state": "MD",
+      "venue": "Navy-Marine Corps Memorial Stadium"
+    },
+    {
+      "abbr": "NCS",
+      "name": "NC State",
+      "lat": 35.8008001,
+      "lon": -78.7195655,
+      "city": "Raleigh",
+      "state": "NC",
+      "venue": "Carter-Finley Stadium"
+    },
+    {
+      "abbr": "NDE",
+      "name": "Notre Dame",
+      "lat": 41.698378,
+      "lon": -86.2339425,
+      "city": "Notre Dame",
+      "state": "IN",
+      "venue": "Notre Dame Stadium"
+    },
+    {
+      "abbr": "NDS",
+      "name": "North Dakota State",
+      "lat": 46.893,
+      "lon": -96.8018,
+      "city": "Fargo",
+      "state": "ND",
+      "venue": "Fargodome"
+    },
+    {
+      "abbr": "NEB",
+      "name": "Nebraska",
+      "lat": 40.820682,
+      "lon": -96.705594,
+      "city": "Lincoln",
+      "state": "NE",
+      "venue": "Memorial Stadium (Lincoln, NE)"
+    },
+    {
+      "abbr": "NEV",
+      "name": "Nevada",
+      "lat": 39.5469459,
+      "lon": -119.8175435,
+      "city": "Reno",
+      "state": "NV",
+      "venue": "Mackay Stadium"
+    },
+    {
+      "abbr": "NIU",
+      "name": "Northern Illinois",
+      "lat": 41.9339586,
+      "lon": -88.7778357,
+      "city": "DeKalb",
+      "state": "IL",
+      "venue": "Huskie Stadium"
+    },
+    {
+      "abbr": "NMS",
+      "name": "New Mexico State",
+      "lat": 32.2796202,
+      "lon": -106.7411148,
+      "city": "Las Cruces",
+      "state": "NM",
+      "venue": "Aggie Memorial Stadium"
+    },
+    {
+      "abbr": "NWU",
+      "name": "Northwestern",
+      "lat": 42.058246,
+      "lon": -87.670876,
+      "city": "Evanston",
+      "state": "IL",
+      "venue": "Lanny and Sharon Martin Stadium"
+    },
+    {
+      "abbr": "ODU",
+      "name": "Old Dominion",
+      "lat": 36.8889533,
+      "lon": -76.3049175,
+      "city": "Norfolk",
+      "state": "VA",
+      "venue": "S.B. Ballard Stadium"
+    },
+    {
+      "abbr": "OHI",
+      "name": "Ohio",
+      "lat": 39.3212794,
+      "lon": -82.1034315,
+      "city": "Athens",
+      "state": "OH",
+      "venue": "Peden Stadium"
+    },
+    {
+      "abbr": "OKL",
+      "name": "Oklahoma",
+      "lat": 35.2058537,
+      "lon": -97.4423145,
+      "city": "Norman",
+      "state": "OK",
+      "venue": "Memorial Stadium (Norman, OK)"
+    },
+    {
+      "abbr": "OKS",
+      "name": "Oklahoma State",
+      "lat": 36.125673,
+      "lon": -97.066513,
+      "city": "Stillwater",
+      "state": "OK",
+      "venue": "Boone Pickens Stadium"
+    },
+    {
+      "abbr": "OLM",
+      "name": "Ole Miss",
+      "lat": 34.3619837,
+      "lon": -89.5342076,
+      "city": "Oxford",
+      "state": "MS",
+      "venue": "Vaught-Hemingway Stadium"
+    },
+    {
+      "abbr": "ORE",
+      "name": "Oregon",
+      "lat": 44.0582712,
+      "lon": -123.0684883,
+      "city": "Eugene",
+      "state": "OR",
+      "venue": "Autzen Stadium"
+    },
+    {
+      "abbr": "ORS",
+      "name": "Oregon State",
+      "lat": 44.5594559,
+      "lon": -123.2814341,
+      "city": "Corvallis",
+      "state": "OR",
+      "venue": "Reser Stadium"
+    },
+    {
+      "abbr": "OSU",
+      "name": "Ohio State",
+      "lat": 40.0016447,
+      "lon": -83.0197266,
+      "city": "Columbus",
+      "state": "OH",
+      "venue": "Ohio Stadium"
+    },
+    {
+      "abbr": "PIT",
+      "name": "Pittsburgh",
+      "lat": 40.4467648,
+      "lon": -80.0157603,
+      "city": "Pittsburgh",
+      "state": "PA",
+      "venue": "Acrisure Stadium"
+    },
+    {
+      "abbr": "PSU",
+      "name": "Penn State",
+      "lat": 40.8121958,
+      "lon": -77.8561023,
+      "city": "University Park",
+      "state": "PA",
+      "venue": "Beaver Stadium"
+    },
+    {
+      "abbr": "PUR",
+      "name": "Purdue",
+      "lat": 40.4352253,
+      "lon": -86.9186843,
+      "city": "West Lafayette",
+      "state": "IN",
+      "venue": "Ross-Ade Stadium"
+    },
+    {
+      "abbr": "RIC",
+      "name": "Rice",
+      "lat": 29.7163297,
+      "lon": -95.4093261,
+      "city": "Houston",
+      "state": "TX",
+      "venue": "Rice Stadium"
+    },
+    {
+      "abbr": "RUT",
+      "name": "Rutgers",
+      "lat": 40.513611,
+      "lon": -74.465278,
+      "city": "Piscataway",
+      "state": "NJ",
+      "venue": "SHI Stadium"
+    },
+    {
+      "abbr": "SAC",
+      "name": "Sacramento State",
+      "lat": 38.5575,
+      "lon": -121.422,
+      "city": "Sacramento",
+      "state": "CA",
+      "venue": "Hornet Stadium"
+    },
+    {
+      "abbr": "SCA",
+      "name": "South Carolina",
+      "lat": 33.9730239,
+      "lon": -81.0191726,
+      "city": "Columbia",
+      "state": "SC",
+      "venue": "Williams-Brice Stadium"
+    },
+    {
+      "abbr": "SDS",
+      "name": "San Diego State",
+      "lat": 32.784444,
+      "lon": -117.122833,
+      "city": "San Diego",
+      "state": "CA",
+      "venue": "Snapdragon Stadium"
+    },
+    {
+      "abbr": "SHS",
+      "name": "Sam Houston",
+      "lat": 30.713926,
+      "lon": -95.5419802,
+      "city": "Huntsville",
+      "state": "TX",
+      "venue": "Elliott T. Bowers Stadium"
+    },
+    {
+      "abbr": "SJS",
+      "name": "San Jose State",
+      "lat": 37.3196675,
+      "lon": -121.8682962,
+      "city": "San Jose",
+      "state": "CA",
+      "venue": "CEFCU Stadium"
+    },
+    {
+      "abbr": "SMI",
+      "name": "Southern Miss",
+      "lat": 31.3289321,
+      "lon": -89.3318118,
+      "city": "Hattiesburg",
+      "state": "MS",
+      "venue": "M. M. Roberts Stadium"
+    },
+    {
+      "abbr": "SMU",
+      "name": "SMU",
+      "lat": 32.8377223,
+      "lon": -96.7827859,
+      "city": "University Park",
+      "state": "TX",
+      "venue": "Gerald J. Ford Stadium"
+    },
+    {
+      "abbr": "STA",
+      "name": "Stanford",
+      "lat": 37.4345556,
+      "lon": -122.1611271,
+      "city": "Stanford",
+      "state": "CA",
+      "venue": "Stanford Stadium"
+    },
+    {
+      "abbr": "SYR",
+      "name": "Syracuse",
+      "lat": 43.0362269,
+      "lon": -76.1363161,
+      "city": "Syracuse",
+      "state": "NY",
+      "venue": "JMA Wireless Dome"
+    },
+    {
+      "abbr": "TAM",
+      "name": "Texas A&M",
+      "lat": 30.6098891,
+      "lon": -96.3403828,
+      "city": "College Station",
+      "state": "TX",
+      "venue": "Kyle Field"
+    },
+    {
+      "abbr": "TCU",
+      "name": "TCU",
+      "lat": 32.7096604,
+      "lon": -97.3680835,
+      "city": "Fort Worth",
+      "state": "TX",
+      "venue": "Amon G. Carter Stadium"
+    },
+    {
+      "abbr": "TEM",
+      "name": "Temple",
+      "lat": 39.9007995,
+      "lon": -75.1675414,
+      "city": "Philadelphia",
+      "state": "PA",
+      "venue": "Lincoln Financial Field"
+    },
+    {
+      "abbr": "TEN",
+      "name": "Tennessee",
+      "lat": 35.9550131,
+      "lon": -83.9250128,
+      "city": "Knoxville",
+      "state": "TN",
+      "venue": "Neyland Stadium"
+    },
+    {
+      "abbr": "TEX",
+      "name": "Texas",
+      "lat": 30.2836813,
+      "lon": -97.7325345,
+      "city": "Austin",
+      "state": "TX",
+      "venue": "DKR-Texas Memorial Stadium"
+    },
+    {
+      "abbr": "TLS",
+      "name": "Tulsa",
+      "lat": 36.1489175,
+      "lon": -95.9437853,
+      "city": "Tulsa",
+      "state": "OK",
+      "venue": "Chapman Stadium"
+    },
+    {
+      "abbr": "TOL",
+      "name": "Toledo",
+      "lat": 41.6574777,
+      "lon": -83.6135652,
+      "city": "Toledo",
+      "state": "OH",
+      "venue": "Glass Bowl"
+    },
+    {
+      "abbr": "TRO",
+      "name": "Troy",
+      "lat": 31.7995565,
+      "lon": -85.9518328,
+      "city": "Troy",
+      "state": "AL",
+      "venue": "Veterans Memorial Stadium (AL)"
+    },
+    {
+      "abbr": "TST",
+      "name": "Texas State",
+      "lat": 29.8910008,
+      "lon": -97.9255735,
+      "city": "San Marcos",
+      "state": "TX",
+      "venue": "Bobcat Stadium (TX)"
+    },
+    {
+      "abbr": "TTU",
+      "name": "Texas Tech",
+      "lat": 33.5910518,
+      "lon": -101.8728824,
+      "city": "Lubbock",
+      "state": "TX",
+      "venue": "Jones AT&T Stadium"
+    },
+    {
+      "abbr": "TUL",
+      "name": "Tulane",
+      "lat": 29.944616,
+      "lon": -90.116692,
+      "city": "New Orleans",
+      "state": "LA",
+      "venue": "Yulman Stadium"
+    },
+    {
+      "abbr": "UAB",
+      "name": "UAB",
+      "lat": 33.5206824,
+      "lon": -86.8024326,
+      "city": "Birmingham",
+      "state": "AL",
+      "venue": "Protective Stadium"
+    },
+    {
+      "abbr": "UCF",
+      "name": "UCF",
+      "lat": 28.6079765,
+      "lon": -81.1927233,
+      "city": "Orlando",
+      "state": "FL",
+      "venue": "FBC Mortgage Stadium"
+    },
+    {
+      "abbr": "UCL",
+      "name": "UCLA",
+      "lat": 34.1613284,
+      "lon": -118.1676462,
+      "city": "Pasadena",
+      "state": "CA",
+      "venue": "Rose Bowl"
+    },
+    {
+      "abbr": "UCN",
+      "name": "UConn",
+      "lat": 41.7595675,
+      "lon": -72.6187728,
+      "city": "East Hartford",
+      "state": "CT",
+      "venue": "Pratt & Whitney Stadium"
+    },
+    {
+      "abbr": "UGA",
+      "name": "Georgia",
+      "lat": 33.9498197,
+      "lon": -83.3733813,
+      "city": "Athens",
+      "state": "GA",
+      "venue": "Sanford Stadium"
+    },
+    {
+      "abbr": "UKY",
+      "name": "Kentucky",
+      "lat": 38.0220905,
+      "lon": -84.5053408,
+      "city": "Lexington",
+      "state": "KY",
+      "venue": "Kroger Field"
+    },
+    {
+      "abbr": "ULL",
+      "name": "Louisiana",
+      "lat": 30.2158434,
+      "lon": -92.0417371,
+      "city": "Lafayette",
+      "state": "LA",
+      "venue": "Cajun Field"
+    },
+    {
+      "abbr": "ULM",
+      "name": "ULM",
+      "lat": 32.5308089,
+      "lon": -92.0660602,
+      "city": "Monroe",
+      "state": "LA",
+      "venue": "Malone Stadium"
+    },
+    {
+      "abbr": "UMA",
+      "name": "UMass",
+      "lat": 42.3773244,
+      "lon": -72.5360595,
+      "city": "Hadley",
+      "state": "MA",
+      "venue": "Warren McGuirk Alumni Stadium"
+    },
+    {
+      "abbr": "UMD",
+      "name": "Maryland",
+      "lat": 38.9903332,
+      "lon": -76.9473792,
+      "city": "College Park",
+      "state": "MD",
+      "venue": "SECU Stadium"
+    },
+    {
+      "abbr": "UNC",
+      "name": "North Carolina",
+      "lat": 35.9069294,
+      "lon": -79.0478889,
+      "city": "Chapel Hill",
+      "state": "NC",
+      "venue": "Kenan Stadium"
+    },
+    {
+      "abbr": "UNL",
+      "name": "UNLV",
+      "lat": 36.09075,
+      "lon": -115.183722,
+      "city": "Las Vegas",
+      "state": "NV",
+      "venue": "Allegiant Stadium"
+    },
+    {
+      "abbr": "UNM",
+      "name": "New Mexico",
+      "lat": 35.0669479,
+      "lon": -106.6283225,
+      "city": "Albuquerque",
+      "state": "NM",
+      "venue": "University Stadium (NM)"
+    },
+    {
+      "abbr": "UNT",
+      "name": "North Texas",
+      "lat": 33.203899,
+      "lon": -97.159245,
+      "city": "Denton",
+      "state": "TX",
+      "venue": "DATCU Stadium"
+    },
+    {
+      "abbr": "USA",
+      "name": "South Alabama",
+      "lat": 30.696904,
+      "lon": -88.192013,
+      "city": "Mobile",
+      "state": "AL",
+      "venue": "Hancock Whitney Stadium"
+    },
+    {
+      "abbr": "USC",
+      "name": "USC",
+      "lat": 34.014167,
+      "lon": -118.287778,
+      "city": "Los Angeles",
+      "state": "CA",
+      "venue": "Los Angeles Memorial Coliseum"
+    },
+    {
+      "abbr": "USF",
+      "name": "USF",
+      "lat": 27.9758691,
+      "lon": -82.5033344,
+      "city": "Tampa",
+      "state": "FL",
+      "venue": "Raymond James Stadium"
+    },
+    {
+      "abbr": "UST",
+      "name": "Utah State",
+      "lat": 41.7517394,
+      "lon": -111.8116007,
+      "city": "Logan",
+      "state": "UT",
+      "venue": "Maverik Stadium"
+    },
+    {
+      "abbr": "UTA",
+      "name": "Utah",
+      "lat": 40.7599724,
+      "lon": -111.8488255,
+      "city": "Salt Lake City",
+      "state": "UT",
+      "venue": "Rice-Eccles Stadium"
+    },
+    {
+      "abbr": "UTP",
+      "name": "UTEP",
+      "lat": 31.7733353,
+      "lon": -106.507957,
+      "city": "El Paso",
+      "state": "TX",
+      "venue": "Sun Bowl"
+    },
+    {
+      "abbr": "UTS",
+      "name": "UTSA",
+      "lat": 29.4169834,
+      "lon": -98.4788143,
+      "city": "San Antonio",
+      "state": "TX",
+      "venue": "Alamodome"
+    },
+    {
+      "abbr": "UVA",
+      "name": "Virginia",
+      "lat": 38.0311801,
+      "lon": -78.5137897,
+      "city": "Charlottesville",
+      "state": "VA",
+      "venue": "Scott Stadium"
+    },
+    {
+      "abbr": "VAN",
+      "name": "Vanderbilt",
+      "lat": 36.1440455,
+      "lon": -86.8088942,
+      "city": "Nashville",
+      "state": "TN",
+      "venue": "FirstBank Stadium"
+    },
+    {
+      "abbr": "VAT",
+      "name": "Virginia Tech",
+      "lat": 37.2199873,
+      "lon": -80.4180643,
+      "city": "Blacksburg",
+      "state": "VA",
+      "venue": "Lane Stadium"
+    },
+    {
+      "abbr": "WAS",
+      "name": "Washington",
+      "lat": 47.6503235,
+      "lon": -122.3015746,
+      "city": "Seattle",
+      "state": "WA",
+      "venue": "Husky Stadium"
+    },
+    {
+      "abbr": "WFU",
+      "name": "Wake Forest",
+      "lat": 36.1305507,
+      "lon": -80.2545851,
+      "city": "Winston-Salem",
+      "state": "NC",
+      "venue": "Allegacy Federal Credit Union Stadium"
+    },
+    {
+      "abbr": "WIS",
+      "name": "Wisconsin",
+      "lat": 43.06994,
+      "lon": -89.4126943,
+      "city": "Madison",
+      "state": "WI",
+      "venue": "Camp Randall Stadium"
+    },
+    {
+      "abbr": "WKU",
+      "name": "WKU",
+      "lat": 36.9847901,
+      "lon": -86.4594041,
+      "city": "Bowling Green",
+      "state": "KY",
+      "venue": "Houchens Industries-L.T. Smith Stadium"
+    },
+    {
+      "abbr": "WMU",
+      "name": "Western Michigan",
+      "lat": 42.2860064,
+      "lon": -85.6007573,
+      "city": "Kalamazoo",
+      "state": "MI",
+      "venue": "Waldo Stadium"
+    },
+    {
+      "abbr": "WSU",
+      "name": "Washington State",
+      "lat": 46.731831,
+      "lon": -117.1604991,
+      "city": "Pullman",
+      "state": "WA",
+      "venue": "Gesa Field"
+    },
+    {
+      "abbr": "WVU",
+      "name": "West Virginia",
+      "lat": 39.6502744,
+      "lon": -79.9551873,
+      "city": "Morgantown",
+      "state": "WV",
+      "venue": "Milan Puskar Stadium"
+    },
+    {
+      "abbr": "WYO",
+      "name": "Wyoming",
+      "lat": 41.31161,
+      "lon": -105.5681384,
+      "city": "Laramie",
+      "state": "WY",
+      "venue": "War Memorial Stadium"
+    }
+  ]
+}

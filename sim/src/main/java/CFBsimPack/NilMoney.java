@@ -90,22 +90,23 @@ public final class NilMoney {
         return roundToThousand(500_000 + Math.pow(normalized, 2.40) * 24_500_000);
     }
 
+    /** Prior position premiums; league supply/demand multiplies these at runtime. */
     public static double positionPremium(String position) {
         if (position == null) return 1.0;
         switch (position) {
-            case "QB": return 1.50;
-            case "RB": return 0.92;
-            case "FB": return 0.65;
-            case "WR": return 1.18;
-            case "TE": return 1.02;
-            case "OL": return 1.08;
-            case "EDGE": return 1.20;
-            case "DL": return 1.10;
-            case "LB": return 1.02;
-            case "CB": return 1.16;
-            case "S": return 0.98;
-            case "K": return 0.50;
-            case "P": return 0.48;
+            case "QB": return 2.20;
+            case "RB": return 0.78;
+            case "FB": return 0.40;
+            case "WR": return 1.35;
+            case "TE": return 1.05;
+            case "OL": return 1.22;
+            case "EDGE": return 1.40;
+            case "DL": return 1.12;
+            case "LB": return 1.05;
+            case "CB": return 1.38;
+            case "S": return 1.00;
+            case "K": return 0.35;
+            case "P": return 0.30;
             default: return 1.0;
         }
     }
@@ -150,22 +151,26 @@ public final class NilMoney {
         }
     }
 
+    /**
+     * League-agnostic market baseline (talent × position prior × youth × awards).
+     * Destination fit and distance are applied in {@link ProgramOffers#nilAmountFor}.
+     */
     public static int marketValue(Player p) {
         if (p == null) return 25000;
-        int ovr = p.ratOvr;
+        int talent = PlayerMarket.marketTalent(p);
         double premium = positionPremium(p.position);
 
         double base;
-        if (ovr < 60) {
-            base = 25_000 + Math.max(0, ovr - 50) * 5_000;
-        } else if (ovr < 70) {
-            base = 75_000 + (ovr - 60) * 20_000;
-        } else if (ovr < 80) {
-            base = 300_000 + (ovr - 70) * 45_000;
-        } else if (ovr < 90) {
-            base = 800_000 + (ovr - 80) * 150_000;
+        if (talent < 60) {
+            base = 25_000 + Math.max(0, talent - 50) * 4_000;
+        } else if (talent < 70) {
+            base = 70_000 + (talent - 60) * 18_000;
+        } else if (talent < 80) {
+            base = 280_000 + (talent - 70) * 50_000;
+        } else if (talent < 90) {
+            base = 850_000 + (talent - 80) * 180_000;
         } else {
-            base = 2_400_000 + (ovr - 90) * 350_000;
+            base = 2_800_000 + (talent - 90) * 400_000;
         }
 
         base *= premium;
@@ -176,7 +181,7 @@ public final class NilMoney {
         else if (p.careerAllConference > 0 || p.wonAllConference) base *= 1.06;
 
         if (p.transferReason != null && p.transferReason != TransferReason.NONE) {
-            double portalPremium = p.ratOvr >= 85 ? 1.40 : p.ratOvr >= 75 ? 1.25 : 1.15;
+            double portalPremium = talent >= 85 ? 1.45 : talent >= 75 ? 1.28 : 1.18;
             base *= portalPremium;
         }
 
@@ -250,7 +255,7 @@ public final class NilMoney {
         else if (p.year == 3) rate += 0.10;
         else rate -= 0.05;
         if (p.contractYearsRemaining >= 2) rate += 0.12;
-        if (p.ratOvr >= 85 || p.ratPot - p.ratOvr >= 15) rate += 0.10;
+        if (PlayerMarket.marketTalent(p) >= 85 || p.ratPot - p.ratOvr >= 15) rate += 0.10;
         if (p.year >= 4) rate = Math.min(rate, 0.45);
         if (rate < 0.25) rate = 0.25;
         if (rate > 0.85) rate = 0.85;
@@ -258,18 +263,10 @@ public final class NilMoney {
         return Math.max(0, cost);
     }
 
+    /** @deprecated use {@link #buyoutCost(Player, ProgramProfile)} */
+    @Deprecated
     public static int buyoutCost(Player p, int revShareScore) {
-        if (p == null) return 0;
-        int remainingYears = Math.max(0, p.contractYearsRemaining);
-        if (remainingYears <= 0 && (p.rosterStatus == null || p.rosterStatus == RosterStatus.PWO)) {
-            return 0;
-        }
-        int years = Math.max(1, remainingYears);
-        int annual = nilPurseCost(p.rosterStatus, p.nilDealAmount, revShareScore);
-        double rate = p.year <= 2 ? 0.60 : p.year == 3 ? 0.45 : 0.30;
-        if (remainingYears >= 2) rate += 0.12;
-        if (p.ratOvr >= 85 || p.ratPot - p.ratOvr >= 15) rate += 0.10;
-        return roundToThousand(annual * years * Math.max(0.25, Math.min(0.85, rate)));
+        return buyoutCost(p, (ProgramProfile) null);
     }
 
     /** Max schedule-tier gap treated as a peer series (free home-and-home). */

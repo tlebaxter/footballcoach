@@ -20,6 +20,8 @@ object OffseasonFlow {
         check(OffseasonSession.ready()) { "Offseason not ready" }
         val league = OffseasonSession.league
         GameSession.setLeague(league)
+        // Pad user roster toward 105 before portal opens
+        league.userTeam?.fillRosterToCap()
         OffseasonSession.offseason.buildTransferPortal()
         OffseasonSession.phase = OffseasonSession.Phase.PORTAL
         return Next.STAY_TALENT_HUB

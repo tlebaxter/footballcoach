@@ -37,6 +37,10 @@ internal object PlayerSaveMapping {
             contractLength = p.contractLength,
             retainedThisOffseason = p.retainedThisOffseason,
             depthLocked = p.depthLocked,
+            homeGeoid = p.homeGeoid,
+            homeCity = p.homeCity,
+            homeState = p.homeState,
+            yearsAtProgram = p.yearsAtProgram,
             season = if (hasSeason) {
                 PlayerSeasonDoc(
                     gamesPlayed = p.gamesPlayed,
@@ -88,6 +92,13 @@ internal object PlayerSaveMapping {
         p.contractLength = doc.contractLength
         p.retainedThisOffseason = doc.retainedThisOffseason
         p.depthLocked = doc.depthLocked
+        p.homeGeoid = doc.homeGeoid
+        p.homeCity = doc.homeCity
+        p.homeState = doc.homeState
+        p.yearsAtProgram = doc.yearsAtProgram
+        if (p.homeGeoid == null || p.homeGeoid.isEmpty()) {
+            CFBsimPack.GeoCatalog.get().applyHometown(p, java.util.Random(doc.name.hashCode().toLong()))
+        }
         p.careerPrAtt = doc.careerPrAtt
         p.careerPrYards = doc.careerPrYards
         p.careerPrTd = doc.careerPrTd

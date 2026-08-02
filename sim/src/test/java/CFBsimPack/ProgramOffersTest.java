@@ -47,8 +47,8 @@ public class ProgramOffersTest {
         mid.ratOvr = 86;
         mid.position = "WR";
         mid.projectedDraftRound = 4;
-        assertTrue(ProgramOffers.canPayToStay(mid));
-        assertTrue(ProgramOffers.draftStayBonus(mid, null) >= 100000);
+        assertTrue(ProgramOffers.canRetainDraftEligible(mid));
+        assertTrue(ProgramOffers.annualNilFor(mid, null, 1) >= 25000);
     }
 
     @Test

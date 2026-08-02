@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -84,7 +85,7 @@ private val SORTS = listOf("OVR ↓", "Cost ↑", "Name")
 
 private val CompactFieldContentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp)
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
 fun TalentHubScreen(
     onNavigateToMain: () -> Unit,
@@ -230,12 +231,36 @@ fun TalentHubScreen(
                         modifier = Modifier.fillMaxSize(),
                         verticalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        items(state.rows, key = { it.id }) { row ->
-                            TalentRowCard(
-                                row = row,
-                                onClick = { viewModel.onRowTap(row.id) },
-                                onCheck = { viewModel.toggleSuggestion(row.id) },
-                            )
+                        if (tab == HubTab.RETAIN || tab == HubTab.PORTAL || tab == HubTab.HS) {
+                            val grouped = state.rows.groupBy { it.sectionPosition ?: it.position }
+                            for ((pos, rows) in grouped) {
+                                stickyHeader(key = "hdr-$pos-${tab.name}") {
+                                    val ctx = state.depthBoard?.positions?.find { it.position == pos }
+                                    Text(
+                                        text = ctx?.contextLine() ?: pos,
+                                        style = MaterialTheme.typography.labelLarge,
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .background(MaterialTheme.colorScheme.surface)
+                                            .padding(vertical = 6.dp, horizontal = 4.dp),
+                                    )
+                                }
+                                items(rows, key = { it.id }) { row ->
+                                    TalentRowCard(
+                                        row = row,
+                                        onClick = { viewModel.onRowTap(row.id) },
+                                        onCheck = { viewModel.toggleSuggestion(row.id) },
+                                    )
+                                }
+                            }
+                        } else {
+                            items(state.rows, key = { it.id }) { row ->
+                                TalentRowCard(
+                                    row = row,
+                                    onClick = { viewModel.onRowTap(row.id) },
+                                    onCheck = { viewModel.toggleSuggestion(row.id) },
+                                )
+                            }
                         }
                     }
                 }
@@ -326,6 +351,20 @@ fun TalentHubScreen(
             },
             dismissButton = {
                 TextButton(onClick = viewModel::dismissDelete) { Text("Cancel") }
+            },
+        )
+    }
+
+    if (state.showPhaseConfirm) {
+        AlertDialog(
+            onDismissRequest = viewModel::dismissPhaseConfirm,
+            title = { Text(state.phaseConfirmTitle ?: "Confirm") },
+            text = { Text(state.phaseConfirmBody ?: "") },
+            confirmButton = {
+                TextButton(onClick = viewModel::confirmPhaseAdvance) { Text("Confirm") }
+            },
+            dismissButton = {
+                TextButton(onClick = viewModel::dismissPhaseConfirm) { Text("Cancel") }
             },
         )
     }
@@ -584,6 +623,53 @@ private fun TalentRowCard(
     }
 }
 
+private val DepthBoardBadgeWidth = 36.dp
+private val DepthBoardCountWidth = 40.dp
+private val DepthBoardOvrWidth = 56.dp
+
+@Composable
+private fun DepthBoardColumnHeader(modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Spacer(modifier = Modifier.width(DepthBoardBadgeWidth))
+        Spacer(modifier = Modifier.width(DepthBoardCountWidth))
+        Row(
+            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                "Sch",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "PWO",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.weight(1f),
+            )
+            Text(
+                "NIL",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                modifier = Modifier.weight(1.2f),
+            )
+        }
+        Spacer(modifier = Modifier.width(DepthBoardOvrWidth))
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun DepthBoardSheet(
@@ -613,6 +699,11 @@ private fun DepthBoardSheet(
                 style = MaterialTheme.typography.labelMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            DepthBoardColumnHeader(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 10.dp),
+            )
             LazyColumn(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -640,46 +731,62 @@ private fun DepthBoardSheet(
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
                         ) {
                             Text(
                                 pos.position,
                                 color = FcChipPosText,
                                 fontWeight = FontWeight.Bold,
                                 style = MaterialTheme.typography.labelLarge,
+                                maxLines = 1,
                                 modifier = Modifier
+                                    .width(DepthBoardBadgeWidth)
                                     .clip(RoundedCornerShape(6.dp))
                                     .background(FcChipPosBg)
-                                    .padding(horizontal = 6.dp, vertical = 2.dp)
-                                    .width(48.dp),
+                                    .padding(horizontal = 4.dp, vertical = 2.dp),
                                 textAlign = TextAlign.Center,
                             )
-                            Spacer(Modifier.width(8.dp))
                             Text(
                                 "${pos.have}/${pos.sug}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
-                                modifier = Modifier.width(44.dp),
+                                maxLines = 1,
+                                modifier = Modifier.width(DepthBoardCountWidth),
                             )
-                            Text(
-                                "Sch ${pos.scholly}",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.width(52.dp),
-                            )
-                            Text(
-                                "PWO ${pos.pwo}",
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.width(52.dp),
-                            )
-                            Text(
-                                "NIL ${NilMoney.format(pos.nilSpend)}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = FcChipMoneyText,
-                                modifier = Modifier.width(72.dp),
-                            )
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                Text(
+                                    "${pos.scholly}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    "${pos.pwo}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f),
+                                )
+                                Text(
+                                    NilMoney.format(pos.nilSpend),
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = FcChipMoneyText,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1.2f),
+                                )
+                            }
                             Text(
                                 if (pos.have == 0) "— / —" else "${pos.topOvr} / ${pos.avgOvr}",
                                 style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.weight(1f),
+                                maxLines = 1,
+                                softWrap = false,
+                                modifier = Modifier.width(DepthBoardOvrWidth),
                                 textAlign = TextAlign.End,
                             )
                         }

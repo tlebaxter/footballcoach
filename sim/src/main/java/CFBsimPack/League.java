@@ -79,6 +79,81 @@ public class League {
     public boolean loadedInOffseason;
     public OffseasonSession.Phase loadedOffseasonPhase;
 
+    /**
+     * Per-position supply/demand multipliers (default 1.0). Updated each offseason
+     * from portal/HS composition vs roster deficits.
+     */
+    public double[] positionMarketPremium = defaultPositionPremiums();
+
+    private static double[] defaultPositionPremiums() {
+        double[] d = new double[NilMoney.POSITIONS.length];
+        Arrays.fill(d, 1.0);
+        return d;
+    }
+
+    public double positionMarketFactor(String position) {
+        if (positionMarketPremium == null) {
+            positionMarketPremium = defaultPositionPremiums();
+        }
+        for (int i = 0; i < NilMoney.POSITIONS.length; i++) {
+            if (NilMoney.POSITIONS[i].equals(position)) {
+                double v = positionMarketPremium[i];
+                if (v < 0.70) return 0.70;
+                if (v > 1.40) return 1.40;
+                return v;
+            }
+        }
+        return 1.0;
+    }
+
+    /** Recompute position premiums from current portal + HS supply vs team needs. */
+    public void refreshPositionMarketPremiums(ArrayList<Player> portal, ArrayList<Player> hsClass) {
+        if (positionMarketPremium == null || positionMarketPremium.length != NilMoney.POSITIONS.length) {
+            positionMarketPremium = defaultPositionPremiums();
+        }
+        int[] supply = new int[NilMoney.POSITIONS.length];
+        int[] demand = new int[NilMoney.POSITIONS.length];
+        if (portal != null) {
+            for (Player p : portal) {
+                int i = posIndex(p.position);
+                if (i >= 0) supply[i]++;
+            }
+        }
+        if (hsClass != null) {
+            for (Player p : hsClass) {
+                int i = posIndex(p.position);
+                if (i >= 0) supply[i]++;
+            }
+        }
+        if (teamList != null) {
+            for (Team t : teamList) {
+                for (int i = 0; i < NilMoney.POSITIONS.length; i++) {
+                    String pos = NilMoney.POSITIONS[i];
+                    int have = t.getPositionList(pos) != null ? t.getPositionList(pos).size() : 0;
+                    int sug = NilMoney.sugFor(pos);
+                    demand[i] += Math.max(0, sug - have);
+                }
+            }
+        }
+        for (int i = 0; i < NilMoney.POSITIONS.length; i++) {
+            double s = Math.max(1, supply[i]);
+            double d = Math.max(1, demand[i]);
+            double ratio = d / s;
+            double factor = Math.pow(ratio, 0.35);
+            if (factor < 0.70) factor = 0.70;
+            if (factor > 1.40) factor = 1.40;
+            positionMarketPremium[i] = factor;
+        }
+    }
+
+    private static int posIndex(String position) {
+        if (position == null) return -1;
+        for (int i = 0; i < NilMoney.POSITIONS.length; i++) {
+            if (NilMoney.POSITIONS[i].equals(position)) return i;
+        }
+        return -1;
+    }
+
     /** Multi-year OOC buy games and home-and-homes. */
     public OocContractBook oocContracts;
 

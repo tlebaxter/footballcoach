@@ -10,7 +10,6 @@ public final class ProgramOffers {
 
     public static int maxContractYears(Player p) {
         if (p == null) return 1;
-        // year 1=FR … 5=grad; remaining eligibility seasons
         int rem = 6 - p.year;
         if (rem < 1) rem = 1;
         if (rem > 4) rem = 4;
@@ -20,16 +19,18 @@ public final class ProgramOffers {
     public static int suggestedContractYears(Player p) {
         int max = maxContractYears(p);
         if (p == null) return 1;
+        int draft = p.projectedDraftRound > 0 ? p.projectedDraftRound : projectDraftRound(p);
+        if (draft >= 1 && draft <= 7) return 1;
+        if (p.year >= 4) return 1;
         if (p.year <= 1 && p.ratPot >= 80) return Math.min(max, 4);
         if (p.year <= 2 && p.ratOvr >= 75) return Math.min(max, 3);
-        if (p.year >= 4) return 1;
         return Math.min(max, 2);
     }
 
     public static double lengthAnnualBump(Player p, int years) {
         if (years <= 1) return 1.0;
-        double bump = 1.0 + (years - 1) * 0.08;
-        if (p != null && p.year <= 2) bump += (years - 1) * 0.06;
+        double bump = 1.0 + (years - 1) * 0.12;
+        if (p != null && p.year <= 2) bump += (years - 1) * 0.08;
         return bump;
     }
 
@@ -44,68 +45,116 @@ public final class ProgramOffers {
     }
 
     public static int nilAmountFor(Player p, Team destination) {
-        int base = NilMoney.marketValue(p);
-        double multiplier = 1.0;
+        if (p == null) return 25000;
+        int talent = PlayerMarket.marketTalent(p);
+        double premium = NilMoney.positionPremium(p.position);
+        if (destination != null && destination.league != null) {
+            premium *= destination.league.positionMarketFactor(p.position);
+        }
+
+        double base;
+        if (talent < 60) {
+            base = 25_000 + Math.max(0, talent - 50) * 4_000;
+        } else if (talent < 70) {
+            base = 70_000 + (talent - 60) * 18_000;
+        } else if (talent < 80) {
+            base = 280_000 + (talent - 70) * 50_000;
+        } else if (talent < 90) {
+            base = 850_000 + (talent - 80) * 180_000;
+        } else {
+            base = 2_800_000 + (talent - 90) * 400_000;
+        }
+
+        base *= premium;
+        base *= NilMoney.youthPremium(p);
+
+        int depth = projectedDepthRank(p, destination);
+        base *= PlayerMarket.roleMultiplier(depth);
+
         TransferReason reason = p.transferReason != null ? p.transferReason : TransferReason.NONE;
         ProgramProfile profile = destination != null ? destination.programProfile : null;
         int brand = profile != null ? profile.brandAttract : 60;
         int pipeline = profile != null ? profile.pipeline : 60;
         int momentum = profile != null ? profile.momentum : 60;
-        int depthRank = projectedDepthRank(p, destination);
 
+        double multiplier = 1.0;
         switch (reason) {
             case PLAYING_TIME:
-                if (depthRank <= 1) multiplier *= 0.72;
-                else if (depthRank <= 2) multiplier *= 0.86;
-                else multiplier *= 1.22;
+                if (depth <= 1) multiplier *= 0.45;
+                else if (depth <= 2) multiplier *= 0.65;
+                else multiplier *= 1.55;
                 break;
             case MOVE_UP:
-                multiplier *= brand >= 82 ? 0.82 : brand >= 70 ? 1.0 : 1.25;
+                multiplier *= brand >= 82 ? 0.78 : brand >= 70 ? 1.0 : 1.35;
                 break;
             case COACHING_CHANGE:
-                multiplier *= momentum >= 70 ? 0.90 : 1.10;
+                multiplier *= momentum >= 70 ? 0.88 : 1.25;
                 break;
             case SCHEME_FIT:
-                multiplier *= depthRank <= 1 ? 0.82 : 1.12;
+                multiplier *= depth <= 1 ? 0.70 : 1.25;
                 break;
             case WINNING:
                 if (destination != null && destination.rankTeamPollScore > 0 && destination.rankTeamPollScore <= 25) {
-                    multiplier *= 0.84;
+                    multiplier *= 0.80;
                 } else if (momentum >= 80) {
-                    multiplier *= 0.90;
+                    multiplier *= 0.88;
                 } else {
-                    multiplier *= 1.18;
+                    multiplier *= 1.30;
                 }
                 break;
             case PROGRAM_FREEFALL:
-                multiplier *= profile != null && profile.diffProgramPower >= 0 ? 0.86 : 1.20;
+                multiplier *= profile != null && profile.diffProgramPower >= 0 ? 0.82 : 1.40;
                 break;
             case TITLE_CHASE:
                 multiplier *= brand >= 88 || (destination != null && destination.totalNCs > 0)
-                        ? 0.78 : 1.28;
+                        ? 0.72 : 1.40;
                 break;
             case INJURY_COMEBACK:
-                multiplier *= 0.90;
-                base = (int) (base * 0.90);
+                multiplier *= 0.88;
+                base *= 0.90;
                 break;
             case NONE:
-                multiplier *= 0.95;
+                // Homegrown / happy: mild discount; still apply depth
+                if (depth <= 1) multiplier *= 0.70;
+                else if (depth <= 2) multiplier *= 0.85;
+                else multiplier *= 1.20;
                 break;
             case BETTER_FIT:
             default:
+                if (depth <= 1) multiplier *= 0.75;
+                else if (depth >= 3) multiplier *= 1.35;
                 break;
         }
 
-        multiplier *= 1.0 - Math.max(0, brand - 60) * 0.004;
-        if (brand < 55) multiplier *= 1.0 + (55 - brand) * 0.006;
-        if (p.year >= 3 || reason == TransferReason.TITLE_CHASE || reason == TransferReason.MOVE_UP) {
-            multiplier *= 1.0 - Math.max(0, pipeline - 60) * 0.002;
+        // All schools: playing-time path is the biggest lever
+        if (reason != TransferReason.PLAYING_TIME) {
+            if (depth <= 1) multiplier *= 0.85;
+            else if (depth >= 3) multiplier *= 1.25;
         }
+
+        multiplier *= 1.0 - Math.max(0, brand - 60) * 0.004;
+        if (brand < 55) multiplier *= 1.0 + (55 - brand) * 0.008;
+        multiplier *= 1.0 - Math.max(0, pipeline - 60) * 0.003;
+        multiplier *= PlayerMarket.facilitiesMultiplier(profile);
+        multiplier *= PlayerMarket.loyaltyMultiplier(p);
+        multiplier *= PlayerMarket.draftLeverageMultiplier(p);
+
+        if (destination != null) {
+            double miles = GeoCatalog.get().miles(p, destination);
+            multiplier *= GeoCatalog.distanceMultiplier(miles);
+        }
+
+        // 1-year rental premium for portal entries
+        if (p.priorTeam != null && p.year >= 3) {
+            multiplier *= 1.12;
+        }
+
         multiplier *= deterministicMarketPreference(p, destination);
 
         int amount = (int) Math.round(base * multiplier / 1000.0) * 1000;
         if (amount < 25000) amount = 25000;
         if (amount > maxSingleDeal(destination)) amount = maxSingleDeal(destination);
+        // Depth 3+ with tiny role share may fall to scholly floor — keep at least 25k if NIL status
         return amount;
     }
 
@@ -135,11 +184,20 @@ public final class ProgramOffers {
         return better + 1;
     }
 
+    /** Preferred roster status by depth / talent (two-deep NIL band). */
+    public static RosterStatus suggestedStatus(Player p, Team team) {
+        if (p == null) return RosterStatus.PWO;
+        if (PlayerMarket.qualifiesForNil(p, team)) return RosterStatus.SCHOLARSHIP_PLUS_NIL;
+        int talent = PlayerMarket.marketTalent(p);
+        if (talent >= 62) return RosterStatus.SCHOLARSHIP;
+        return RosterStatus.PWO;
+    }
+
     public static RosterStatus minimumAcceptable(Player p, int riskTier) {
-        int ovr = p != null ? p.ratOvr : 60;
-        if (riskTier >= 3 || ovr >= 85) return RosterStatus.SCHOLARSHIP_PLUS_NIL;
-        if (riskTier >= 2 || ovr >= 72) return RosterStatus.SCHOLARSHIP;
-        if (ovr >= 62) return RosterStatus.SCHOLARSHIP;
+        int talent = p != null ? PlayerMarket.marketTalent(p) : 60;
+        if (riskTier >= 3 || talent >= 85) return RosterStatus.SCHOLARSHIP_PLUS_NIL;
+        if (riskTier >= 2 || talent >= 72) return RosterStatus.SCHOLARSHIP;
+        if (talent >= 62) return RosterStatus.SCHOLARSHIP;
         return RosterStatus.PWO;
     }
 
@@ -167,18 +225,15 @@ public final class ProgramOffers {
         return 0;
     }
 
-    /**
-     * Project NFL draft round 1–7, or 0 for UDFA / not declaring-level.
-     */
     public static int projectDraftRound(Player p) {
         if (p == null || p.year < 3) return 0;
-        if ("K".equals(p.position)) return 0;
+        if ("K".equals(p.position) || "P".equals(p.position)) return 0;
 
-        int score = p.ratOvr;
+        int score = PlayerMarket.marketTalent(p);
         if (p.wonHeisman || p.careerHeismans > 0) score += 8;
         else if (p.wonAllAmerican || p.careerAllAmerican > 0) score += 5;
         else if (p.wonAllConference || p.careerAllConference > 0) score += 2;
-        if (p.year == 3) score -= 2; // early declare slightly harder
+        if (p.year == 3) score -= 2;
         if ("QB".equals(p.position) || "WR".equals(p.position) || "CB".equals(p.position)) score += 1;
 
         if (score >= 94) return 1;
@@ -195,36 +250,24 @@ public final class ProgramOffers {
         return round >= 1 && round <= 3;
     }
 
-    public static boolean canPayToStay(Player p) {
+    /** Draft-eligible players who can still be retained via NIL (not locked R1–3). */
+    public static boolean canRetainDraftEligible(Player p) {
         if (p == null || p.year >= 5) return false;
         int r = p.projectedDraftRound > 0 ? p.projectedDraftRound : projectDraftRound(p);
         if (isLockedDraftRound(r)) return false;
-        return r >= 4 || (r == 0 && p.year >= 3 && p.ratOvr > 90);
+        return r >= 4 || (r == 0 && p.year >= 3 && PlayerMarket.marketTalent(p) >= 78);
     }
 
-    /**
-     * One-time stay bonus from current budget (not multi-year encumbrance).
-     */
+    /** @deprecated use canRetainDraftEligible — draft stay is no longer a separate product */
+    @Deprecated
+    public static boolean canPayToStay(Player p) {
+        return canRetainDraftEligible(p);
+    }
+
+    /** @deprecated draft stay bonus removed; use annualNilFor with draft leverage */
+    @Deprecated
     public static int draftStayBonus(Player p, Team t) {
-        if (p == null) return 0;
-        int round = p.projectedDraftRound > 0 ? p.projectedDraftRound : projectDraftRound(p);
-        double base = NilMoney.marketValue(p);
-        double mult;
-        if (round == 4) mult = 1.35;
-        else if (round == 5) mult = 1.10;
-        else if (round == 6) mult = 0.85;
-        else if (round == 7) mult = 0.65;
-        else mult = 0.45; // UDFA-leaning early declare
-        if (t != null) {
-            int brand = t.programProfile != null ? t.programProfile.brandAttract : 60;
-            int collective = t.programProfile != null ? t.programProfile.collectivePool : 60;
-            mult *= 1.0 - Math.max(0, brand - 65) * 0.002;
-            mult *= 1.0 + Math.max(0, collective - 75) * 0.0015;
-        }
-        int amount = (int) Math.round(base * mult / 1000.0) * 1000;
-        if (amount < 100000) amount = 100000;
-        if (amount > maxSingleDeal(t)) amount = maxSingleDeal(t);
-        return amount;
+        return annualNilFor(p, t, 1);
     }
 
     public static String draftRoundLabel(int round) {
